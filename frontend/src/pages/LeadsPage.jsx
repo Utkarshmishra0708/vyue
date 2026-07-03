@@ -1,0 +1,323 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import Layout from '../components/Layout';
+import LeadForm from '../components/LeadForm';
+import ActivityLogView from '../components/ActivityLogView';
+import MultiSelect from '../components/MultiSelect';
+import KanbanView from '../components/KanbanView';
+import { useAuth } from '../context/AuthContext';
+import { getLeads, deleteLead, updateLead, getBds, bulkUpdateLeads, getStageHistory } from '../services/api';
+import { PHASE_BADGE, TEMP_BADGE } from '../utils/constants';
+import { fmtDate, isTATBreached, isOverdue, getPOExpiryDays, calcLeadScore, buildRotMetrics, getRotState, stripHtml } from '../utils/leadHelpers';
+import { exportRowsToPdf } from '../utils/pdfExport';
+
+const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
+const RATINGS = ['Hot', 'Warm', 'Cold'];
+const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales'];
+
+export default function LeadsPage() {
+  const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const [leads, setLeads] = useState([]);
+  const [stageHistory, setStageHistory] = useState([]);
+  const [bds, setBds] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [filterPhases, setFilterPhases] = useState([]);
+  const [filterTemps, setFilterTemps] = useState([]);
+  const [filterSources, setFilterSources] = useState([]);
+  const [filterBDs, setFilterBDs] = useState([]);
+  const [filterOverdue, setFilterOverdue] = useState(false);
+  const [view, setView] = useState('table');
+  const [showForm, setShowForm] = useState(false);
+  const [editLead, setEditLead] = useState(null);
+  const [tab, setTab] = useState('form');
+  const [deleteId, setDeleteId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkAction, setBulkAction] = useState(null);
+  const [bulkValue, setBulkValue] = useState('');
+  const [cameFromDashboard, setCameFromDashboard] = useState(false);
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    const [ld, sh] = await Promise.all([getLeads(), getStageHistory()]);
+    setLeads(ld); setStageHistory(sh);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => { getBds(user.business_unit).then(setBds); }, [user.business_unit]);
+
+  // Pre-filter from dashboard KPI/phase-chip clicks
+  useEffect(() => {
+    const f = searchParams.get('filter');
+    const phase = searchParams.get('phase');
+    const bd = searchParams.get('bd');
+    if (!f && !phase && !bd) return;
+    setCameFromDashboard(true);
+    if (f === 'hot') setFilterTemps(['Hot']);
+    else if (f === 'won') setFilterPhases(['PO Received']);
+    else if (f === 'overdue') setFilterOverdue(true);
+    else if (f === 'active') setFilterPhases(['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected']);
+    if (phase) setFilterPhases([phase]);
+    if (bd && isAdmin) setFilterBDs([bd]);
+  }, [searchParams, isAdmin]);
+
+  const { lastEntry: rotLastEntry, teamAvg: rotTeamAvg } = useMemo(() => buildRotMetrics(stageHistory), [stageHistory]);
+
+  const filtered = useMemo(() => leads.filter(l => {
+    const s = search.toLowerCase();
+    const matchSearch = !s || [l.customer_name, l.city, l.state, l.lead_source, l.competitor, l.device_sku]
+      .some(f => f?.toLowerCase().includes(s));
+    return matchSearch
+      && (!filterPhases.length || filterPhases.includes(l.phase))
+      && (!filterTemps.length || filterTemps.includes(l.lead_temperature))
+      && (!filterSources.length || filterSources.includes(l.lead_source))
+      && (!filterBDs.length || filterBDs.includes(l.owner?.name))
+      && (!filterOverdue || isOverdue(l));
+  }), [leads, search, filterPhases, filterTemps, filterSources, filterBDs, filterOverdue]);
+
+  const openCount = filtered.filter(l => !['Lost', 'On Hold', 'PO Received'].includes(l.phase)).length;
+
+  const openNew = () => { setEditLead(null); setTab('form'); setShowForm(true); };
+  const openEdit = (l) => { setEditLead(l); setTab('form'); setShowForm(true); };
+  const closeForm = () => { setShowForm(false); setEditLead(null); };
+  const onSaved = () => { closeForm(); fetchAll(); };
+
+  const handlePhaseChangeKanban = async (leadId, newPhase) => {
+    const lead = leads.find(l => l.id === leadId);
+    if (!lead || lead.phase === newPhase) return;
+    await updateLead(leadId, {
+      customer_name: lead.customer_name, owner_id: lead.owner_id, business_unit: lead.business_unit,
+      lead_source: lead.lead_source, channel_partner_name: lead.channel_partner_name, kam_name: lead.kam_name,
+      new_or_renewal: lead.new_or_renewal, lead_temperature: lead.lead_temperature, competitor: lead.competitor,
+      potential_tcv_lakhs: lead.potential_tcv_lakhs, contract_period_months: lead.contract_period_months,
+      po_validity_months: lead.po_validity_months, phase: newPhase, phase_date: undefined,
+      includes_platform: lead.includes_platform, platform_rate: lead.platform_rate, platform_qty: lead.platform_qty,
+      includes_cms: lead.includes_cms, cms_rate: lead.cms_rate, cms_qty: lead.cms_qty,
+      includes_connectivity: lead.includes_connectivity, connectivity_rate: lead.connectivity_rate, connectivity_qty: lead.connectivity_qty,
+      includes_display: lead.includes_display, display_rate: lead.display_rate, display_qty: lead.display_qty,
+      includes_device: lead.includes_device, device_sku: lead.device_sku, device_rate: lead.device_rate,
+      device_qty: lead.device_qty, device_requested_date: lead.device_requested_date,
+      jhes_product: lead.jhes_product, additional_notes: lead.additional_notes,
+    });
+    fetchAll();
+  };
+
+  const toggleSelect = (id) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const selectAll = () => setSelectedIds(new Set(filtered.map(l => l.id)));
+  const clearSelect = () => setSelectedIds(new Set());
+
+  const executeBulk = async () => {
+    if (!bulkValue || selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    if (bulkAction === 'reassign') await bulkUpdateLeads(ids, { owner_id: bulkValue });
+    else if (bulkAction === 'phase') await bulkUpdateLeads(ids, { phase: bulkValue });
+    setBulkAction(null); setBulkValue(''); clearSelect(); fetchAll();
+  };
+
+  const exportExcel = async () => {
+    const toExport = selectedIds.size > 0 ? filtered.filter(l => selectedIds.has(l.id)) : filtered;
+    const XLSX = await import('xlsx');
+    const rows = toExport.map(l => ({
+      'Sr No': l.sr_no, 'Business Unit': (l.business_unit || '').toUpperCase(), 'Customer': l.customer_name,
+      'City': l.city || '', 'State': l.state || '', 'Lead Owner': l.owner?.name || '',
+      'Lead Source': l.lead_source, 'Channel Partner': l.channel_partner_name || '', 'KAM Name': l.kam_name || '',
+      'New/Renewal': l.new_or_renewal, 'Lead Rating': l.lead_temperature, 'Competitor': l.competitor || '',
+      'Quantity (Total)': l.quantity, 'Potential TCV (L)': l.potential_tcv_lakhs, 'Contract Period (Mo)': l.contract_period_months,
+      'PO Validity (Mo)': l.po_validity_months || '', 'ACV (L/yr)': l.acv_lakhs, 'Contract Value (L)': l.contract_value_lakhs || '',
+      'Phase': l.phase, 'Next Follow-Up': l.next_followup_date || '', 'PO Expected Date': l.po_expected_date || '',
+      'Platform': l.includes_platform ? 'Yes' : '', 'Platform Rate (₹)': l.platform_rate || '', 'Platform Qty': l.platform_qty || '',
+      'CMS': l.includes_cms ? 'Yes' : '', 'CMS Rate (₹)': l.cms_rate || '', 'CMS Qty': l.cms_qty || '',
+      'Connectivity': l.includes_connectivity ? 'Yes' : '', 'Connectivity Rate (₹)': l.connectivity_rate || '', 'Connectivity Qty': l.connectivity_qty || '',
+      'Display': l.includes_display ? 'Yes' : '', 'Display Rate (₹)': l.display_rate || '', 'Display Qty': l.display_qty || '',
+      'Device': l.includes_device ? 'Yes' : '', 'Device SKU': l.device_sku || '', 'Device Rate (₹)': l.device_rate || '',
+      'Device Qty': l.device_qty || '', 'Device Requested Date': l.device_requested_date || '',
+      'JHES Product': l.jhes_product || '', 'Actual PO Value (L)': l.po_actual_value_lakhs || '', 'Lost Reason': l.lost_reason || '',
+      'Additional Notes': stripHtml(l.additional_notes), 'Created At': l.createdAt ? fmtDate(l.createdAt) : '',
+    }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Leads');
+    XLSX.writeFile(wb, `Sales_CRM_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  // PDF export shows a curated, readable column set (not all 30+ Excel columns —
+  // full detail belongs in Excel; PDF is for a quick printable summary).
+  const exportPdf = () => {
+    const toExport = selectedIds.size > 0 ? filtered.filter(l => selectedIds.has(l.id)) : filtered;
+    if (!toExport.length) return;
+    exportRowsToPdf({
+      title: 'Sales CRM — Leads',
+      subtitle: `${toExport.length} lead${toExport.length > 1 ? 's' : ''} · generated ${fmtDate(new Date())}`,
+      tables: [{
+        columns: ['Sr', 'Customer', 'BD', 'Phase', 'Rating', 'TCV (₹L)', 'Score', 'Source', 'Next Follow-Up'],
+        rows: toExport.map(l => [
+          l.sr_no, l.customer_name, l.owner?.name?.split(' ')[0] || '', l.phase, l.lead_temperature,
+          l.potential_tcv_lakhs, calcLeadScore(l), l.lead_source,
+          ['On Hold', 'Lost', 'PO Received'].includes(l.phase) ? '—' : (l.next_followup_date ? fmtDate(l.next_followup_date) : '—'),
+        ]),
+      }],
+      filename: `Sales_CRM_${new Date().toISOString().slice(0, 10)}.pdf`,
+    });
+  };
+
+  const bdNames = bds.map(b => b.name);
+
+  return (
+    <Layout>
+      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {cameFromDashboard && <button className="btn btn-sm" onClick={() => navigate('/dashboard')}>← Dashboard</button>}
+          <div>
+            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Leads</h1>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{openCount} active · {filtered.length} total</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={exportExcel}>Export Excel</button>
+          <button className="btn" onClick={exportPdf}>Export PDF</button>
+          <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+            <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, background: view === 'table' ? '#eef2ff' : '#fff' }} onClick={() => setView('table')}>Table</button>
+            <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, background: view === 'kanban' ? '#eef2ff' : '#fff' }} onClick={() => setView('kanban')}>Kanban</button>
+          </div>
+          <button className="btn btn-primary" onClick={openNew}>+ New Lead</button>
+        </div>
+      </div>
+
+      <div style={{ padding: 20 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input className="input" style={{ width: 220 }} placeholder="Search customer, city, competitor…" value={search} onChange={e => setSearch(e.target.value)} />
+          <MultiSelect label="Phase" options={PHASES} selected={filterPhases} onChange={setFilterPhases} />
+          <MultiSelect label="Rating" options={RATINGS} selected={filterTemps} onChange={setFilterTemps} />
+          <MultiSelect label="Source" options={SOURCES} selected={filterSources} onChange={setFilterSources} />
+          {isAdmin && <MultiSelect label="BD" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569' }}>
+            <input type="checkbox" checked={filterOverdue} onChange={e => setFilterOverdue(e.target.checked)} /> Overdue only
+          </label>
+        </div>
+
+        {isAdmin && selectedIds.size > 0 && (
+          <div className="card-sm" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, background: '#eef2ff', borderColor: '#c7d2fe' }}>
+            <span style={{ fontSize: 12, fontWeight: 700 }}>{selectedIds.size} selected</span>
+            <button className="btn btn-sm" onClick={() => { setBulkAction('reassign'); setBulkValue(''); }}>Reassign</button>
+            <button className="btn btn-sm" onClick={() => { setBulkAction('phase'); setBulkValue(''); }}>Change Phase</button>
+            {bulkAction && (
+              <>
+                <select className="input" style={{ width: 160 }} value={bulkValue} onChange={e => setBulkValue(e.target.value)}>
+                  <option value="">Select…</option>
+                  {(bulkAction === 'reassign' ? bds.map(b => ({ id: b.id, label: b.name })) : PHASES.map(p => ({ id: p, label: p })))
+                    .map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+                <button className="btn btn-sm btn-primary" onClick={executeBulk}>Apply</button>
+              </>
+            )}
+            <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={clearSelect}>Clear</button>
+          </div>
+        )}
+
+        {loading ? <p style={{ color: '#94a3b8' }}>Loading…</p> : view === 'kanban' ? (
+          <KanbanView leads={filtered} onOpen={openEdit} onPhaseChange={handlePhaseChangeKanban} />
+        ) : (
+          <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  {isAdmin && <th></th>}
+                  <th>Sr</th><th>Customer</th>{isAdmin && <th>BD</th>}<th>Phase</th><th>Rating</th>
+                  <th style={{ textAlign: 'right' }}>TCV (₹L)</th><th>Score</th><th>Next Follow-Up</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(l => {
+                  const tatBad = isTATBreached(l);
+                  const overdue = isOverdue(l);
+                  const poExpiry = getPOExpiryDays(l);
+                  const showExpiry = poExpiry !== null && poExpiry <= 60;
+                  const rot = getRotState(l, rotLastEntry, rotTeamAvg);
+                  const isClosed = ['On Hold', 'Lost', 'PO Received'].includes(l.phase);
+                  return (
+                    <tr key={l.id} onClick={() => openEdit(l)} style={{ background: tatBad ? '#fef2f2' : undefined }}>
+                      {isAdmin && <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelect(l.id)} /></td>}
+                      <td style={{ color: '#94a3b8' }}>{l.sr_no}</td>
+                      <td>
+                        <p style={{ fontWeight: 700, margin: 0 }}>{l.customer_name}</p>
+                        <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>{l.new_or_renewal} · {l.lead_source}</p>
+                        {showExpiry && (
+                          <span className={`badge ${poExpiry < 30 ? 'badge-red' : 'badge-amber'}`} style={{ marginTop: 4, marginRight: 4 }}>
+                            {poExpiry < 0 ? `⚠ PO expired ${Math.abs(poExpiry)}d ago` : `⏳ PO expires in ${poExpiry}d`}
+                          </span>
+                        )}
+                        {rot && (
+                          <span className={`badge ${rot.severity === 'red' ? 'badge-red' : 'badge-amber'}`} style={{ marginTop: 4 }}>
+                            🥀 Stuck {rot.ageDays}d
+                          </span>
+                        )}
+                      </td>
+                      {isAdmin && <td>{l.owner?.name?.split(' ')[0]}</td>}
+                      <td><span className={`badge ${PHASE_BADGE[l.phase]}`}>{l.phase}</span></td>
+                      <td><span className={`badge ${TEMP_BADGE[l.lead_temperature]}`}>{l.lead_temperature}</span></td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>₹{l.potential_tcv_lakhs}</td>
+                      <td>{calcLeadScore(l)}</td>
+                      <td>
+                        {isClosed ? <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>—</span> :
+                          l.next_followup_date ? <span style={{ color: overdue ? '#dc2626' : '#334155', fontWeight: overdue ? 700 : 400 }}>{overdue && '⚠ '}{fmtDate(l.next_followup_date)}</span> :
+                          <span style={{ color: '#cbd5e1' }}>—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>No leads match your filters.</td></tr>}
+              </tbody>
+            </table>
+            {isAdmin && filtered.length > 0 && (
+              <div style={{ padding: 10 }}>
+                <button className="btn btn-sm" onClick={selectAll}>Select all ({filtered.length})</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="modal-overlay" onClick={closeForm}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', gap: 4 }}>
+                <span className={`tab ${tab === 'form' ? 'active' : ''}`} onClick={() => setTab('form')}>{editLead ? 'Edit Lead' : 'New Lead'}</span>
+                {editLead && <span className={`tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>Activity</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {editLead && isAdmin && <button className="btn btn-sm btn-danger" onClick={() => setDeleteId(editLead.id)}>Delete</button>}
+                <button className="btn btn-sm" onClick={closeForm}>✕</button>
+              </div>
+            </div>
+            <div className="modal-body">
+              {tab === 'form' ? <LeadForm lead={editLead} onSave={onSaved} onCancel={closeForm} /> : <ActivityLogView leadId={editLead.id} />}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteId && (
+        <div className="modal-overlay" onClick={() => setDeleteId(null)}>
+          <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-body">
+              <p style={{ fontWeight: 700, marginBottom: 8 }}>Delete this lead?</p>
+              <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>This permanently removes the lead, its contacts, and its activity history. This cannot be undone.</p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn" onClick={() => setDeleteId(null)}>Cancel</button>
+                <button className="btn btn-danger" onClick={async () => { await deleteLead(deleteId); setDeleteId(null); closeForm(); fetchAll(); }}>Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </Layout>
+  );
+}
