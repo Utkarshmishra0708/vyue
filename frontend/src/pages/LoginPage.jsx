@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login as adminLogin, bdLogin, getBds } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { IS_PROD } from '../env';
 
 const BU_LABEL = { signage: 'Signage', jhes: 'JHES' };
 const BU_COLOR = { signage: '#4f46e5', jhes: '#ea580c' };
@@ -46,6 +47,25 @@ export default function LoginPage() {
       setBusy(false);
     }
   };
+
+  // ---- Production: password login is disabled; the app is entered via the
+  // portal SSO hand-off. Show a notice instead of the password flow, but keep
+  // the public Forecast Dashboard reachable (no login required). ----
+  if (IS_PROD) return (
+    <div style={s.wrap}>
+      <div style={s.card}>
+        <h1 style={s.title}>Sales CRM</h1>
+        <p style={s.sub}>Please open Sales CRM from the portal to sign in.</p>
+        <button onClick={() => navigate('/forecast')} style={{ ...s.buButton, borderColor: '#a7f3d0', background: '#fff' }}>
+          <div style={{ ...s.buIcon, background: '#059669' }}>📊</div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={s.buName}>Forecast Dashboard</div>
+            <div style={s.buDesc}>Hardware units forecast — no login needed</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
 
   // ---- Step 1: Business unit ----
   if (!bu) return (

@@ -9,10 +9,15 @@ const sequelize = require('../config/database');
 const User = sequelize.define('User', {
   id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name:          { type: DataTypes.STRING(255), allowNull: false },
-  email:         { type: DataTypes.STRING(255), unique: true, allowNull: true },
+  // email is unique PER business unit (composite key email_business_unit — see migration 002), so
+  // one corporate email may hold both a signage and a jhes account. NULL emails (BDs) are exempt.
+  email:         { type: DataTypes.STRING(255), unique: 'email_business_unit', allowNull: true },
+  // mobile contact number. Nullable in the DB so pre-existing rows are unaffected; the Settings
+  // add/edit modal makes it mandatory for users created or edited through the app.
+  mobile:        { type: DataTypes.STRING(32), allowNull: true },
   password_hash: { type: DataTypes.STRING(255), allowNull: true },
   role:          { type: DataTypes.ENUM('admin', 'pmo', 'bd'), allowNull: false, defaultValue: 'bd' },
-  business_unit: { type: DataTypes.ENUM('signage', 'jhes'), allowNull: false, defaultValue: 'signage' },
+  business_unit: { type: DataTypes.ENUM('signage', 'jhes'), unique: 'email_business_unit', allowNull: false, defaultValue: 'signage' },
   initials:      { type: DataTypes.STRING(8) },
   color:         { type: DataTypes.STRING(32), defaultValue: 'bg-indigo-500' },
   active:        { type: DataTypes.BOOLEAN, defaultValue: true },

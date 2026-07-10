@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { BU_CONFIG } from '../utils/constants';
+import { IS_PROD } from '../env';
 
 const NAV_ICONS = {
   leads: '📋', dashboard: '📊', reports: '📁', settings: '⚙️', 'change-password': '🔒',
@@ -28,7 +29,8 @@ export default function Sidebar() {
     { path: '/dashboard', label: 'Dashboard' },
     ...(isAdmin ? [{ path: '/reports', label: 'Reports' }] : []),
     ...(isAdmin ? [{ path: '/settings', label: 'Settings' }] : []),
-    { path: '/change-password', label: 'Password' }, // every user manages their own password now
+    // Self-service password change is DEV-ONLY; production is SSO-only.
+    ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
   ];
 
   return (
