@@ -24,8 +24,22 @@ export const PHASE_BADGE = {
 export const TEMP_BADGE = { Hot: 'badge-red', Warm: 'badge-amber', Cold: 'badge-blue' };
 
 export const DEVICE_SKU_MAP = {
-  MCM3000: 'Media Player', JSB210: 'Media Player', J100: 'Media Player', M2S: 'Dongle',
+  MCM3000: 'Media Player', JSB210: 'Media Player', J100: 'Media Player', C2Av2: 'Media Player', M2S: 'Dongle',
 };
+
+// Signage services offered on a lead, with the cost nature that drives the TCV auto-calc.
+//   opex  → recurring: billed monthly over the contract term (qty × rate × contract months)
+//   capex → one-time:  qty × rate
+// The `device` line is handled separately in the form because its nature is chosen per-lead by
+// the BD (see device_cost_type). Mirror of TCV_SERVICES in backend/routes/leads.js — keep in sync.
+export const SIGNAGE_SERVICES = [
+  { key: 'platform',     label: 'Platform',     nature: 'opex' },
+  { key: 'cms',          label: 'CMS',          nature: 'opex' },
+  { key: 'connectivity', label: 'Connectivity', nature: 'opex' },
+  { key: 'amc',          label: 'AMC (Annual Maintenance Charge)', nature: 'opex' },
+  { key: 'display',      label: 'Display',      nature: 'capex' },
+  { key: 'installation', label: 'Installation Charge (one-time)',  nature: 'capex' },
+];
 
 export const LOST_REASONS = ['Pricing', 'Competition', 'No Budget', 'No Decision', 'Timing', 'Product Fit', 'Other'];
 export const TAT_DAYS = 14;

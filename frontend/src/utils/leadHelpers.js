@@ -1,4 +1,27 @@
-import { PHASE_DATE_MAP, TAT_DAYS } from './constants';
+import { PHASE_DATE_MAP, TAT_DAYS, SIGNAGE_SERVICES } from './constants';
+
+// Auto-calculated Total Contract Value, in lakhs (₹ / 100,000), from a lead/form's ticked services:
+//   opex  → qty × rate × contract months   (recurring)
+//   capex → qty × rate                      (one-time)
+// The device line uses its per-lead cost type (form.device_cost_type, default capex). Returns ''
+// when nothing is calculable (no services, or missing rate/qty), so callers can show a blank field.
+// Mirror of computeTcvLakhs() in backend/routes/leads.js — keep the two formulas in sync.
+export function computeTcvLakhs(form) {
+  const months = parseInt(form.contract_period_months, 10) || 0;
+  let rupees = 0;
+  const add = (included, rate, qty, nature) => {
+    if (!included) return;
+    const r = parseFloat(rate) || 0;
+    const q = parseInt(qty, 10) || 0;
+    if (!r || !q) return;
+    rupees += nature === 'opex' ? r * q * months : r * q;
+  };
+  for (const svc of SIGNAGE_SERVICES) {
+    add(form[`includes_${svc.key}`], form[`${svc.key}_rate`], form[`${svc.key}_qty`], svc.nature);
+  }
+  add(form.includes_device, form.device_rate, form.device_qty, form.device_cost_type === 'opex' ? 'opex' : 'capex');
+  return rupees > 0 ? +(rupees / 100000).toFixed(2) : '';
+}
 
 // Additional Notes is stored as rich-text HTML (react-quill). Strip tags for
 // plain-text contexts (Excel/PDF cells) so exports don't show raw markup.

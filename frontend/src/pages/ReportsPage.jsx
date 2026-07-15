@@ -9,8 +9,8 @@ import { exportRowsToPdf } from '../utils/pdfExport';
 const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
 const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales'];
 const RENEWALS = ['New', 'Renewal', 'Expansion'];
-const SERVICES = ['Platform', 'CMS', 'Connectivity', 'Display', 'Device'];
-const SERVICE_KEY = { Platform: 'includes_platform', CMS: 'includes_cms', Connectivity: 'includes_connectivity', Display: 'includes_display', Device: 'includes_device' };
+const SERVICES = ['Platform', 'CMS', 'Connectivity', 'AMC', 'Display', 'Installation', 'Device'];
+const SERVICE_KEY = { Platform: 'includes_platform', CMS: 'includes_cms', Connectivity: 'includes_connectivity', AMC: 'includes_amc', Display: 'includes_display', Installation: 'includes_installation', Device: 'includes_device' };
 
 export default function ReportsPage() {
   const { user } = useAuth();

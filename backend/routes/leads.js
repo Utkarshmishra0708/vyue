@@ -27,10 +27,46 @@ const FIELD_LABELS = {
   includes_cms: 'Service: CMS', cms_rate: 'CMS Rate', cms_qty: 'CMS Qty',
   includes_connectivity: 'Service: Connectivity', connectivity_rate: 'Connectivity Rate', connectivity_qty: 'Connectivity Qty',
   includes_display: 'Service: Display', display_rate: 'Display Rate', display_qty: 'Display Qty',
-  includes_device: 'Service: Device', device_sku: 'Device SKU', device_rate: 'Device Rate',
-  device_qty: 'Device Qty', device_requested_date: 'Device Requested Date',
+  includes_device: 'Service: Device', device_sku: 'Device SKU', device_cost_type: 'Device Cost Type',
+  device_rate: 'Device Rate', device_qty: 'Device Qty', device_requested_date: 'Device Requested Date',
+  includes_amc: 'Service: AMC', amc_rate: 'AMC Rate', amc_qty: 'AMC Qty',
+  includes_installation: 'Service: Installation', installation_rate: 'Installation Rate', installation_qty: 'Installation Qty',
   jhes_product: 'JHES Product', additional_notes: 'Additional Notes',
 };
+
+// Signage services and their cost nature, used to auto-calculate TCV. OPEX services bill monthly
+// over the contract term; CAPEX services are one-time. Device's nature is per-lead (device_cost_type).
+// Mirror of frontend SIGNAGE_SERVICES in frontend/src/utils/constants.js — keep the two in sync.
+const TCV_SERVICES = [
+  { key: 'platform',     nature: 'opex' },
+  { key: 'cms',          nature: 'opex' },
+  { key: 'connectivity', nature: 'opex' },
+  { key: 'amc',          nature: 'opex' },
+  { key: 'display',      nature: 'capex' },
+  { key: 'installation', nature: 'capex' },
+];
+
+// Auto-calculated Total Contract Value, in lakhs (₹ / 100,000), from the ticked services:
+//   OPEX  → qty × rate × contract months   (recurring)
+//   CAPEX → qty × rate                      (one-time)
+// Device uses its per-lead cost type (defaults to capex). Returns 0 when nothing is calculable.
+// Mirror of computeTcvLakhs() in frontend/src/utils/leadHelpers.js — keep the two in sync.
+function computeTcvLakhs(body) {
+  const months = parseInt(body.contract_period_months, 10) || 0;
+  let rupees = 0;
+  const add = (included, rate, qty, nature) => {
+    if (!included) return;
+    const r = parseFloat(rate) || 0;
+    const q = parseInt(qty, 10) || 0;
+    if (!r || !q) return;
+    rupees += nature === 'opex' ? r * q * months : r * q;
+  };
+  for (const svc of TCV_SERVICES) {
+    add(body[`includes_${svc.key}`], body[`${svc.key}_rate`], body[`${svc.key}_qty`], svc.nature);
+  }
+  add(body.includes_device, body.device_rate, body.device_qty, body.device_cost_type === 'opex' ? 'opex' : 'capex');
+  return rupees > 0 ? +(rupees / 100000).toFixed(2) : 0;
+}
 
 // Date-only helpers — deliberately avoid toISOString()/UTC conversion.
 // A DATEONLY value like "2026-07-02" must mean the same calendar day
@@ -51,11 +87,13 @@ function addDaysLocal(dateStr, days) {
   return localDateString(dt);
 }
 
-// Clamp a date string to [today-2, today+2] — defense-in-depth for the
-// "BD can backdate the phase date up to 2 days" business rule.
-function clampPhaseDate(input) {
+// Clamp a phase date — defense-in-depth for the "BD can adjust the phase date" business rule.
+// Window is [today+2] on the high end for every phase; the low end depends on the phase:
+//   * "New"   → today (a brand-new lead can't have started in the past)
+//   * others  → today-2 (a phase move may have actually happened up to 2 days ago)
+function clampPhaseDate(input, phase) {
   const todayStr = localDateString();
-  const minStr = addDaysLocal(todayStr, -2);
+  const minStr = phase === 'New' ? todayStr : addDaysLocal(todayStr, -2);
   const maxStr = addDaysLocal(todayStr, 2);
   let val = (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) ? input : todayStr;
   if (val < minStr) val = minStr;
@@ -66,8 +104,11 @@ function clampPhaseDate(input) {
 // Build the persisted payload from a raw request body, applying all
 // business rules server-side (quantity totals, phase-gated fields, etc).
 function normalizePayload(body, { isCreate, existing }) {
-  const tcv = parseFloat(body.potential_tcv_lakhs) || 0;
+  // TCV is either hand-typed (tcv_manual) or auto-calculated from the services × contract period.
+  // Computing it server-side keeps the stored value authoritative regardless of the client.
+  const tcvManual = !!body.tcv_manual;
   const months = parseInt(body.contract_period_months, 10) || null;
+  const tcv = tcvManual ? (parseFloat(body.potential_tcv_lakhs) || 0) : computeTcvLakhs(body);
   const acv = tcv && months ? +(tcv / (months / 12)).toFixed(2) : 0;
   const phase = body.phase || 'New';
 
@@ -77,6 +118,10 @@ function normalizePayload(body, { isCreate, existing }) {
   const connQty = svcQty(body.includes_connectivity, body.connectivity_qty);
   const displayQty = svcQty(body.includes_display, body.display_qty);
   const deviceQty = svcQty(body.includes_device, body.device_qty);
+  const amcQty = svcQty(body.includes_amc, body.amc_qty);
+  const installationQty = svcQty(body.includes_installation, body.installation_qty);
+  // `quantity` stays the sum of the original hardware/service lines so the device Forecast
+  // (which falls back to it) is unaffected; AMC/installation counts live in their own columns.
   const totalQty = platformQty + cmsQty + connQty + displayQty + deviceQty;
 
   const phaseChanged = isCreate || (existing && existing.phase !== phase);
@@ -96,6 +141,7 @@ function normalizePayload(body, { isCreate, existing }) {
     competitor: body.competitor || null,
     quantity: totalQty,
     potential_tcv_lakhs: tcv,
+    tcv_manual: tcvManual,
     contract_period_months: months,
     po_validity_months: body.po_validity_months ? (parseInt(body.po_validity_months, 10) || null) : null,
     acv_lakhs: acv,
@@ -110,17 +156,25 @@ function normalizePayload(body, { isCreate, existing }) {
     includes_connectivity: !!body.includes_connectivity,
     includes_display: !!body.includes_display,
     includes_device: !!body.includes_device,
+    includes_amc: !!body.includes_amc,
+    includes_installation: !!body.includes_installation,
     platform_rate: body.includes_platform && body.platform_rate ? parseFloat(body.platform_rate) : null,
     cms_rate: body.includes_cms && body.cms_rate ? parseFloat(body.cms_rate) : null,
     connectivity_rate: body.includes_connectivity && body.connectivity_rate ? parseFloat(body.connectivity_rate) : null,
     display_rate: body.includes_display && body.display_rate ? parseFloat(body.display_rate) : null,
     device_rate: body.includes_device && body.device_rate ? parseFloat(body.device_rate) : null,
+    amc_rate: body.includes_amc && body.amc_rate ? parseFloat(body.amc_rate) : null,
+    installation_rate: body.includes_installation && body.installation_rate ? parseFloat(body.installation_rate) : null,
     platform_qty: platformQty || null,
     cms_qty: cmsQty || null,
     connectivity_qty: connQty || null,
     display_qty: displayQty || null,
     device_qty: deviceQty || null,
+    amc_qty: amcQty || null,
+    installation_qty: installationQty || null,
     device_sku: body.includes_device ? (body.device_sku || null) : null,
+    // Device cost nature: BD's choice, defaulting to capex when a device is included; null otherwise.
+    device_cost_type: body.includes_device ? (body.device_cost_type === 'opex' ? 'opex' : 'capex') : null,
     device_requested_date: body.includes_device ? (body.device_requested_date || null) : null,
     jhes_product: body.business_unit === 'jhes' ? (body.jhes_product || null) : null,
     additional_notes: body.additional_notes || null,
@@ -132,7 +186,7 @@ function normalizePayload(body, { isCreate, existing }) {
   // Phase date handling — only touched on an actual phase transition.
   if (phaseChanged) {
     const dateCol = PHASE_DATE_MAP[phase];
-    const clamped = clampPhaseDate(body.phase_date);
+    const clamped = clampPhaseDate(body.phase_date, phase);
     payload.phase_changed_at = new Date(`${clamped}T12:00:00`);
     if (dateCol) payload[dateCol] = clamped;
   } else if (existing) {

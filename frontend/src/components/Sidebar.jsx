@@ -13,6 +13,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebarCollapsed') === '1');
+  const [logoHover, setLogoHover] = useState(false);
 
   if (!user) return null;
 
@@ -38,10 +39,32 @@ export default function Sidebar() {
       width: collapsed ? 64 : 220, flexShrink: 0, background: '#0f172a', color: '#cbd5e1',
       display: 'flex', flexDirection: 'column', minHeight: '100vh', transition: 'width .15s',
     }}>
-      <div style={{ padding: '18px 16px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 30, height: 30, borderRadius: 8, background: bu.color, flexShrink: 0 }} />
+      {/* Logo doubles as a home button → Leads (the app's home page). */}
+      <button
+        type="button"
+        onClick={() => navigate('/leads')}
+        onMouseEnter={() => setLogoHover(true)}
+        onMouseLeave={() => setLogoHover(false)}
+        title="Sales CRM — Home"
+        style={{
+          padding: '16px', borderBottom: '1px solid #1e293b', borderTop: 'none', borderLeft: 'none', borderRight: 'none',
+          display: 'flex', alignItems: 'center', gap: 10, width: '100%', cursor: 'pointer', textAlign: 'left',
+          background: logoHover ? '#1e293b' : 'transparent', transition: 'background .12s',
+        }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {/* Jio logo from public/jio-logo.svg. Falls back to the BU colour tile if the asset is missing. */}
+          <img
+            src={`${process.env.PUBLIC_URL}/jio-logo.svg`}
+            alt="Jio"
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+            onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentNode.style.background = bu.color; }}
+          />
+        </div>
         {!collapsed && <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>Sales CRM</div>}
-      </div>
+      </button>
 
       <nav style={{ flex: 1, padding: '12px 8px' }}>
         {navItems.map(item => {

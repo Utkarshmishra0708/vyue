@@ -3,8 +3,8 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { useAuth } from '../context/AuthContext';
 import { createLead, updateLead, uploadPoDocument, fileUrl, getBds } from '../services/api';
-import { PHASE_DATE_MAP, DEVICE_SKU_MAP, LOST_REASONS } from '../utils/constants';
-import { todayStr, addDaysStr } from '../utils/leadHelpers';
+import { DEVICE_SKU_MAP, LOST_REASONS, SIGNAGE_SERVICES } from '../utils/constants';
+import { todayStr, addDaysStr, computeTcvLakhs } from '../utils/leadHelpers';
 
 const NOTES_TOOLBAR = [['bold', 'italic', 'underline'], [{ list: 'ordered' }, { list: 'bullet' }], ['link'], ['clean']];
 
@@ -19,10 +19,12 @@ const emptyForm = {
   includes_platform: false, platform_rate: '', platform_qty: '',
   includes_cms: false, cms_rate: '', cms_qty: '',
   includes_connectivity: false, connectivity_rate: '', connectivity_qty: '',
+  includes_amc: false, amc_rate: '', amc_qty: '',
   includes_display: false, display_rate: '', display_qty: '',
-  includes_device: false, device_sku: '', device_rate: '', device_qty: '', device_requested_date: '',
+  includes_installation: false, installation_rate: '', installation_qty: '',
+  includes_device: false, device_sku: '', device_cost_type: 'capex', device_rate: '', device_qty: '', device_requested_date: '',
   jhes_product: '',
-  potential_tcv_lakhs: '', contract_period_months: '', po_validity_months: '',
+  potential_tcv_lakhs: '', tcv_manual: false, contract_period_months: '', po_validity_months: '',
   phase: 'New', next_followup_date: '', po_expected_date: '', lost_reason: '', po_actual_value_lakhs: '',
   additional_notes: '',
 };
@@ -33,6 +35,16 @@ function Field({ label, children, required }) {
       <label className="field-label">{label}{required && ' *'}</label>
       {children}
     </div>
+  );
+}
+
+// Small tag showing a service's cost nature, so BDs can see how it feeds the TCV calc.
+function NatureChip({ nature }) {
+  const opex = nature === 'opex';
+  return (
+    <span className={`badge ${opex ? 'badge-blue' : 'badge-amber'}`} style={{ marginLeft: 6, fontSize: 10, fontWeight: 700 }}>
+      {opex ? 'Opex · recurring' : 'Capex · one-time'}
+    </span>
   );
 }
 
@@ -63,11 +75,14 @@ export default function LeadForm({ lead, onSave, onCancel }) {
         includes_platform: !!lead.includes_platform, platform_rate: lead.platform_rate || '', platform_qty: lead.platform_qty || '',
         includes_cms: !!lead.includes_cms, cms_rate: lead.cms_rate || '', cms_qty: lead.cms_qty || '',
         includes_connectivity: !!lead.includes_connectivity, connectivity_rate: lead.connectivity_rate || '', connectivity_qty: lead.connectivity_qty || '',
+        includes_amc: !!lead.includes_amc, amc_rate: lead.amc_rate || '', amc_qty: lead.amc_qty || '',
         includes_display: !!lead.includes_display, display_rate: lead.display_rate || '', display_qty: lead.display_qty || '',
-        includes_device: !!lead.includes_device, device_sku: lead.device_sku || '', device_rate: lead.device_rate || '',
+        includes_installation: !!lead.includes_installation, installation_rate: lead.installation_rate || '', installation_qty: lead.installation_qty || '',
+        includes_device: !!lead.includes_device, device_sku: lead.device_sku || '', device_cost_type: lead.device_cost_type || 'capex', device_rate: lead.device_rate || '',
         device_qty: lead.device_qty || '', device_requested_date: lead.device_requested_date || '',
         jhes_product: lead.jhes_product || '',
-        potential_tcv_lakhs: lead.potential_tcv_lakhs || '', contract_period_months: lead.contract_period_months || '',
+        potential_tcv_lakhs: lead.potential_tcv_lakhs || '', tcv_manual: lead.tcv_manual === undefined ? true : !!lead.tcv_manual,
+        contract_period_months: lead.contract_period_months || '',
         po_validity_months: lead.po_validity_months || '',
         phase: lead.phase || 'New', next_followup_date: lead.next_followup_date || '', po_expected_date: lead.po_expected_date || '',
         lost_reason: lead.lost_reason?.startsWith('Other: ') ? 'Other' : (lead.lost_reason || ''),
@@ -78,7 +93,8 @@ export default function LeadForm({ lead, onSave, onCancel }) {
       setExistingPoUrl(lead.po_document_url || null);
       setPhaseChanged(false);
     } else {
-      setForm({ ...emptyForm, owner_id: !isAdmin ? user.id : '', next_followup_date: addDaysStr(todayStr(), 14) });
+      // JHES leads have no itemized services to auto-calc from, so they enter TCV by hand.
+      setForm({ ...emptyForm, owner_id: !isAdmin ? user.id : '', next_followup_date: addDaysStr(todayStr(), 14), tcv_manual: isJHES });
       setContacts([]);
       setExistingPoUrl(null);
       setPhaseChanged(true);
@@ -95,8 +111,15 @@ export default function LeadForm({ lead, onSave, onCancel }) {
     setPhaseChanged(true);
   };
 
+  // TCV auto-calculates from the ticked services × contract period, unless the BD overrides it
+  // (tcv_manual). effectiveTcv is what's shown in the field and persisted on save.
+  const computedTcv = computeTcvLakhs(form);
+  const effectiveTcv = form.tcv_manual ? form.potential_tcv_lakhs : computedTcv;
+  const overrideTcv = () => setForm(f => ({ ...f, tcv_manual: true, potential_tcv_lakhs: computeTcvLakhs(f) }));
+  const useAutoTcv = () => setForm(f => ({ ...f, tcv_manual: false }));
+
   const acv = () => {
-    const tcv = parseFloat(form.potential_tcv_lakhs), m = parseInt(form.contract_period_months, 10);
+    const tcv = parseFloat(effectiveTcv), m = parseInt(form.contract_period_months, 10);
     if (!tcv || !m) return null;
     return (tcv / (m / 12)).toFixed(2);
   };
@@ -112,6 +135,8 @@ export default function LeadForm({ lead, onSave, onCancel }) {
       const payload = {
         ...form,
         business_unit: user.business_unit,
+        // In auto mode form.potential_tcv_lakhs isn't kept in sync — send the computed value.
+        potential_tcv_lakhs: form.tcv_manual ? form.potential_tcv_lakhs : (computedTcv || ''),
         lost_reason: form.phase === 'Lost' && form.lost_reason === 'Other' && lostOther.trim()
           ? `Other: ${lostOther.trim()}` : form.lost_reason,
         contacts,
@@ -134,7 +159,10 @@ export default function LeadForm({ lead, onSave, onCancel }) {
     }
   };
 
-  const minPhaseDate = addDaysStr(todayStr(), -2);
+  // "New" can't be backdated (a lead starts today at the earliest); every other phase move may
+  // have happened up to 2 days ago. The high end is always today+2.
+  const isNewPhase = form.phase === 'New';
+  const minPhaseDate = isNewPhase ? todayStr() : addDaysStr(todayStr(), -2);
   const maxPhaseDate = addDaysStr(todayStr(), 2);
   const inactivePhase = ['PO Received', 'Lost'].includes(form.phase);
 
@@ -204,35 +232,56 @@ export default function LeadForm({ lead, onSave, onCancel }) {
       ) : (
         <section>
           <p className="section-title">Services Offered</p>
-          <p style={{ fontSize: 12, color: '#94a3b8', margin: '-6px 0 10px' }}>Tick each service offered, then enter its unit rate and quantity.</p>
+          <p style={{ fontSize: 12, color: '#94a3b8', margin: '-6px 0 10px' }}>
+            Tick each service, then enter its unit rate and quantity. <b>Opex</b> is recurring (billed monthly over the contract);
+            <b> Capex</b> is one-time. These feed the auto-calculated TCV below.
+          </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {['platform', 'cms', 'connectivity', 'display'].map(svc => (
-              <div key={svc} className="card-sm" style={{ borderColor: form[`includes_${svc}`] ? '#c7d2fe' : '#e2e8f0', background: form[`includes_${svc}`] ? '#eef2ff' : '#fff' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                  <input type="checkbox" checked={form[`includes_${svc}`]} onChange={e => {
-                    set(`includes_${svc}`, e.target.checked);
-                    if (!e.target.checked) { set(`${svc}_rate`, ''); set(`${svc}_qty`, ''); }
-                  }} />
-                  {svc === 'cms' ? 'CMS' : svc[0].toUpperCase() + svc.slice(1)}
-                </label>
-                {form[`includes_${svc}`] && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-                    <Field label="Unit Rate (₹)"><input type="number" step="0.01" min="0" className="input" value={form[`${svc}_rate`]} onChange={e => set(`${svc}_rate`, e.target.value)} /></Field>
-                    <Field label="Quantity" required><input required type="number" min="1" className="input" value={form[`${svc}_qty`]} onChange={e => set(`${svc}_qty`, e.target.value)} /></Field>
-                  </div>
-                )}
-              </div>
-            ))}
+            {SIGNAGE_SERVICES.map(svc => {
+              const on = form[`includes_${svc.key}`];
+              return (
+                <div key={svc.key} className="card-sm" style={{ borderColor: on ? '#c7d2fe' : '#e2e8f0', background: on ? '#eef2ff' : '#fff' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                    <input type="checkbox" checked={on} onChange={e => {
+                      set(`includes_${svc.key}`, e.target.checked);
+                      if (!e.target.checked) { set(`${svc.key}_rate`, ''); set(`${svc.key}_qty`, ''); }
+                    }} />
+                    {svc.label}
+                    <NatureChip nature={svc.nature} />
+                  </label>
+                  {on && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+                      <Field label={svc.nature === 'opex' ? 'Unit Rate (₹/month)' : 'Unit Rate (₹, one-time)'}>
+                        <input type="number" step="0.01" min="0" className="input" value={form[`${svc.key}_rate`]} onChange={e => set(`${svc.key}_rate`, e.target.value)} />
+                      </Field>
+                      <Field label="Quantity" required><input required type="number" min="1" className="input" value={form[`${svc.key}_qty`]} onChange={e => set(`${svc.key}_qty`, e.target.value)} /></Field>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             <div className="card-sm" style={{ borderColor: form.includes_device ? '#c7d2fe' : '#e2e8f0', background: form.includes_device ? '#eef2ff' : '#fff' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                 <input type="checkbox" checked={form.includes_device} onChange={e => {
                   set('includes_device', e.target.checked);
-                  if (!e.target.checked) { set('device_sku', ''); set('device_rate', ''); set('device_qty', ''); set('device_requested_date', ''); }
+                  if (e.target.checked) { if (!form.device_cost_type) set('device_cost_type', 'capex'); }
+                  else { set('device_sku', ''); set('device_rate', ''); set('device_qty', ''); set('device_requested_date', ''); set('device_cost_type', 'capex'); }
                 }} />
                 Device
+                <NatureChip nature={form.device_cost_type === 'opex' ? 'opex' : 'capex'} />
               </label>
               {form.includes_device && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                  <Field label="Cost Type" required>
+                    <div style={{ display: 'flex', gap: 18 }}>
+                      {[['capex', 'Capex (one-time)'], ['opex', 'Opex (recurring)']].map(([ct, lbl]) => (
+                        <label key={ct} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                          <input type="radio" name="device_cost_type" checked={(form.device_cost_type || 'capex') === ct} onChange={() => set('device_cost_type', ct)} />
+                          {lbl}
+                        </label>
+                      ))}
+                    </div>
+                  </Field>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <Field label="Device SKU" required>
                       <select required className="input" value={form.device_sku} onChange={e => set('device_sku', e.target.value)}>
@@ -243,7 +292,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
                     {form.device_sku && <Field label="Device Type"><input className="input" readOnly disabled value={DEVICE_SKU_MAP[form.device_sku]} style={{ background: '#f8fafc' }} /></Field>}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <Field label="Unit Rate (₹)"><input type="number" step="0.01" min="0" className="input" value={form.device_rate} onChange={e => set('device_rate', e.target.value)} /></Field>
+                    <Field label={form.device_cost_type === 'opex' ? 'Unit Rate (₹/month)' : 'Unit Rate (₹, one-time)'}><input type="number" step="0.01" min="0" className="input" value={form.device_rate} onChange={e => set('device_rate', e.target.value)} /></Field>
                     <Field label="Quantity" required><input required type="number" min="1" className="input" value={form.device_qty} onChange={e => set('device_qty', e.target.value)} /></Field>
                   </div>
                   <Field label="Device Requested Date">
@@ -261,7 +310,39 @@ export default function LeadForm({ lead, onSave, onCancel }) {
       <section>
         <p className="section-title">Deal Size</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-          <Field label="Potential TCV (Lakhs)" required><input required type="number" step="0.01" min="0" className="input" value={form.potential_tcv_lakhs} onChange={e => set('potential_tcv_lakhs', e.target.value)} /></Field>
+          <Field label="Potential TCV (Lakhs)" required>
+            {isJHES ? (
+              <input required type="number" step="0.01" min="0" className="input" value={form.potential_tcv_lakhs} onChange={e => set('potential_tcv_lakhs', e.target.value)} />
+            ) : (
+              <>
+                <input
+                  required type="number" step="0.01" min="0" className="input"
+                  value={effectiveTcv}
+                  readOnly={!form.tcv_manual}
+                  onChange={e => set('potential_tcv_lakhs', e.target.value)}
+                  style={!form.tcv_manual ? { background: '#f8fafc', color: '#334155' } : undefined}
+                  title={!form.tcv_manual ? 'Auto-calculated — click Override to edit' : undefined}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                  {form.tcv_manual ? (
+                    <>
+                      <button type="button" className="btn btn-sm" onClick={useAutoTcv}>↻ Use auto-calc</button>
+                      {computedTcv !== '' && <span style={{ fontSize: 11, color: '#94a3b8' }}>Auto-calc: ₹{computedTcv} L</span>}
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" className="btn btn-sm" onClick={overrideTcv}>✎ Override</button>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                        {computedTcv === ''
+                          ? 'Auto-calc: add services with rate & quantity (and contract period), or Override to type a value.'
+                          : 'Auto-calculated from services × contract period.'}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </Field>
           <Field label="Contract Period (Months)" required><input required type="number" min="1" className="input" value={form.contract_period_months} onChange={e => set('contract_period_months', e.target.value)} /></Field>
           <Field label="PO Validity (Months)">
             <input type="number" min="1" className="input" value={form.po_validity_months} onChange={e => set('po_validity_months', e.target.value)} />
@@ -285,9 +366,13 @@ export default function LeadForm({ lead, onSave, onCancel }) {
             </Field>
           )}
           {phaseChanged && (
-            <Field label={`"${form.phase}" Date (±2 days)`}>
+            <Field label={`"${form.phase}" Date ${isNewPhase ? '(today to +2 days)' : '(±2 days)'}`}>
               <input type="date" className="input" value={phaseDate} min={minPhaseDate} max={maxPhaseDate} onChange={e => setPhaseDate(e.target.value)} />
-              <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Defaults to today. Adjust ±2 days if this phase actually happened earlier or later.</p>
+              <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                {isNewPhase
+                  ? 'Defaults to today. A new lead can be dated today up to 2 days ahead.'
+                  : 'Defaults to today. Adjust ±2 days if this phase actually happened earlier or later.'}
+              </p>
             </Field>
           )}
           {form.phase === 'Lost' && (
