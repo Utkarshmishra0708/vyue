@@ -334,27 +334,15 @@ router.post('/', async (req, res) => {
 // PUT /api/leads/:id — update
 // --------------------------------------------------------------------------
 router.put('/:id', async (req, res) => {
-  // Temporary diagnostic logging for the "phase not updating on staging" issue.
-  // Every line is prefixed with [LEAD_UPDATE] so it can be grepped out of the live logs:
-  //   grep LEAD_UPDATE <logfile>
-  // Remove this block once the staging issue is resolved.
-  const L = (...args) => console.log('[LEAD_UPDATE]', `lead=${req.params.id}`, ...args);
-  L('--- incoming request ---');
-  L('user:', req.user ? { id: req.user.id, name: req.user.name, role: req.user.role } : '(no req.user!)');
-  L('requested phase:', req.body ? req.body.phase : '(no body)', '| phase_date:', req.body ? req.body.phase_date : undefined);
-
   const t = await sequelize.transaction();
   try {
     const existing = await Lead.findByPk(req.params.id, { transaction: t });
     if (!existing) {
-      L('lead NOT FOUND → 404');
       await t.rollback();
       return res.status(404).json({ message: 'Lead not found' });
     }
-    L('existing phase:', existing.phase, '| owner_id:', existing.owner_id);
 
     if (req.user.role === 'bd' && existing.owner_id !== req.user.id) {
-      L('BD scope mismatch → 403 (existing.owner_id', existing.owner_id, '!= user.id', req.user.id, ')');
       await t.rollback();
       return res.status(403).json({ message: 'Forbidden' });
     }
@@ -364,10 +352,13 @@ router.put('/:id', async (req, res) => {
 
     const before = existing.toJSON();
     const { payload, phaseChanged, fromPhase } = normalizePayload(body, { isCreate: false, existing: before });
-    L('normalized:', 'phaseChanged=', phaseChanged, '| fromPhase=', fromPhase, '| payload.phase=', payload.phase, '| phase_changed_at=', payload.phase_changed_at);
 
-    await existing.update({ ...payload, updated_by: req.user.id }, { transaction: t });
-    L('Lead.update OK → phase in row is now', existing.phase);
+    // Use a static UPDATE (not existing.update) so the write does NOT rely on Sequelize's
+    // per-instance dirty-tracking. In the mounted (STB) process that dirty-tracking was flagging
+    // every data field as "unchanged", so instance.update() emitted only `SET updated_at=?` and the
+    // real edits (phase, service fields, etc.) were silently dropped — while the transaction still
+    // committed, so it looked like a no-op. A static update always writes the given columns.
+    await Lead.update({ ...payload, updated_by: req.user.id }, { where: { id: existing.id }, transaction: t });
 
     // Contacts — replace-all, matching original app behavior
     if (Array.isArray(body.contacts)) {
@@ -378,38 +369,22 @@ router.put('/:id', async (req, res) => {
           { transaction: t }
         );
       }
-      L('contacts replaced:', body.contacts.length);
     }
 
     if (phaseChanged) {
-      L('creating StageHistory:', { from_stage: fromPhase, to_stage: payload.phase, changed_by: req.user.name, changed_at: payload.phase_changed_at });
       await StageHistory.create({
         lead_id: existing.id, from_stage: fromPhase, to_stage: payload.phase,
         changed_by: req.user.name, changed_at: payload.phase_changed_at || new Date(),
       }, { transaction: t });
-      L('StageHistory.create OK');
     }
 
     const rows = diffActivity(before, payload, existing.id, existing.sr_no, existing.customer_name, req.user.name);
-    L('activity rows to insert:', rows.length, rows.map(r => `${r.field_changed}:${r.old_value}->${r.new_value}`));
     if (rows.length) await ActivityLog.bulkCreate(rows, { transaction: t });
 
     await t.commit();
-    L('COMMIT OK');
     const full = await Lead.findByPk(existing.id, { include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] }] });
-    L('post-commit phase read back from DB:', full ? full.phase : '(null)');
     return res.json(full);
   } catch (err) {
-    // Full error detail — name, message, SQL, and stack — so the real cause surfaces in staging logs.
-    console.error('[LEAD_UPDATE] ERROR lead=' + req.params.id, {
-      name: err.name,
-      message: err.message,
-      original: err.original ? err.original.message : undefined,
-      sql: err.sql,
-      sqlMessage: err.original ? err.original.sqlMessage : undefined,
-      code: err.original ? err.original.code : undefined,
-    });
-    console.error('[LEAD_UPDATE] STACK', err.stack);
     await t.rollback();
     return res.status(500).json({ message: err.message });
   }
