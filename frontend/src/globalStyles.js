@@ -57,4 +57,17 @@ export const GLOBAL_CSS = `
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+
+  /* Continuous, smooth ticker (e.g. overdue follow-ups). The track holds two identical copies of the
+     content back-to-back and slides left by exactly half its width, so the loop is seamless with no
+     jump. Pauses on hover so a user can read an entry. Respects reduced-motion preferences. */
+  .marquee { overflow: hidden; white-space: nowrap; }
+  .marquee__track { display: inline-flex; white-space: nowrap; will-change: transform; animation: crm-marquee linear infinite; }
+  .marquee:hover .marquee__track { animation-play-state: paused; }
+  @keyframes crm-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) { .marquee__track { animation: none; } }
+
+  /* Clickable conversion-funnel bands — subtle lift + brighten on hover. */
+  .funnel-band { transition: filter .15s ease, transform .15s ease; }
+  .funnel-band:hover { filter: brightness(1.06) saturate(1.08); transform: translateY(-1px); }
 `;

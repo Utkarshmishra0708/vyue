@@ -44,7 +44,7 @@ api.interceptors.response.use(
 // --------------------------------------------------------------------------
 
 // Auth
-export const login          = (email, password)               => api.post('/auth/login', { email, password }).then(r => r.data);
+export const login          = (email, password, businessUnit) => api.post('/auth/login', { email, password, business_unit: businessUnit }).then(r => r.data);
 export const bdLogin        = (userId, password)              => api.post('/auth/bd-login', { userId, password }).then(r => r.data);
 export const getMe          = ()                              => api.get('/auth/me').then(r => r.data);
 export const changePassword = (currentPassword, newPassword)  => api.post('/auth/change-password', { currentPassword, newPassword }).then(r => r.data);

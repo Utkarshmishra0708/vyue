@@ -6,21 +6,46 @@ import { PHASE_DATE_MAP, TAT_DAYS, SIGNAGE_SERVICES } from './constants';
 // The device line uses its per-lead cost type (form.device_cost_type, default capex). Returns ''
 // when nothing is calculable (no services, or missing rate/qty), so callers can show a blank field.
 // Mirror of computeTcvLakhs() in backend/routes/leads.js — keep the two formulas in sync.
-export function computeTcvLakhs(form) {
+// Split the ticked services into OPEX (recurring) and CAPEX (one-time) parts, both in lakhs.
+// Mirror of computeTcvBreakdown() in backend/routes/leads.js — keep the two in sync.
+export function computeTcvBreakdown(form) {
   const months = parseInt(form.contract_period_months, 10) || 0;
-  let rupees = 0;
+  let opex = 0, capex = 0;
   const add = (included, rate, qty, nature) => {
     if (!included) return;
     const r = parseFloat(rate) || 0;
     const q = parseInt(qty, 10) || 0;
     if (!r || !q) return;
-    rupees += nature === 'opex' ? r * q * months : r * q;
+    if (nature === 'opex') opex += r * q * months; else capex += r * q;
   };
   for (const svc of SIGNAGE_SERVICES) {
     add(form[`includes_${svc.key}`], form[`${svc.key}_rate`], form[`${svc.key}_qty`], svc.nature);
   }
   add(form.includes_device, form.device_rate, form.device_qty, form.device_cost_type === 'opex' ? 'opex' : 'capex');
-  return rupees > 0 ? +(rupees / 100000).toFixed(2) : '';
+  return { opexLakhs: opex / 100000, capexLakhs: capex / 100000 };
+}
+
+export function computeTcvLakhs(form) {
+  const { opexLakhs, capexLakhs } = computeTcvBreakdown(form);
+  const tcv = opexLakhs + capexLakhs;
+  return tcv > 0 ? +tcv.toFixed(2) : '';
+}
+
+// First-year Annual Contract Value in lakhs. OPEX is annualised across the contract term; CAPEX
+// (one-time) is realised in full in year 1. For a hand-typed TCV (no service breakdown, e.g. JHES)
+// the whole value is annualised evenly. Returns null when it can't be computed.
+export function computeAcvLakhs(form, { manual, manualTcv } = {}) {
+  const months = parseInt(form.contract_period_months, 10) || 0;
+  const years = months ? months / 12 : 0;
+  if (manual) {
+    const tcv = parseFloat(manualTcv) || 0;
+    if (!tcv || !years) return null;
+    return +(tcv / years).toFixed(2);
+  }
+  const { opexLakhs, capexLakhs } = computeTcvBreakdown(form);
+  if (opexLakhs + capexLakhs <= 0) return null;
+  const opexPerYear = years ? opexLakhs / years : opexLakhs;
+  return +(opexPerYear + capexLakhs).toFixed(2);
 }
 
 // Additional Notes is stored as rich-text HTML (react-quill). Strip tags for
@@ -79,24 +104,59 @@ export function getPOExpiryDays(lead) {
   return daysBetween(new Date(), expiry);
 }
 
-export function calcLeadScore(lead) {
-  if (lead.phase === 'PO Received') return 100;
-  if (lead.phase === 'Lost') return 0;
-  if (lead.phase === 'On Hold') return 10;
-  const PHASE_PTS = { New:5, Qualified:15, Demo:25, Proposal:35, Negotiation:48, 'PO Expected':58 };
-  let s = PHASE_PTS[lead.phase] || 5;
-  if (lead.lead_temperature === 'Hot') s += 20;
-  else if (lead.lead_temperature === 'Warm') s += 10;
+// Phase → progression score (30% weight). Lost is excluded from scoring entirely.
+const PHASE_SCORE = {
+  'PO Received': 100, 'PO Expected': 90, Negotiation: 85, Proposal: 70,
+  Demo: 55, Qualified: 40, New: 20, 'On Hold': 15,
+};
+
+// Deal-size percentile cut-offs (20th / 80th) of Potential TCV across all non-Lost leads in the
+// pipeline. Pass the result to calcLeadScore so every lead is ranked against the same population.
+export function dealSizeThresholds(leads) {
+  const tcvs = leads
+    .filter(l => l.phase !== 'Lost')
+    .map(l => parseFloat(l.potential_tcv_lakhs) || 0)
+    .sort((a, b) => a - b);
+  const n = tcvs.length;
+  if (!n) return { p20: 0, p80: 0, n: 0 };
+  const at = (p) => tcvs[Math.min(n - 1, Math.max(0, Math.round(p * (n - 1))))];
+  return { p20: at(0.2), p80: at(0.8), n };
+}
+
+// Weighted lead score (0–100). Returns null for Lost leads (caller greys the row, shows no score).
+//   Deal Size 40%  — Top 20% by TCV → 100, Middle 60% → 60, Bottom 20% → 30
+//   Phase     30%  — see PHASE_SCORE
+//   Deal Type 15%  — Renewal/Expansion → 90, New → 60
+//   Recency   15%  — base 60; overdue follow-up −20; PO expected within 30 days +15; clamped 0–100
+export function calcLeadScore(lead, thresholds) {
+  if (lead.phase === 'Lost') return null;
+
+  // Deal Size (40%). Needs enough spread to rank meaningfully; otherwise everyone is "middle".
   const tcv = parseFloat(lead.potential_tcv_lakhs) || 0;
-  if (tcv > 50) s += 10; else if (tcv > 20) s += 7; else if (tcv > 5) s += 4; else if (tcv > 0) s += 2;
-  const dateKey = PHASE_DATE_MAP[lead.phase];
-  const dateStr = lead.phase_changed_at || (dateKey ? lead[dateKey] : null) || lead.createdAt;
-  if (dateStr && daysBetween(dateStr, new Date()) > TAT_DAYS) s -= 12;
-  if (lead.next_followup_date) {
-    s += 5;
-    if (new Date(lead.next_followup_date) >= new Date()) s += 5;
+  let dealSize = 60;
+  if (thresholds && thresholds.n >= 3 && thresholds.p80 > thresholds.p20) {
+    if (tcv >= thresholds.p80) dealSize = 100;
+    else if (tcv <= thresholds.p20) dealSize = 30;
+    else dealSize = 60;
   }
-  return Math.min(99, Math.max(1, s));
+
+  // Phase (30%)
+  const phase = PHASE_SCORE[lead.phase] ?? 20;
+
+  // Deal Type (15%) — Renewal and Expansion are existing-customer growth → 90; New → 60.
+  const dealType = (lead.new_or_renewal === 'Renewal' || lead.new_or_renewal === 'Expansion') ? 90 : 60;
+
+  // Recency / Momentum (15%)
+  let recency = 60;
+  if (lead.next_followup_date && new Date(lead.next_followup_date) < new Date()) recency -= 20;
+  if (lead.po_expected_date) {
+    const d = daysBetween(new Date(), lead.po_expected_date);
+    if (d >= 0 && d <= 30) recency += 15;
+  }
+  recency = Math.min(100, Math.max(0, recency));
+
+  const score = dealSize * 0.40 + phase * 0.30 + dealType * 0.15 + recency * 0.15;
+  return Math.round(Math.min(100, Math.max(0, score)));
 }
 
 // Build stage-age + team-average lookup from raw stage_history rows.

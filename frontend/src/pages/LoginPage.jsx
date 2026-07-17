@@ -38,7 +38,7 @@ export default function LoginPage() {
     try {
       const data = selected.role === 'bd'
         ? await bdLogin(selected.id, password)
-        : await adminLogin(pmoEmail, password);
+        : await adminLogin(pmoEmail, password, bu);
       login(data.token, data.user);
       navigate('/leads', { replace: true });
     } catch (err) {

@@ -23,10 +23,16 @@ const passwordAuthDevOnly = (req, res, next) => {
 // POST /api/auth/login — admin/PMO login with email + password (dev only)
 router.post('/login', passwordAuthDevOnly, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, business_unit } = req.body;
     if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
 
-    const user = await User.findOne({ where: { email } });
+    // Scope the lookup to the chosen business unit when supplied. The same corporate email may hold a
+    // separate account per business unit (signage / jhes) — see migration 002 — so matching on email
+    // alone would return whichever row happens to come first and log a JHES admin into signage (or
+    // vice-versa). With business_unit set, each PMO signs into their own business unit's account.
+    const where = { email };
+    if (business_unit) where.business_unit = business_unit;
+    const user = await User.findOne({ where });
     if (!user)                 return res.status(401).json({ message: 'Invalid credentials' });
     if (!user.active)          return res.status(403).json({ message: 'User is inactive' });
     if (!['admin', 'pmo'].includes(user.role)) return res.status(403).json({ message: 'Not an admin account' });

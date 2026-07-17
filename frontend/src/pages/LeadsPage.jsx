@@ -8,8 +8,9 @@ import KanbanView from '../components/KanbanView';
 import { useAuth } from '../context/AuthContext';
 import { getLeads, deleteLead, updateLead, getBds, bulkUpdateLeads, getStageHistory } from '../services/api';
 import { PHASE_BADGE, TEMP_BADGE } from '../utils/constants';
-import { fmtDate, isTATBreached, isOverdue, getPOExpiryDays, calcLeadScore, buildRotMetrics, getRotState, stripHtml } from '../utils/leadHelpers';
+import { fmtDate, isTATBreached, isOverdue, getPOExpiryDays, calcLeadScore, dealSizeThresholds, buildRotMetrics, getRotState, stripHtml } from '../utils/leadHelpers';
 import { exportRowsToPdf } from '../utils/pdfExport';
+import { writeFormattedSheet } from '../utils/excelExport';
 
 const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
 const RATINGS = ['Hot', 'Warm', 'Cold'];
@@ -55,17 +56,21 @@ export default function LeadsPage() {
     const f = searchParams.get('filter');
     const phase = searchParams.get('phase');
     const bd = searchParams.get('bd');
-    if (!f && !phase && !bd) return;
+    const source = searchParams.get('source');
+    if (!f && !phase && !bd && !source) return;
     setCameFromDashboard(true);
     if (f === 'hot') setFilterTemps(['Hot']);
     else if (f === 'won') setFilterPhases(['PO Received']);
     else if (f === 'overdue') setFilterOverdue(true);
     else if (f === 'active') setFilterPhases(['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected']);
-    if (phase) setFilterPhases([phase]);
+    if (phase) setFilterPhases(phase.split(','));
+    if (source) setFilterSources(source.split(','));
     if (bd && isAdmin) setFilterBDs([bd]);
   }, [searchParams, isAdmin]);
 
   const { lastEntry: rotLastEntry, teamAvg: rotTeamAvg } = useMemo(() => buildRotMetrics(stageHistory), [stageHistory]);
+  // Deal-size percentile cut-offs for the lead score, ranked across the whole (scoped) pipeline.
+  const scoreThresholds = useMemo(() => dealSizeThresholds(leads), [leads]);
 
   const filtered = useMemo(() => leads.filter(l => {
     const s = search.toLowerCase();
@@ -134,7 +139,7 @@ export default function LeadsPage() {
       'New/Renewal': l.new_or_renewal, 'Lead Rating': l.lead_temperature, 'Competitor': l.competitor || '',
       'Quantity (Total)': l.quantity, 'Potential TCV (L)': l.potential_tcv_lakhs, 'Contract Period (Mo)': l.contract_period_months,
       'PO Validity (Mo)': l.po_validity_months || '', 'ACV (L/yr)': l.acv_lakhs, 'Contract Value (L)': l.contract_value_lakhs || '',
-      'Phase': l.phase, 'Next Follow-Up': l.next_followup_date || '', 'PO Expected Date': l.po_expected_date || '',
+      'Phase': l.phase, 'Lead Score': calcLeadScore(l, scoreThresholds) ?? '', 'Next Follow-Up': l.next_followup_date || '', 'PO Expected Date': l.po_expected_date || '',
       'Platform': l.includes_platform ? 'Yes' : '', 'Platform Rate (₹)': l.platform_rate || '', 'Platform Qty': l.platform_qty || '',
       'CMS': l.includes_cms ? 'Yes' : '', 'CMS Rate (₹)': l.cms_rate || '', 'CMS Qty': l.cms_qty || '',
       'Connectivity': l.includes_connectivity ? 'Yes' : '', 'Connectivity Rate (₹)': l.connectivity_rate || '', 'Connectivity Qty': l.connectivity_qty || '',
@@ -146,9 +151,7 @@ export default function LeadsPage() {
       'JHES Product': l.jhes_product || '', 'Actual PO Value (L)': l.po_actual_value_lakhs || '', 'Lost Reason': l.lost_reason || '',
       'Additional Notes': stripHtml(l.additional_notes), 'Created At': l.createdAt ? fmtDate(l.createdAt) : '',
     }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Leads');
-    XLSX.writeFile(wb, `Sales_CRM_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    writeFormattedSheet(XLSX, rows, 'Leads', `Sales_CRM_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   // PDF export shows a curated, readable column set (not all 30+ Excel columns —
@@ -161,11 +164,14 @@ export default function LeadsPage() {
       subtitle: `${toExport.length} lead${toExport.length > 1 ? 's' : ''} · generated ${fmtDate(new Date())}`,
       tables: [{
         columns: ['Sr', 'Customer', 'BD', 'Phase', 'Rating', 'TCV (₹L)', 'Score', 'Source', 'Next Follow-Up'],
-        rows: toExport.map(l => [
-          l.sr_no, l.customer_name, l.owner?.name?.split(' ')[0] || '', l.phase, l.lead_temperature,
-          l.potential_tcv_lakhs, calcLeadScore(l), l.lead_source,
-          ['On Hold', 'Lost', 'PO Received'].includes(l.phase) ? '—' : (l.next_followup_date ? fmtDate(l.next_followup_date) : '—'),
-        ]),
+        rows: toExport.map(l => {
+          const sc = calcLeadScore(l, scoreThresholds);
+          return [
+            l.sr_no, l.customer_name, l.owner?.name?.split(' ')[0] || '', l.phase, l.lead_temperature,
+            l.potential_tcv_lakhs, sc === null ? '—' : sc, l.lead_source,
+            ['On Hold', 'Lost', 'PO Received'].includes(l.phase) ? '—' : (l.next_followup_date ? fmtDate(l.next_followup_date) : '—'),
+          ];
+        }),
       }],
       filename: `Sales_CRM_${new Date().toISOString().slice(0, 10)}.pdf`,
     });
@@ -195,13 +201,14 @@ export default function LeadsPage() {
       </div>
 
       <div style={{ padding: 20 }}>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input className="input" style={{ width: 220 }} placeholder="Search customer, city, competitor…" value={search} onChange={e => setSearch(e.target.value)} />
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 14px' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginRight: 2 }}>Filters</span>
+          <input className="input" style={{ width: 240 }} placeholder="Search customer, city, competitor…" value={search} onChange={e => setSearch(e.target.value)} />
           <MultiSelect label="Phase" options={PHASES} selected={filterPhases} onChange={setFilterPhases} />
           <MultiSelect label="Rating" options={RATINGS} selected={filterTemps} onChange={setFilterTemps} />
           <MultiSelect label="Source" options={SOURCES} selected={filterSources} onChange={setFilterSources} />
           {isAdmin && <MultiSelect label="BD" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#334155' }}>
             <input type="checkbox" checked={filterOverdue} onChange={e => setFilterOverdue(e.target.checked)} /> Overdue only
           </label>
         </div>
@@ -245,8 +252,10 @@ export default function LeadsPage() {
                   const showExpiry = poExpiry !== null && poExpiry <= 60;
                   const rot = getRotState(l, rotLastEntry, rotTeamAvg);
                   const isClosed = ['On Hold', 'Lost', 'PO Received'].includes(l.phase);
+                  const isLost = l.phase === 'Lost';
+                  const score = calcLeadScore(l, scoreThresholds);
                   return (
-                    <tr key={l.id} onClick={() => openEdit(l)} style={{ background: tatBad ? '#fef2f2' : undefined }}>
+                    <tr key={l.id} onClick={() => openEdit(l)} style={{ background: isLost ? '#f1f5f9' : (tatBad ? '#fef2f2' : undefined), color: isLost ? '#94a3b8' : undefined, opacity: isLost ? 0.75 : 1 }}>
                       {isAdmin && <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelect(l.id)} /></td>}
                       <td style={{ color: '#94a3b8' }}>{l.sr_no}</td>
                       <td>
@@ -267,7 +276,11 @@ export default function LeadsPage() {
                       <td><span className={`badge ${PHASE_BADGE[l.phase]}`}>{l.phase}</span></td>
                       <td><span className={`badge ${TEMP_BADGE[l.lead_temperature]}`}>{l.lead_temperature}</span></td>
                       <td style={{ textAlign: 'right', fontWeight: 700 }}>₹{l.potential_tcv_lakhs}</td>
-                      <td>{calcLeadScore(l)}</td>
+                      <td>
+                        {score === null ? <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>—</span> : (
+                          <span className={`badge ${score >= 70 ? 'badge-green' : score >= 40 ? 'badge-amber' : 'badge-gray'}`} style={{ minWidth: 34, justifyContent: 'center' }}>{score}</span>
+                        )}
+                      </td>
                       <td>
                         {isClosed ? <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>—</span> :
                           l.next_followup_date ? <span style={{ color: overdue ? '#dc2626' : '#334155', fontWeight: overdue ? 700 : 400 }}>{overdue && '⚠ '}{fmtDate(l.next_followup_date)}</span> :

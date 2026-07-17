@@ -3,6 +3,20 @@ import { PHASE_BADGE } from '../utils/constants';
 
 const COLUMNS = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
 
+// Per-column tint + accent so every column is clearly distinguishable and never renders low-contrast
+// (light) text on a white background. Card text stays dark on white for readability.
+const COLUMN_STYLE = {
+  New:           { bg: '#f1f5f9', accent: '#64748b' },
+  Qualified:     { bg: '#f5f3ff', accent: '#7c3aed' },
+  Demo:          { bg: '#fffbeb', accent: '#b45309' },
+  Proposal:      { bg: '#eff6ff', accent: '#1d4ed8' },
+  Negotiation:   { bg: '#fff7ed', accent: '#c2410c' },
+  'PO Expected': { bg: '#f0fdfa', accent: '#0f766e' },
+  'PO Received': { bg: '#f0fdf4', accent: '#15803d' },
+  Lost:          { bg: '#fef2f2', accent: '#b91c1c' },
+  'On Hold':     { bg: '#f1f5f9', accent: '#64748b' },
+};
+
 export default function KanbanView({ leads, onOpen, onPhaseChange }) {
   const [dragId, setDragId] = useState(null);
   const [overCol, setOverCol] = useState(null);
@@ -11,6 +25,8 @@ export default function KanbanView({ leads, onOpen, onPhaseChange }) {
     <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12 }}>
       {COLUMNS.map(col => {
         const items = leads.filter(l => l.phase === col);
+        const cs = COLUMN_STYLE[col] || { bg: '#f1f5f9', accent: '#64748b' };
+        const isOver = overCol === col;
         return (
           <div
             key={col}
@@ -22,26 +38,36 @@ export default function KanbanView({ leads, onOpen, onPhaseChange }) {
               setDragId(null); setOverCol(null);
             }}
             style={{
-              minWidth: 220, flexShrink: 0, background: overCol === col ? '#eef2ff' : '#f8fafc',
-              border: '1px solid #e2e8f0', borderRadius: 12, padding: 10,
+              minWidth: 230, flexShrink: 0,
+              background: isOver ? '#e0e7ff' : cs.bg,
+              border: isOver ? '2px dashed #6366f1' : '1px solid #e2e8f0',
+              borderTop: `3px solid ${cs.accent}`,
+              borderRadius: 12, padding: 10,
             }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <span className={`badge ${PHASE_BADGE[col]}`}>{col}</span>
-              <span style={{ fontSize: 11, color: '#94a3b8' }}>{items.length}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: cs.accent }}>{items.length}</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 40 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 48 }}>
               {items.map(l => (
                 <div
                   key={l.id}
                   draggable
                   onDragStart={() => setDragId(l.id)}
                   onClick={() => onOpen(l)}
-                  className="card-sm"
-                  style={{ cursor: 'grab', background: '#fff' }}>
+                  style={{
+                    cursor: 'grab', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
+                    padding: 10, boxShadow: '0 1px 2px rgba(15,23,42,.06)',
+                  }}>
                   <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 4px', color: '#0f172a' }}>{l.customer_name}</p>
                   <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{l.owner?.name?.split(' ')[0]} · ₹{l.potential_tcv_lakhs}L</p>
                 </div>
               ))}
+              {items.length === 0 && (
+                <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', padding: '12px 0', fontStyle: 'italic' }}>
+                  Drop here
+                </div>
+              )}
             </div>
           </div>
         );

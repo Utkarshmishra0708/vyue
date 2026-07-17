@@ -15,11 +15,12 @@ export default function MultiSelect({ label, options, selected, onChange, width 
   return (
     <div ref={ref} style={{ position: 'relative', width }}>
       <button type="button" className="input" onClick={() => setOpen(o => !o)}
-        style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-        <span style={{ fontSize: 12, color: selected.length ? '#0f172a' : '#94a3b8' }}>
+        style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
+          borderColor: selected.length ? '#6366f1' : '#cbd5e1', background: selected.length ? '#eef2ff' : '#fff' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: selected.length ? '#4338ca' : '#334155' }}>
           {selected.length ? `${label} (${selected.length})` : label}
         </span>
-        <span style={{ fontSize: 10, color: '#94a3b8' }}>▾</span>
+        <span style={{ fontSize: 11, color: '#64748b' }}>▾</span>
       </button>
       {open && (
         <div style={{

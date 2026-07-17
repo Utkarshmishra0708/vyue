@@ -4,7 +4,7 @@ import 'react-quill/dist/quill.snow.css';
 import { useAuth } from '../context/AuthContext';
 import { createLead, updateLead, uploadPoDocument, fileUrl, getBds } from '../services/api';
 import { DEVICE_SKU_MAP, LOST_REASONS, SIGNAGE_SERVICES } from '../utils/constants';
-import { todayStr, addDaysStr, computeTcvLakhs } from '../utils/leadHelpers';
+import { todayStr, addDaysStr, computeTcvLakhs, computeAcvLakhs, computeTcvBreakdown } from '../utils/leadHelpers';
 
 const NOTES_TOOLBAR = [['bold', 'italic', 'underline'], [{ list: 'ordered' }, { list: 'bullet' }], ['link'], ['clean']];
 
@@ -118,11 +118,10 @@ export default function LeadForm({ lead, onSave, onCancel }) {
   const overrideTcv = () => setForm(f => ({ ...f, tcv_manual: true, potential_tcv_lakhs: computeTcvLakhs(f) }));
   const useAutoTcv = () => setForm(f => ({ ...f, tcv_manual: false }));
 
-  const acv = () => {
-    const tcv = parseFloat(effectiveTcv), m = parseInt(form.contract_period_months, 10);
-    if (!tcv || !m) return null;
-    return (tcv / (m / 12)).toFixed(2);
-  };
+  // First-year ACV: OPEX is annualised over the contract term, but CAPEX (one-time) is realised in
+  // full in year 1. JHES / manual-TCV leads have no service breakdown, so the whole TCV is
+  // annualised evenly. Mirrors the backend ACV rule in normalizePayload().
+  const acv = () => computeAcvLakhs(form, { manual: form.tcv_manual || isJHES, manualTcv: form.potential_tcv_lakhs });
 
   const addContact = () => setContacts(c => [...c, { name: '', phone: '', email: '', designation: '' }]);
   const updateContact = (i, key, val) => setContacts(c => c.map((row, idx) => idx === i ? { ...row, [key]: val } : row));
@@ -306,10 +305,11 @@ export default function LeadForm({ lead, onSave, onCancel }) {
         </section>
       )}
 
-      {/* Section 3: Deal Size */}
+      {/* Section 3: Deal Size — Contract Period first, since the auto-calculated TCV depends on it */}
       <section>
         <p className="section-title">Deal Size</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+          <Field label="Contract Period (Months)" required><input required type="number" min="1" className="input" value={form.contract_period_months} onChange={e => set('contract_period_months', e.target.value)} /></Field>
           <Field label="Potential TCV (Lakhs)" required>
             {isJHES ? (
               <input required type="number" step="0.01" min="0" className="input" value={form.potential_tcv_lakhs} onChange={e => set('potential_tcv_lakhs', e.target.value)} />
@@ -343,12 +343,18 @@ export default function LeadForm({ lead, onSave, onCancel }) {
               </>
             )}
           </Field>
-          <Field label="Contract Period (Months)" required><input required type="number" min="1" className="input" value={form.contract_period_months} onChange={e => set('contract_period_months', e.target.value)} /></Field>
           <Field label="PO Validity (Months)">
             <input type="number" min="1" className="input" value={form.po_validity_months} onChange={e => set('po_validity_months', e.target.value)} />
           </Field>
         </div>
-        {acv() && <div className="badge badge-blue" style={{ marginTop: 10, padding: '6px 12px' }}>ACV: ₹{acv()} L/yr</div>}
+        {acv() !== null && (
+          <div className="badge badge-blue" style={{ marginTop: 10, padding: '6px 12px' }}>
+            First-Year ACV: ₹{acv()} L/yr
+            {!form.tcv_manual && !isJHES && computeTcvBreakdown(form).capexLakhs > 0 && (
+              <span style={{ marginLeft: 6, fontWeight: 500 }}>· incl. one-time CAPEX in year 1</span>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Section 4: Phase & Timeline */}

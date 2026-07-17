@@ -5,7 +5,7 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getLeads, getStageHistory, getSettings, setSetting, getBds } from '../services/api';
 import { STAGE_ORDER, STAGE_WIN_PCT, PHASE_BADGE } from '../utils/constants';
-import { fmtDate, isOverdue, daysBetween } from '../utils/leadHelpers';
+import { fmtDate, isOverdue, daysBetween, calcLeadScore, dealSizeThresholds } from '../utils/leadHelpers';
 
 function Kpi({ icon, label, value, sub, onClick }) {
   return (
@@ -52,6 +52,19 @@ export default function DashboardPage() {
     if (isAdmin && filterBD) params.set('bd', filterBD);
     navigate(`/leads?${params}`);
   };
+  // Funnel band click → Leads filtered to every phase at or beyond the clicked stage (the leads
+  // counted as having "reached" it), so the resulting list matches the count shown on the band.
+  const navigateReached = (stage) => {
+    const reached = STAGE_ORDER.slice(STAGE_ORDER.indexOf(stage));
+    const params = new URLSearchParams({ phase: reached.join(',') });
+    if (isAdmin && filterBD) params.set('bd', filterBD);
+    navigate(`/leads?${params}`);
+  };
+  const navigateWithSource = (source) => {
+    const params = new URLSearchParams({ source });
+    if (isAdmin && filterBD) params.set('bd', filterBD);
+    navigate(`/leads?${params}`);
+  };
 
   const active = filtered.filter(l => !['Lost', 'On Hold', 'PO Received'].includes(l.phase));
   const won = filtered.filter(l => l.phase === 'PO Received');
@@ -86,18 +99,21 @@ export default function DashboardPage() {
   const phaseCounts = STAGE_ORDER.concat(['Lost', 'On Hold']).map(p => ({ phase: p, count: filtered.filter(l => l.phase === p).length }));
   const funnelData = STAGE_ORDER.map(p => ({ name: p, count: filtered.filter(l => l.phase === p).length }));
 
-  // Funnel & conversion (from stage_history)
   const filteredLeadIds = new Set(filtered.map(l => l.id));
   const scopedHistory = stageHistory.filter(sh => filteredLeadIds.has(sh.lead_id));
-  const stageRanks = Object.fromEntries(STAGE_ORDER.map((s, i) => [s, i]));
-  const maxRankPerLead = {};
-  for (const sh of scopedHistory) {
-    const r = stageRanks[sh.to_stage];
-    if (r === undefined) continue;
-    maxRankPerLead[sh.lead_id] = Math.max(maxRankPerLead[sh.lead_id] ?? -1, r);
-  }
-  const funnelStages = STAGE_ORDER.map((stage, i) => ({
-    stage, count: Object.values(maxRankPerLead).filter(r => r >= i).length, winPct: STAGE_WIN_PCT[stage] || 0,
+
+  // Conversion funnel — based on each lead's CURRENT phase, so it updates immediately as a stage
+  // moves (no dependence on stage_history completeness, which was making it look stale). A lead
+  // currently at stage N has reached every earlier stage, so each level counts leads at or beyond it.
+  // Lost / On Hold aren't pipeline stages and are excluded. This yields a monotonically narrowing —
+  // i.e. a true funnel — shape.
+  const stageRank = Object.fromEntries(STAGE_ORDER.map((s, i) => [s, i]));
+  // Funnel omits the Negotiation step by request. Counts still use each stage's TRUE rank, so a lead
+  // sitting in Negotiation is correctly counted as having reached Proposal but not yet PO Expected.
+  const funnelStages = STAGE_ORDER.filter(s => s !== 'Negotiation').map(stage => ({
+    stage,
+    count: filtered.filter(l => { const r = stageRank[l.phase]; return r !== undefined && r >= stageRank[stage]; }).length,
+    winPct: STAGE_WIN_PCT[stage] || 0,
   }));
   const funnelWithConv = funnelStages.map((s, i) => ({
     ...s, conv: i === 0 || funnelStages[i-1].count === 0 ? null : Math.round((s.count / funnelStages[i-1].count) * 100),
@@ -120,11 +136,33 @@ export default function DashboardPage() {
     return { stage, avgDays: arr.length ? Math.round(arr.reduce((s,d)=>s+d,0)/arr.length) : null, samples: arr.length };
   });
 
-  const overdueForTicker = leads.filter(isOverdue);
+  // Lead Source Effectiveness — which channels bring the best leads. Per source: volume, win rate
+  // (won / closed), total pipeline TCV, and average lead score. Ranked by TCV so the most valuable
+  // source is on top. Respects the active BD filter (via `filtered`).
+  const scoreThresholds = useMemo(() => dealSizeThresholds(leads), [leads]);
+  const sourceStats = useMemo(() => {
+    const known = ['Channel Partner', 'KAM', 'Direct Sales'];
+    const sources = Array.from(new Set([...known, ...filtered.map(l => l.lead_source).filter(Boolean)]));
+    return sources.map(src => {
+      const rows = filtered.filter(l => l.lead_source === src);
+      const won = rows.filter(l => l.phase === 'PO Received').length;
+      const lost = rows.filter(l => l.phase === 'Lost').length;
+      const closed = won + lost;
+      const tcv = rows.reduce((s, l) => s + (parseFloat(l.potential_tcv_lakhs) || 0), 0);
+      const scores = rows.map(l => calcLeadScore(l, scoreThresholds)).filter(v => v !== null);
+      const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+      return { src, count: rows.length, won, winRate: closed ? Math.round((won / closed) * 100) : null, tcv, avgScore };
+    }).filter(s => s.count > 0).sort((a, b) => b.tcv - a.tcv);
+  }, [filtered, scoreThresholds]);
 
-  // Annual BD performance — BDs see only their own, admin sees all
+  // Ticker follows the same BD filter as the rest of the dashboard.
+  const overdueForTicker = filtered.filter(isOverdue);
+
+  // Annual BD performance — BDs see only their own; admin sees all BDs, or just the selected one.
   const currentYear = new Date().getFullYear();
-  const bdsToShow = isAdmin ? bds.map(b => b.name) : [user.name];
+  const bdsToShow = isAdmin ? (filterBD ? [filterBD] : bds.map(b => b.name)) : [user.name];
+  // BD cards (weekly targets) follow the same selection.
+  const bdCards = isAdmin && filterBD ? bds.filter(b => b.name === filterBD) : bds;
   const annualBDPerf = bdsToShow.map(name => {
     const bdLeads = leads.filter(l => l.owner?.name === name);
     const wonThisYear = bdLeads.filter(l => l.phase === 'PO Received' && new Date(l.po_received_date || l.phase_changed_at).getFullYear() === currentYear);
@@ -176,12 +214,24 @@ export default function DashboardPage() {
       </div>
 
       <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {overdueForTicker.length > 0 && (
-          <div style={{ background: '#dc2626', color: '#fff', borderRadius: 10, padding: '8px 14px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-            <span style={{ fontWeight: 700, marginRight: 12 }}>⏰ OVERDUE</span>
-            {overdueForTicker.map(l => `${l.customer_name} · ${l.owner?.name?.split(' ')[0]} · Due ${fmtDate(l.next_followup_date)}`).join('   |   ')}
-          </div>
-        )}
+        {overdueForTicker.length > 0 && (() => {
+          const text = overdueForTicker
+            .map(l => `${l.customer_name} · ${l.owner?.name?.split(' ')[0]} · Due ${fmtDate(l.next_followup_date)}`)
+            .join('     •     ');
+          // Speed scales with content so the pace stays even regardless of how many items there are.
+          const duration = Math.max(18, overdueForTicker.length * 6);
+          return (
+            <div style={{ background: '#dc2626', color: '#fff', borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontWeight: 700, flexShrink: 0 }}>⏰ OVERDUE</span>
+              <div className="marquee" style={{ flex: 1 }}>
+                <div className="marquee__track" style={{ animationDuration: `${duration}s` }}>
+                  <span style={{ paddingRight: 48 }}>{text}</span>
+                  <span style={{ paddingRight: 48 }} aria-hidden="true">{text}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
           <Kpi icon="💰" label="Open Pipeline" value={`₹${openTCV.toFixed(1)}L`} sub={`${active.length} active`} onClick={() => navigateWithFilter('active')} />
@@ -245,7 +295,7 @@ export default function DashboardPage() {
           )}
           {isAdmin && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16, borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
-              {bds.map(b => {
+              {bdCards.map(b => {
                 const target = bdTargets[b.name] ?? weeklyTarget;
                 const bdWon = leads.filter(l => l.owner?.name === b.name && l.phase === 'PO Received').filter(l => {
                   const d = new Date(l.po_received_date || l.phase_changed_at); return d >= weekStart && d <= weekEnd;
@@ -277,7 +327,7 @@ export default function DashboardPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div className="card">
             <p className="section-title">Pipeline by Phase</p>
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={330}>
               <BarChart data={funnelData} layout="vertical" margin={{ left: 0, right: 16 }}>
                 <XAxis type="number" tick={{ fontSize: 11 }} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={80} />
@@ -289,22 +339,53 @@ export default function DashboardPage() {
 
           <div className="card">
             <p className="section-title">Conversion Funnel</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {funnelWithConv.map((f, i) => {
-                const maxCount = Math.max(...funnelWithConv.map(x => x.count), 1);
-                return (
-                  <div key={f.stage} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
-                    <div style={{ width: 80, fontWeight: 600 }}>{f.stage}</div>
-                    <div style={{ flex: 1, height: 20, background: '#f8fafc', borderRadius: 6, position: 'relative' }}>
-                      <div style={{ height: '100%', width: `${Math.max(8, Math.round((f.count/maxCount)*100))}%`, background: '#a5b4fc', borderRadius: 6, display: 'flex', alignItems: 'center', paddingLeft: 6 }}>
-                        <span style={{ fontWeight: 700 }}>{f.count}</span>
-                      </div>
-                    </div>
-                    <div style={{ width: 40, textAlign: 'right', color: f.conv !== null && f.conv < 50 ? '#dc2626' : '#059669', fontWeight: 700 }}>{i === 0 || f.conv === null ? '—' : `${f.conv}%`}</div>
-                  </div>
-                );
-              })}
-            </div>
+            {(() => {
+              const hasData = (funnelWithConv[0]?.count || 0) > 0;
+              if (!hasData) return <p style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>No pipeline leads yet.</p>;
+              // Segmented trapezoid funnel: dark navy → light blue ramp (6 bands, Negotiation removed),
+              // with the stage-to-stage conversion % shown between bands. The lightest bands stay a
+              // visible blue (not white) so they read on the white card, with dark text.
+              const shades = ['#0d47a1', '#1565c0', '#1e88e5', '#42a5f5', '#7fb5ec', '#a9d0f5'];
+              const n = funnelWithConv.length;
+              // Gentle fixed taper (top 100% → base ~55%) so the shape always reads as a funnel AND
+              // every label fits fully inside its trapezoid. Each band's bottom width equals the next
+              // band's top width, so the segments line up into one continuous funnel silhouette.
+              const widthAt = (i) => 1 - (i / n) * 0.45;
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', padding: '4px 0' }}>
+                  {funnelWithConv.map((f, i) => {
+                    const wTop = widthAt(i);
+                    const wBot = widthAt(i + 1);
+                    const insetPct = Math.max(0, Math.min(45, (1 - wBot / wTop) / 2 * 100));
+                    const darkText = i >= 4; // light blue bands need dark text for contrast
+                    const nextConv = i < n - 1 ? funnelWithConv[i + 1].conv : null;
+                    return (
+                      <React.Fragment key={f.stage}>
+                        <div
+                          className="funnel-band"
+                          onClick={() => navigateReached(f.stage)}
+                          title={`View the ${f.count} lead${f.count === 1 ? '' : 's'} that reached ${f.stage}`}
+                          style={{
+                          width: `${Math.round(wTop * 100)}%`, margin: '0 auto', height: 44,
+                          background: shades[i] || '#a9d0f5',
+                          clipPath: `polygon(0 0, 100% 0, ${100 - insetPct}% 100%, ${insetPct}% 100%)`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          color: darkText ? '#0d47a1' : '#fff', whiteSpace: 'nowrap', cursor: 'pointer', transition: 'width .3s ease',
+                        }}>
+                          <span style={{ fontSize: 13, fontWeight: 700 }}>{f.stage}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, opacity: 0.9 }}>· {f.count} lead{f.count === 1 ? '' : 's'}</span>
+                        </div>
+                        {i < n - 1 && (
+                          <div style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: '#94a3b8', padding: '2px 0' }}>
+                            {nextConv === null ? '·' : `${nextConv}% conversion`}
+                          </div>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="card">
@@ -326,6 +407,44 @@ export default function DashboardPage() {
                   );
                 })}
               </div>
+            )}
+          </div>
+
+          <div className="card">
+            <p className="section-title">Lead Source Effectiveness</p>
+            {sourceStats.length === 0 ? (
+              <p style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>No leads to analyse yet.</p>
+            ) : (
+              <table className="data-table" style={{ fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    <th style={{ textAlign: 'right' }}>Leads</th>
+                    <th style={{ textAlign: 'right' }}>Win %</th>
+                    <th style={{ textAlign: 'right' }}>TCV (₹L)</th>
+                    <th style={{ textAlign: 'right' }}>Avg Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sourceStats.map(s => (
+                    <tr key={s.src} onClick={() => navigateWithSource(s.src)} title={`View ${s.count} ${s.src} lead(s)`} style={{ cursor: 'pointer' }}>
+                      <td style={{ fontWeight: 600 }}>{s.src}</td>
+                      <td style={{ textAlign: 'right' }}>{s.count}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        {s.winRate === null
+                          ? <span style={{ color: '#cbd5e1' }}>—</span>
+                          : <span style={{ fontWeight: 700, color: s.winRate >= 50 ? '#059669' : s.winRate >= 25 ? '#b45309' : '#dc2626' }}>{s.winRate}%</span>}
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>₹{s.tcv.toFixed(1)}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        {s.avgScore === null
+                          ? <span style={{ color: '#cbd5e1' }}>—</span>
+                          : <span className={`badge ${s.avgScore >= 70 ? 'badge-green' : s.avgScore >= 40 ? 'badge-amber' : 'badge-gray'}`}>{s.avgScore}</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
 

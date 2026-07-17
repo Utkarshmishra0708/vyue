@@ -46,26 +46,34 @@ const TCV_SERVICES = [
   { key: 'installation', nature: 'capex' },
 ];
 
-// Auto-calculated Total Contract Value, in lakhs (₹ / 100,000), from the ticked services:
-//   OPEX  → qty × rate × contract months   (recurring)
+// Auto-calculated contract value, split into its OPEX (recurring) and CAPEX (one-time) parts,
+// both in lakhs (₹ / 100,000), from the ticked services:
+//   OPEX  → qty × rate × contract months   (recurring, billed across the term)
 //   CAPEX → qty × rate                      (one-time)
-// Device uses its per-lead cost type (defaults to capex). Returns 0 when nothing is calculable.
-// Mirror of computeTcvLakhs() in frontend/src/utils/leadHelpers.js — keep the two in sync.
-function computeTcvLakhs(body) {
+// Device uses its per-lead cost type (defaults to capex).
+// Mirror of computeTcvBreakdown() in frontend/src/utils/leadHelpers.js — keep the two in sync.
+function computeTcvBreakdown(body) {
   const months = parseInt(body.contract_period_months, 10) || 0;
-  let rupees = 0;
+  let opex = 0, capex = 0;
   const add = (included, rate, qty, nature) => {
     if (!included) return;
     const r = parseFloat(rate) || 0;
     const q = parseInt(qty, 10) || 0;
     if (!r || !q) return;
-    rupees += nature === 'opex' ? r * q * months : r * q;
+    if (nature === 'opex') opex += r * q * months; else capex += r * q;
   };
   for (const svc of TCV_SERVICES) {
     add(body[`includes_${svc.key}`], body[`${svc.key}_rate`], body[`${svc.key}_qty`], svc.nature);
   }
   add(body.includes_device, body.device_rate, body.device_qty, body.device_cost_type === 'opex' ? 'opex' : 'capex');
-  return rupees > 0 ? +(rupees / 100000).toFixed(2) : 0;
+  return { opexLakhs: opex / 100000, capexLakhs: capex / 100000 };
+}
+
+// Total Contract Value in lakhs — OPEX + CAPEX. Returns 0 when nothing is calculable.
+function computeTcvLakhs(body) {
+  const { opexLakhs, capexLakhs } = computeTcvBreakdown(body);
+  const tcv = opexLakhs + capexLakhs;
+  return tcv > 0 ? +tcv.toFixed(2) : 0;
 }
 
 // Date-only helpers — deliberately avoid toISOString()/UTC conversion.
@@ -108,8 +116,20 @@ function normalizePayload(body, { isCreate, existing }) {
   // Computing it server-side keeps the stored value authoritative regardless of the client.
   const tcvManual = !!body.tcv_manual;
   const months = parseInt(body.contract_period_months, 10) || null;
-  const tcv = tcvManual ? (parseFloat(body.potential_tcv_lakhs) || 0) : computeTcvLakhs(body);
-  const acv = tcv && months ? +(tcv / (months / 12)).toFixed(2) : 0;
+  const years = months ? months / 12 : null;
+  let tcv, acv;
+  if (tcvManual) {
+    // Hand-typed TCV has no service breakdown, so annualise the whole value evenly.
+    tcv = parseFloat(body.potential_tcv_lakhs) || 0;
+    acv = tcv && years ? +(tcv / years).toFixed(2) : 0;
+  } else {
+    // Auto-calc: OPEX is annualised across the contract term, but CAPEX (one-time) is realised in
+    // full in year 1 — so first-year ACV = OPEX/years + full CAPEX.
+    const { opexLakhs, capexLakhs } = computeTcvBreakdown(body);
+    tcv = +(opexLakhs + capexLakhs).toFixed(2);
+    const opexPerYear = years ? opexLakhs / years : opexLakhs;
+    acv = +(opexPerYear + capexLakhs).toFixed(2);
+  }
   const phase = body.phase || 'New';
 
   const svcQty = (included, qty) => (included && qty) ? (parseInt(qty, 10) || 0) : 0;
@@ -238,9 +258,10 @@ function diffActivity(before, after, leadId, srNo, customerName, actingUser) {
 // --------------------------------------------------------------------------
 router.get('/', async (req, res) => {
   try {
-    const { business_unit, phase, lead_temperature, lead_source, owner_id, search, overdue } = req.query;
+    const { phase, lead_temperature, lead_source, owner_id, search, overdue } = req.query;
+    // business_unit is always taken from the authenticated user (leadScopeWhere) and cannot be
+    // overridden via query param, so a PMO/BD can never read another business unit's leads.
     const where = leadScopeWhere(req.user);
-    if (business_unit) where.business_unit = business_unit;
     if (phase) where.phase = { [Op.in]: phase.split(',') };
     if (lead_temperature) where.lead_temperature = { [Op.in]: lead_temperature.split(',') };
     if (lead_source) where.lead_source = { [Op.in]: lead_source.split(',') };

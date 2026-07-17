@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { getLeads, getBds } from '../services/api';
 import { fmtDate, fmtMonthYear } from '../utils/leadHelpers';
 import { exportRowsToPdf } from '../utils/pdfExport';
+import { writeFormattedSheet } from '../utils/excelExport';
 
 const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
 const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales'];
@@ -76,9 +77,7 @@ export default function ReportsPage() {
       'New/Renewal': l.new_or_renewal, 'TCV (₹L)': l.potential_tcv_lakhs, 'PO Expected': l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '',
       Phase: l.phase, 'Created At': fmtDate(l.createdAt),
     }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Report');
-    XLSX.writeFile(wb, `CRM_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+    writeFormattedSheet(XLSX, rows, 'Report', `CRM_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   const exportPdf = () => {
