@@ -38,7 +38,8 @@ function authorize(...roles) {
   };
 }
 
-// isAdminOrPmo — convenience
-const adminOnly = authorize('admin', 'pmo');
+// The "admin tier" — roles that can reach admin surfaces (Settings, Reports, bulk actions, dropdowns).
+// Fine-grained rules (who can assign which role, which business) are enforced inside those handlers.
+const adminOnly = authorize('super_admin', 'business_admin', 'pmo');
 
 module.exports = { authenticate, authorize, adminOnly };

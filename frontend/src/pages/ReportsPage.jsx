@@ -2,13 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Layout from '../components/Layout';
 import MultiSelect from '../components/MultiSelect';
 import { useAuth } from '../context/AuthContext';
-import { getLeads, getBds } from '../services/api';
+import { getLeads, getBds, getDropdowns } from '../services/api';
 import { fmtDate, fmtMonthYear } from '../utils/leadHelpers';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import { writeFormattedSheet } from '../utils/excelExport';
 
 const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
-const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales'];
+const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales', 'Lead Affiliate'];
 const RENEWALS = ['New', 'Renewal', 'Expansion'];
 const SERVICES = ['Platform', 'CMS', 'Connectivity', 'AMC', 'Display', 'Installation', 'Device'];
 const SERVICE_KEY = { Platform: 'includes_platform', CMS: 'includes_cms', Connectivity: 'includes_connectivity', AMC: 'includes_amc', Display: 'includes_display', Installation: 'includes_installation', Device: 'includes_device' };
@@ -30,7 +30,11 @@ export default function ReportsPage() {
   const [selStates, setSelStates] = useState([]);
   const [selPOMonths, setSelPOMonths] = useState([]);
 
+  const [dropdowns, setDropdowns] = useState({});
   useEffect(() => { getBds(user.business_unit).then(setBds); }, [user.business_unit]);
+  useEffect(() => { getDropdowns().then(setDropdowns).catch(() => {}); }, []);
+  const sourceOpts  = [...new Set([...(dropdowns.lead_source || SOURCES), ...allLeads.map(l => l.lead_source).filter(Boolean)])];
+  const renewalOpts = [...new Set([...(dropdowns.new_or_renewal || RENEWALS), ...allLeads.map(l => l.new_or_renewal).filter(Boolean)])];
 
   const availableStates = useMemo(() => [...new Set(allLeads.map(l => l.state).filter(Boolean))].sort(), [allLeads]);
   const poMonths = useMemo(() => {
@@ -119,8 +123,8 @@ export default function ReportsPage() {
           </div>
           <MultiSelect label="BD" options={bds.map(b => b.name)} selected={selBDs} onChange={setSelBDs} width={200} />
           <MultiSelect label="Phase" options={PHASES} selected={selPhases} onChange={setSelPhases} width={200} />
-          <MultiSelect label="Lead Source" options={SOURCES} selected={selSources} onChange={setSelSources} width={200} />
-          <MultiSelect label="New/Renewal" options={RENEWALS} selected={selRenewals} onChange={setSelRenewals} width={200} />
+          <MultiSelect label="Lead Source" options={sourceOpts} selected={selSources} onChange={setSelSources} width={200} />
+          <MultiSelect label="New/Renewal" options={renewalOpts} selected={selRenewals} onChange={setSelRenewals} width={200} />
           <MultiSelect label="Services" options={SERVICES} selected={selServices} onChange={setSelServices} width={200} />
           {availableStates.length > 0 && <MultiSelect label="State" options={availableStates} selected={selStates} onChange={setSelStates} width={200} />}
           <MultiSelect label="PO Expected Month" options={poMonths} selected={selPOMonths} onChange={setSelPOMonths} width={200} />

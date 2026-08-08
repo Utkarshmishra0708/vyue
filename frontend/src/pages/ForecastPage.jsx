@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { getForecastDevices } from '../services/api';
 import { fmtDate, fmtMonthYear } from '../utils/leadHelpers';
 import { exportRowsToPdf } from '../utils/pdfExport';
@@ -9,13 +10,26 @@ const monthLabel = (k) => k === 'unscheduled' ? 'Unscheduled' : fmtMonthYear(k +
 
 export default function ForecastPage() {
   const navigate = useNavigate();
+  const { isForecastOnly, logout, user } = useAuth();
+  const buName = (user?.business_unit || '').toUpperCase();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [bu, setBu] = useState('all');
+  // Forecast is scoped server-side to the caller's business unit, so there's no cross-business filter.
+  const [bu] = useState('all');
 
-  useEffect(() => { getForecastDevices().then(setLeads).finally(() => setLoading(false)); }, []);
+  useEffect(() => { getForecastDevices().then(setLeads).catch(() => {}).finally(() => setLoading(false)); }, []);
 
-  const deviceLeads = useMemo(() => leads.filter(l => bu === 'all' || l.business_unit === bu), [leads, bu]);
+  // Sorted by requirement (device expected) date — earliest first = highest priority; undated last.
+  const deviceLeads = useMemo(() => leads
+    .filter(l => bu === 'all' || l.business_unit === bu)
+    .slice()
+    .sort((a, b) => {
+      const da = a.device_requested_date, db = b.device_requested_date;
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return da.localeCompare(db);
+    }), [leads, bu]);
   const units = (l) => l.device_qty ?? l.quantity ?? 0;
 
   const skus = useMemo(() => [...new Set(deviceLeads.map(l => l.device_sku || 'Unspecified'))].sort(), [deviceLeads]);
@@ -52,20 +66,21 @@ export default function ForecastPage() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pivotRows), 'Units by Month');
 
     const detailRows = deviceLeads.map(l => ({
-      Customer: l.customer_name, 'Business Unit': (l.business_unit || '').toUpperCase(), BD: l.owner?.name || '',
+      Customer: l.customer_name, City: l.city || '', State: l.state || '',
+      'Business Unit': (l.business_unit || '').toUpperCase(), BD: l.owner?.name || '',
       'Device SKU': l.device_sku || 'Unspecified', Units: units(l),
-      'Device Requested Date': l.device_requested_date ? fmtDate(l.device_requested_date) : '',
+      'Device Expected Date': l.device_requested_date ? fmtDate(l.device_requested_date) : '',
       'PO Expected': l.po_expected_date ? fmtMonthYear(l.po_expected_date) : 'Unscheduled', Phase: l.phase,
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detailRows), 'Detail');
-    XLSX.writeFile(wb, `Hardware_Forecast_${bu.toUpperCase()}_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, `Hardware_Forecast_${buName || 'FORECAST'}_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   const exportPdf = () => {
     if (!deviceLeads.length) return;
     exportRowsToPdf({
       title: 'Sales CRM — Hardware Forecast',
-      subtitle: `${bu === 'all' ? 'All business units' : bu.toUpperCase()} · ${grandTotal} total units · generated ${fmtDate(new Date())}`,
+      subtitle: `${buName} · ${grandTotal} total units · generated ${fmtDate(new Date())}`,
       tables: [
         {
           heading: 'Units by Month & SKU',
@@ -77,16 +92,16 @@ export default function ForecastPage() {
         },
         {
           heading: 'Device Demand — Detail',
-          columns: ['Customer', 'BU', 'BD', 'Device SKU', 'Units', 'Device Requested', 'PO Expected', 'Phase'],
+          columns: ['Customer', 'City', 'State', 'BU', 'BD', 'Device SKU', 'Units', 'Device Expected', 'PO Expected', 'Phase'],
           rows: deviceLeads.map(l => [
-            l.customer_name, (l.business_unit || '').toUpperCase(), l.owner?.name?.split(' ')[0] || '',
+            l.customer_name, l.city || '—', l.state || '—', (l.business_unit || '').toUpperCase(), l.owner?.name?.split(' ')[0] || '',
             l.device_sku || 'Unspecified', units(l),
             l.device_requested_date ? fmtDate(l.device_requested_date) : '—',
             l.po_expected_date ? fmtMonthYear(l.po_expected_date) : 'Unscheduled', l.phase,
           ]),
         },
       ],
-      filename: `Hardware_Forecast_${bu.toUpperCase()}_${new Date().toISOString().slice(0,10)}.pdf`,
+      filename: `Hardware_Forecast_${buName || 'FORECAST'}_${new Date().toISOString().slice(0,10)}.pdf`,
     });
   };
 
@@ -94,18 +109,13 @@ export default function ForecastPage() {
     <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button className="btn btn-sm" onClick={() => navigate('/')}>← Back</button>
+          <button className="btn btn-sm" onClick={() => isForecastOnly ? logout() : navigate('/leads')}>{isForecastOnly ? 'Sign out' : '← Back'}</button>
           <div>
             <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Forecast Dashboard</h1>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Hardware units expected — by month & SKU · public view</p>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Hardware units expected — by month & SKU · sorted by requirement date</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {['all', 'signage', 'jhes'].map(b => (
-            <button key={b} className="btn btn-sm" style={{ background: bu === b ? '#eef2ff' : '#fff' }} onClick={() => setBu(b)}>
-              {b === 'all' ? 'All' : b === 'jhes' ? 'JHES' : 'Signage'}
-            </button>
-          ))}
           {deviceLeads.length > 0 && <button className="btn btn-success" onClick={exportExcel}>Export Excel</button>}
           {deviceLeads.length > 0 && <button className="btn" onClick={exportPdf}>Export PDF</button>}
         </div>
@@ -145,11 +155,11 @@ export default function ForecastPage() {
                 <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Device Demand — Detail</p>
               </div>
               <table className="data-table">
-                <thead><tr><th>Customer</th><th>BU</th><th>BD</th><th>Device SKU</th><th style={{ textAlign: 'right' }}>Units</th><th>Device Requested</th><th>PO Expected</th><th>Phase</th></tr></thead>
+                <thead><tr><th>Customer</th><th>City</th><th>State</th><th>BU</th><th>BD</th><th>Device SKU</th><th style={{ textAlign: 'right' }}>Units</th><th>Device Expected</th><th>PO Expected</th><th>Phase</th></tr></thead>
                 <tbody>
                   {deviceLeads.map(l => (
                     <tr key={l.id}>
-                      <td>{l.customer_name}</td><td>{(l.business_unit || '').toUpperCase()}</td><td>{l.owner?.name?.split(' ')[0]}</td>
+                      <td>{l.customer_name}</td><td>{l.city || '—'}</td><td>{l.state || '—'}</td><td>{(l.business_unit || '').toUpperCase()}</td><td>{l.owner?.name?.split(' ')[0]}</td>
                       <td>{l.device_sku || 'Unspecified'}</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{units(l)}</td>
                       <td>{l.device_requested_date ? fmtDate(l.device_requested_date) : '—'}</td>
                       <td>{l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '—'}</td><td>{l.phase}</td>

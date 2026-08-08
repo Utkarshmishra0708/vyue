@@ -28,9 +28,12 @@ app.use('/uploads', express.static(path.join(__dirname, process.env.UPLOAD_DIR |
 app.use('/api/auth',          require('./routes/auth'));
 app.use('/api/users',         require('./routes/users'));
 app.use('/api/leads',         require('./routes/leads'));
+app.use('/api/global-pos',    require('./routes/globalPos'));
+app.use('/api/voc',           require('./routes/voc'));
 app.use('/api/activity-log',  require('./routes/activityLog'));
 app.use('/api/stage-history', require('./routes/stageHistory'));
 app.use('/api/settings',      require('./routes/settings'));
+app.use('/api/sla',           require('./routes/sla'));
 app.use('/api/dropdowns',     require('./routes/dropdowns'));
 app.use('/api/uploads',       require('./routes/uploads'));
 app.use('/api/forecast',      require('./routes/forecast')); // public, no auth
@@ -53,6 +56,16 @@ if (require.main === module) {
   (async () => {
     try {
       await runMigrations();
+
+      // Lead Confidence Scoring runs with no manual intervention: recompute once on boot, then hourly,
+      // to apply time-based SLA decay. (Every lead save also recomputes itself — event-triggered.) In
+      // production, prefer an external cron running `npm run recompute` instead of this interval.
+      const { recomputeAll } = require('./services/scoringEngine');
+      const runScoring = () => recomputeAll()
+        .then(r => console.log(`[scoring] recomputed ${r.updated}/${r.total} lead(s)`))
+        .catch(e => console.error('[scoring] recompute failed:', e.message));
+      await runScoring();
+      setInterval(runScoring, 60 * 60 * 1000).unref();
 
       const port = Number(process.env.PORT) || 4000;
       app.listen(port, () => console.log(`Sales CRM API listening on http://localhost:${port}`));

@@ -4,13 +4,13 @@ import { login as adminLogin, bdLogin, getBds } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { IS_PROD } from '../env';
 
-const BU_LABEL = { signage: 'Signage', jhes: 'JHES' };
-const BU_COLOR = { signage: '#4f46e5', jhes: '#ea580c' };
-const BU_DESC  = { signage: 'Digital Signage Solutions', jhes: 'AV & Communication Systems' };
+const BU_LABEL = { signage: 'Signage', jhes: 'JHES', surveillance: 'Surveillance' };
+const BU_COLOR = { signage: '#4f46e5', jhes: '#ea580c', surveillance: '#0891b2' };
+const BU_DESC  = { signage: 'Digital Signage Solutions', jhes: 'Jio Hospitality & Entertainment Services', surveillance: 'Surveillance & Security Solutions' };
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login, isAuthenticated, loading } = useAuth();
+  const { login, user, isAuthenticated, loading } = useAuth();
 
   const [bu, setBu]           = useState(null);   // 'signage' | 'jhes' | null
   const [selected, setSelected] = useState(null); // { id, name, role, ... }
@@ -22,8 +22,14 @@ export default function LoginPage() {
 
   // Already signed in? Skip straight to the app.
   useEffect(() => {
-    if (!loading && isAuthenticated) navigate('/leads', { replace: true });
-  }, [loading, isAuthenticated, navigate]);
+    if (!loading && isAuthenticated && user) {
+      // Super Admin card → global Admin Console. Forecast card / forecast account → Forecast
+      // dashboard. Everyone else → the app (Leads).
+      const dest = selected?.role === 'superadmin' ? '/settings'
+        : (user.role === 'forecast' || selected?.role === 'forecast') ? '/forecast' : '/leads';
+      navigate(dest, { replace: true });
+    }
+  }, [loading, isAuthenticated, user, selected, navigate]);
 
   // Load BDs when a business unit is chosen
   useEffect(() => {
@@ -39,8 +45,21 @@ export default function LoginPage() {
       const data = selected.role === 'bd'
         ? await bdLogin(selected.id, password)
         : await adminLogin(pmoEmail, password, bu);
+      // The Admin Login button requires an actual super_admin account.
+      if (selected.role === 'superadmin' && data.user.role !== 'super_admin') {
+        setError('This is not an Admin account. Use your business sign-in instead.');
+        return;
+      }
+      // Mark the session type: signing in via Admin Login opens the global Admin Console ONLY (no
+      // business pages), even though this super_admin account is also the Signage admin. A business
+      // sign-in clears the flag so that same account gets the full app for its business.
+      if (selected.role === 'superadmin') localStorage.setItem('salescrm_console', '1');
+      else localStorage.removeItem('salescrm_console');
       login(data.token, data.user);
-      navigate('/leads', { replace: true });
+      // Super Admin card → Admin Console; Forecast card / forecast account → Forecast; else the app.
+      const dest = selected.role === 'superadmin' ? '/settings'
+        : (selected.role === 'forecast' || data.user.role === 'forecast') ? '/forecast' : '/leads';
+      navigate(dest, { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Login failed');
     } finally {
@@ -56,24 +75,22 @@ export default function LoginPage() {
       <div style={s.card}>
         <h1 style={s.title}>Sales CRM</h1>
         <p style={s.sub}>Please open Sales CRM from the portal to sign in.</p>
-        <button onClick={() => navigate('/forecast')} style={{ ...s.buButton, borderColor: '#a7f3d0', background: '#fff' }}>
-          <div style={{ ...s.buIcon, background: '#059669' }}>📊</div>
-          <div style={{ textAlign: 'left' }}>
-            <div style={s.buName}>Forecast Dashboard</div>
-            <div style={s.buDesc}>Hardware units forecast — no login needed</div>
-          </div>
-        </button>
       </div>
     </div>
   );
 
-  // ---- Step 1: Business unit ----
-  if (!bu) return (
+  // ---- Step 1: Business unit (+ Forecast-only login) ----
+  if (!bu && !selected) return (
     <div style={s.wrap}>
-      <div style={s.card}>
+      <div style={{ ...s.card, position: 'relative' }}>
+        {/* Admin Login — a small labelled button in the top-right corner. Deliberately separate from
+            the business cards: it opens the global Admin Console only, not tied to any business. */}
+        <button type="button" onClick={() => { setSelected({ role: 'superadmin', name: 'Admin' }); setError(''); }} title="Admin Login" style={s.adminLogin}>
+          <span style={{ fontSize: 13 }}>🛡️</span> Admin Login
+        </button>
         <h1 style={s.title}>Sales CRM</h1>
         <p style={s.sub}>Select your business to continue</p>
-        {['signage', 'jhes'].map(b => (
+        {['signage', 'jhes', 'surveillance'].map(b => (
           <button key={b} onClick={() => setBu(b)} style={{ ...s.buButton, borderColor: BU_COLOR[b] }}>
             <div style={{ ...s.buIcon, background: BU_COLOR[b] }}>{BU_LABEL[b][0]}</div>
             <div style={{ textAlign: 'left' }}>
@@ -83,11 +100,11 @@ export default function LoginPage() {
           </button>
         ))}
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
-          <button onClick={() => navigate('/forecast')} style={{ ...s.buButton, borderColor: '#a7f3d0', background: '#fff' }}>
+          <button onClick={() => { setSelected({ role: 'forecast', name: 'Forecast Dashboard' }); setError(''); }} style={{ ...s.buButton, borderColor: '#a7f3d0', background: '#fff', marginBottom: 0 }}>
             <div style={{ ...s.buIcon, background: '#059669' }}>📊</div>
             <div style={{ textAlign: 'left' }}>
               <div style={s.buName}>Forecast Dashboard</div>
-              <div style={s.buDesc}>Hardware units forecast — no login needed</div>
+              <div style={s.buDesc}>Sign in with your Forecast account</div>
             </div>
           </button>
         </div>
@@ -113,12 +130,12 @@ export default function LoginPage() {
         </div>
 
         <button
-          onClick={() => { setSelected({ role: 'pmo', name: `${BU_LABEL[bu]} PMO` }); setError(''); }}
+          onClick={() => { setSelected({ role: 'pmo', name: `${BU_LABEL[bu]} Business Admin` }); setError(''); }}
           style={s.pmoCard}>
-          <div style={{ ...s.initials, background: '#334155' }}>PM</div>
+          <div style={{ ...s.initials, background: '#334155' }}>🔑</div>
           <div style={{ textAlign: 'left' }}>
-            <div style={s.personName}>PMO</div>
-            <div style={s.buDesc}>{BU_LABEL[bu]} — Admin</div>
+            <div style={s.personName}>Business Admin / Manager</div>
+            <div style={s.buDesc}>{BU_LABEL[bu]} — sign in as Business Admin or PMO</div>
           </div>
         </button>
       </div>
@@ -130,11 +147,11 @@ export default function LoginPage() {
     <div style={s.wrap}>
       <div style={s.card}>
         <button onClick={() => { setSelected(null); setPassword(''); setPmoEmail(''); setError(''); }} style={s.back}>← Back</button>
-        <div style={{ ...s.initials, background: selected.role === 'bd' ? colorMap(selected.color) : '#334155', width: 56, height: 56, fontSize: 18 }}>
-          {selected.role === 'bd' ? (selected.initials || selected.name.slice(0, 2)) : 'PM'}
+        <div style={{ ...s.initials, background: selected.role === 'bd' ? colorMap(selected.color) : selected.role === 'forecast' ? '#059669' : selected.role === 'superadmin' ? '#7c3aed' : '#334155', width: 56, height: 56, fontSize: 18 }}>
+          {selected.role === 'bd' ? (selected.initials || selected.name.slice(0, 2)) : selected.role === 'forecast' ? '📊' : selected.role === 'superadmin' ? '🛡️' : '🔑'}
         </div>
         <h2 style={{ ...s.h2, marginTop: 16 }}>{selected.name}</h2>
-        <p style={s.sub}>{BU_LABEL[bu]}</p>
+        <p style={s.sub}>{selected.role === 'forecast' ? 'Forecast access' : selected.role === 'superadmin' ? 'Global admin console' : BU_LABEL[bu]}</p>
 
         <form onSubmit={handleSubmit}>
           {selected.role !== 'bd' && (
@@ -191,4 +208,5 @@ const s = {
   input:   { width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box' },
   error:   { background: '#fee2e2', color: '#b91c1c', padding: '8px 12px', borderRadius: 8, fontSize: 13, marginTop: 12 },
   submit:  { width: '100%', padding: 12, marginTop: 16, background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
+  adminLogin:{ position: 'absolute', top: 18, right: 18, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 999, border: '1.5px solid #e9d5ff', background: '#faf5ff', color: '#7c3aed', fontSize: 12, fontWeight: 700, cursor: 'pointer', lineHeight: 1 },
 };

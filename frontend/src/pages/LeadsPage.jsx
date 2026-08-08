@@ -5,25 +5,42 @@ import LeadForm from '../components/LeadForm';
 import ActivityLogView from '../components/ActivityLogView';
 import MultiSelect from '../components/MultiSelect';
 import KanbanView from '../components/KanbanView';
+import GlobalPosView from '../components/GlobalPosView';
 import { useAuth } from '../context/AuthContext';
-import { getLeads, deleteLead, updateLead, getBds, bulkUpdateLeads, getStageHistory } from '../services/api';
-import { PHASE_BADGE, TEMP_BADGE } from '../utils/constants';
-import { fmtDate, isTATBreached, isOverdue, getPOExpiryDays, calcLeadScore, dealSizeThresholds, buildRotMetrics, getRotState, stripHtml } from '../utils/leadHelpers';
+import { getLeads, getLead, deleteLead, updateLead, getBds, bulkUpdateLeads, getStageHistory, getDropdowns } from '../services/api';
+import { PHASE_BADGE } from '../utils/constants';
+import { fmtDate, isTATBreached, isOverdue, getPOExpiryDays, hasConfidence, confidenceTrend, buildRotMetrics, getRotState, stripHtml } from '../utils/leadHelpers';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import { writeFormattedSheet } from '../utils/excelExport';
 
 const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
 const RATINGS = ['Hot', 'Warm', 'Cold'];
-const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales'];
+const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales', 'Lead Affiliate'];
+
+// Confidence band of a lead (matches the Dashboard's Pipeline Confidence card).
+const leadConfBand = (l) => {
+  if (l.confidence_score === null || l.confidence_score === undefined) return null;
+  const c = Number(l.confidence_score);
+  return c >= 60 ? 'high' : c >= 30 ? 'medium' : 'low';
+};
+
+// Week-over-week confidence trend indicator shown beside the score.
+function TrendArrow({ trend }) {
+  if (trend === 'up')   return <span title="Up vs last week"   style={{ color: '#16a34a', fontSize: 12, fontWeight: 700 }}>▲</span>;
+  if (trend === 'down') return <span title="Down vs last week" style={{ color: '#dc2626', fontSize: 12, fontWeight: 700 }}>▼</span>;
+  if (trend === 'hold') return <span title="Frozen (On Hold)"  style={{ color: '#0ea5e9', fontSize: 12 }}>❄</span>;
+  return <span title="No change vs last week" style={{ color: '#94a3b8', fontSize: 9 }}>●</span>;
+}
 
 export default function LeadsPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, canForecast } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [leads, setLeads] = useState([]);
   const [stageHistory, setStageHistory] = useState([]);
   const [bds, setBds] = useState([]);
+  const [dropdowns, setDropdowns] = useState({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterPhases, setFilterPhases] = useState([]);
@@ -31,6 +48,7 @@ export default function LeadsPage() {
   const [filterSources, setFilterSources] = useState([]);
   const [filterBDs, setFilterBDs] = useState([]);
   const [filterOverdue, setFilterOverdue] = useState(false);
+  const [filterConf, setFilterConf] = useState('');   // '' | 'high' | 'medium' | 'low' (from the Dashboard)
   const [view, setView] = useState('table');
   const [showForm, setShowForm] = useState(false);
   const [editLead, setEditLead] = useState(null);
@@ -40,6 +58,7 @@ export default function LeadsPage() {
   const [bulkAction, setBulkAction] = useState(null);
   const [bulkValue, setBulkValue] = useState('');
   const [cameFromDashboard, setCameFromDashboard] = useState(false);
+  const [showChains, setShowChains] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -50,6 +69,7 @@ export default function LeadsPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { getBds(user.business_unit).then(setBds); }, [user.business_unit]);
+  useEffect(() => { getDropdowns().then(setDropdowns).catch(() => {}); }, []);
 
   // Pre-filter from dashboard KPI/phase-chip clicks
   useEffect(() => {
@@ -57,7 +77,8 @@ export default function LeadsPage() {
     const phase = searchParams.get('phase');
     const bd = searchParams.get('bd');
     const source = searchParams.get('source');
-    if (!f && !phase && !bd && !source) return;
+    const conf = searchParams.get('conf');
+    if (!f && !phase && !bd && !source && !conf) return;
     setCameFromDashboard(true);
     if (f === 'hot') setFilterTemps(['Hot']);
     else if (f === 'won') setFilterPhases(['PO Received']);
@@ -66,11 +87,10 @@ export default function LeadsPage() {
     if (phase) setFilterPhases(phase.split(','));
     if (source) setFilterSources(source.split(','));
     if (bd && isAdmin) setFilterBDs([bd]);
+    if (conf) setFilterConf(conf);
   }, [searchParams, isAdmin]);
 
   const { lastEntry: rotLastEntry, teamAvg: rotTeamAvg } = useMemo(() => buildRotMetrics(stageHistory), [stageHistory]);
-  // Deal-size percentile cut-offs for the lead score, ranked across the whole (scoped) pipeline.
-  const scoreThresholds = useMemo(() => dealSizeThresholds(leads), [leads]);
 
   const filtered = useMemo(() => leads.filter(l => {
     const s = search.toLowerCase();
@@ -81,13 +101,21 @@ export default function LeadsPage() {
       && (!filterTemps.length || filterTemps.includes(l.lead_temperature))
       && (!filterSources.length || filterSources.includes(l.lead_source))
       && (!filterBDs.length || filterBDs.includes(l.owner?.name))
-      && (!filterOverdue || isOverdue(l));
-  }), [leads, search, filterPhases, filterTemps, filterSources, filterBDs, filterOverdue]);
+      && (!filterOverdue || isOverdue(l))
+      && (!filterConf || leadConfBand(l) === filterConf);
+  }), [leads, search, filterPhases, filterTemps, filterSources, filterBDs, filterOverdue, filterConf]);
 
   const openCount = filtered.filter(l => !['Lost', 'On Hold', 'PO Received'].includes(l.phase)).length;
 
   const openNew = () => { setEditLead(null); setTab('form'); setShowForm(true); };
-  const openEdit = (l) => { setEditLead(l); setTab('form'); setShowForm(true); };
+  // Fetch the FULL lead (the list row from GET /leads omits contacts, stage history, etc.) so the
+  // edit form shows the saved POC contacts instead of an empty section.
+  const openEdit = async (l) => {
+    setTab('form');
+    const full = await getLead(l.id).catch(() => l);
+    setEditLead(full);
+    setShowForm(true);
+  };
   const closeForm = () => { setShowForm(false); setEditLead(null); };
   const onSaved = () => { closeForm(); fetchAll(); };
 
@@ -135,17 +163,20 @@ export default function LeadsPage() {
     const rows = toExport.map(l => ({
       'Sr No': l.sr_no, 'Business Unit': (l.business_unit || '').toUpperCase(), 'Customer': l.customer_name,
       'City': l.city || '', 'State': l.state || '', 'Lead Owner': l.owner?.name || '',
-      'Lead Source': l.lead_source, 'Channel Partner': l.channel_partner_name || '', 'KAM Name': l.kam_name || '',
+      'Lead Source': l.lead_source, 'Channel Partner': l.channel_partner_name || '', 'KAM Name': l.kam_name || '', 'Affiliate Name': l.affiliate_name || '',
       'New/Renewal': l.new_or_renewal, 'Lead Rating': l.lead_temperature, 'Competitor': l.competitor || '',
       'Quantity (Total)': l.quantity, 'Potential TCV (L)': l.potential_tcv_lakhs, 'Contract Period (Mo)': l.contract_period_months,
       'PO Validity (Mo)': l.po_validity_months || '', 'ACV (L/yr)': l.acv_lakhs, 'Contract Value (L)': l.contract_value_lakhs || '',
-      'Phase': l.phase, 'Lead Score': calcLeadScore(l, scoreThresholds) ?? '', 'Next Follow-Up': l.next_followup_date || '', 'PO Expected Date': l.po_expected_date || '',
+      'Phase': l.phase, 'Confidence %': l.confidence_score ?? '', 'Next Follow-Up': l.next_followup_date || '', 'PO Expected Date': l.po_expected_date || '',
+      'Service Start': l.service_start_date || '', 'Service End': l.service_end_date || '',
       'Platform': l.includes_platform ? 'Yes' : '', 'Platform Rate (₹)': l.platform_rate || '', 'Platform Qty': l.platform_qty || '',
       'CMS': l.includes_cms ? 'Yes' : '', 'CMS Rate (₹)': l.cms_rate || '', 'CMS Qty': l.cms_qty || '',
       'Connectivity': l.includes_connectivity ? 'Yes' : '', 'Connectivity Rate (₹)': l.connectivity_rate || '', 'Connectivity Qty': l.connectivity_qty || '',
       'AMC': l.includes_amc ? 'Yes' : '', 'AMC Rate (₹)': l.amc_rate || '', 'AMC Qty': l.amc_qty || '',
       'Display': l.includes_display ? 'Yes' : '', 'Display Rate (₹)': l.display_rate || '', 'Display Qty': l.display_qty || '',
       'Installation': l.includes_installation ? 'Yes' : '', 'Installation Rate (₹)': l.installation_rate || '', 'Installation Qty': l.installation_qty || '',
+      'IPTV': l.includes_iptv ? 'Yes' : '', 'IPTV Rate (₹)': l.iptv_rate || '', 'IPTV Qty': l.iptv_qty || '',
+      'JHES': l.includes_jhes ? 'Yes' : '', 'JHES Rate (₹)': l.jhes_rate || '', 'JHES Qty': l.jhes_qty || '',
       'Device': l.includes_device ? 'Yes' : '', 'Device SKU': l.device_sku || '', 'Device Cost Type': l.device_cost_type ? l.device_cost_type.toUpperCase() : '', 'Device Rate (₹)': l.device_rate || '',
       'Device Qty': l.device_qty || '', 'Device Requested Date': l.device_requested_date || '',
       'JHES Product': l.jhes_product || '', 'Actual PO Value (L)': l.po_actual_value_lakhs || '', 'Lost Reason': l.lost_reason || '',
@@ -163,21 +194,21 @@ export default function LeadsPage() {
       title: 'Sales CRM — Leads',
       subtitle: `${toExport.length} lead${toExport.length > 1 ? 's' : ''} · generated ${fmtDate(new Date())}`,
       tables: [{
-        columns: ['Sr', 'Customer', 'BD', 'Phase', 'Rating', 'TCV (₹L)', 'Score', 'Source', 'Next Follow-Up'],
-        rows: toExport.map(l => {
-          const sc = calcLeadScore(l, scoreThresholds);
-          return [
-            l.sr_no, l.customer_name, l.owner?.name?.split(' ')[0] || '', l.phase, l.lead_temperature,
-            l.potential_tcv_lakhs, sc === null ? '—' : sc, l.lead_source,
-            ['On Hold', 'Lost', 'PO Received'].includes(l.phase) ? '—' : (l.next_followup_date ? fmtDate(l.next_followup_date) : '—'),
-          ];
-        }),
+        columns: ['Sr', 'Customer', 'BD', 'Phase', 'Rating', 'TCV (₹L)', 'Conf %', 'Source', 'Next Follow-Up'],
+        rows: toExport.map(l => [
+          l.sr_no, l.customer_name, l.owner?.name?.split(' ')[0] || '', l.phase, l.lead_temperature,
+          l.potential_tcv_lakhs, hasConfidence(l) ? `${Math.round(Number(l.confidence_score))}%` : '—', l.lead_source,
+          ['On Hold', 'Lost', 'PO Received'].includes(l.phase) ? '—' : (l.next_followup_date ? fmtDate(l.next_followup_date) : '—'),
+        ]),
       }],
       filename: `Sales_CRM_${new Date().toISOString().slice(0, 10)}.pdf`,
     });
   };
 
   const bdNames = bds.map(b => b.name);
+  // Filter options come from the per-business dropdowns, unioned with any values present in the data.
+  const sourceOpts = [...new Set([...(dropdowns.lead_source || SOURCES), ...leads.map(l => l.lead_source).filter(Boolean)])];
+  const ratingOpts = [...new Set([...(dropdowns.lead_temperature || RATINGS), ...leads.map(l => l.lead_temperature).filter(Boolean)])];
 
   return (
     <Layout>
@@ -190,6 +221,8 @@ export default function LeadsPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {canForecast && <button className="btn" onClick={() => navigate('/forecast')}>📊 Forecast</button>}
+          <button className="btn" onClick={() => setShowChains(true)}>🏢 Chains</button>
           <button className="btn" onClick={exportExcel}>Export Excel</button>
           <button className="btn" onClick={exportPdf}>Export PDF</button>
           <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
@@ -205,12 +238,18 @@ export default function LeadsPage() {
           <span style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginRight: 2 }}>Filters</span>
           <input className="input" style={{ width: 240 }} placeholder="Search customer, city, competitor…" value={search} onChange={e => setSearch(e.target.value)} />
           <MultiSelect label="Phase" options={PHASES} selected={filterPhases} onChange={setFilterPhases} />
-          <MultiSelect label="Rating" options={RATINGS} selected={filterTemps} onChange={setFilterTemps} />
-          <MultiSelect label="Source" options={SOURCES} selected={filterSources} onChange={setFilterSources} />
+          <MultiSelect label="Rating" options={ratingOpts} selected={filterTemps} onChange={setFilterTemps} />
+          <MultiSelect label="Source" options={sourceOpts} selected={filterSources} onChange={setFilterSources} />
           {isAdmin && <MultiSelect label="BD" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#334155' }}>
             <input type="checkbox" checked={filterOverdue} onChange={e => setFilterOverdue(e.target.checked)} /> Overdue only
           </label>
+          {filterConf && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 999, padding: '4px 10px', color: '#3730a3' }}>
+              Confidence: {filterConf === 'high' ? 'High ≥60' : filterConf === 'medium' ? 'Medium 30–59' : 'Low <30'}
+              <button type="button" onClick={() => setFilterConf('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#4f46e5', fontWeight: 700, padding: 0 }}>✕</button>
+            </span>
+          )}
         </div>
 
         {isAdmin && selectedIds.size > 0 && (
@@ -240,8 +279,8 @@ export default function LeadsPage() {
               <thead>
                 <tr>
                   {isAdmin && <th></th>}
-                  <th>Sr</th><th>Customer</th>{isAdmin && <th>BD</th>}<th>Phase</th><th>Rating</th>
-                  <th style={{ textAlign: 'right' }}>TCV (₹L)</th><th>Score</th><th>Next Follow-Up</th>
+                  <th>Sr</th><th>Customer</th>{isAdmin && <th>BD</th>}<th>Phase</th><th>Location</th>
+                  <th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>TCV (₹L)</th><th>Scoring</th><th>Next Follow-Up</th>
                 </tr>
               </thead>
               <tbody>
@@ -253,7 +292,7 @@ export default function LeadsPage() {
                   const rot = getRotState(l, rotLastEntry, rotTeamAvg);
                   const isClosed = ['On Hold', 'Lost', 'PO Received'].includes(l.phase);
                   const isLost = l.phase === 'Lost';
-                  const score = calcLeadScore(l, scoreThresholds);
+                  const conf = hasConfidence(l) ? Number(l.confidence_score) : null;
                   return (
                     <tr key={l.id} onClick={() => openEdit(l)} style={{ background: isLost ? '#f1f5f9' : (tatBad ? '#fef2f2' : undefined), color: isLost ? '#94a3b8' : undefined, opacity: isLost ? 0.75 : 1 }}>
                       {isAdmin && <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelect(l.id)} /></td>}
@@ -274,11 +313,15 @@ export default function LeadsPage() {
                       </td>
                       {isAdmin && <td>{l.owner?.name?.split(' ')[0]}</td>}
                       <td><span className={`badge ${PHASE_BADGE[l.phase]}`}>{l.phase}</span></td>
-                      <td><span className={`badge ${TEMP_BADGE[l.lead_temperature]}`}>{l.lead_temperature}</span></td>
+                      <td>{l.state || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
+                      <td style={{ textAlign: 'right' }}>{l.quantity || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
                       <td style={{ textAlign: 'right', fontWeight: 700 }}>₹{l.potential_tcv_lakhs}</td>
                       <td>
-                        {score === null ? <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>—</span> : (
-                          <span className={`badge ${score >= 70 ? 'badge-green' : score >= 40 ? 'badge-amber' : 'badge-gray'}`} style={{ minWidth: 34, justifyContent: 'center' }}>{score}</span>
+                        {conf === null ? <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>—</span> : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span className={`badge ${conf >= 60 ? 'badge-green' : conf >= 30 ? 'badge-amber' : 'badge-gray'}`} style={{ minWidth: 46, justifyContent: 'center' }} title="Win-confidence score">{Math.round(conf)}%</span>
+                            <TrendArrow trend={confidenceTrend(l)} />
+                          </span>
                         )}
                       </td>
                       <td>
@@ -289,7 +332,7 @@ export default function LeadsPage() {
                     </tr>
                   );
                 })}
-                {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>No leads match your filters.</td></tr>}
+                {filtered.length === 0 && <tr><td colSpan={isAdmin ? 10 : 8} style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>No leads match your filters.</td></tr>}
               </tbody>
             </table>
             {isAdmin && filtered.length > 0 && (
@@ -320,6 +363,8 @@ export default function LeadsPage() {
           </div>
         </div>
       )}
+
+      {showChains && <GlobalPosView onClose={() => setShowChains(false)} />}
 
       {deleteId && (
         <div className="modal-overlay" onClick={() => setDeleteId(null)}>

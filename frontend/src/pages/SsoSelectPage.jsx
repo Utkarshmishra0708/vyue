@@ -8,9 +8,9 @@ import { useAuth } from '../context/AuthContext';
 // /sales_crm?ssoTicket=<jwt>, App.captureSsoFromUrl stashes the ticket in sessionStorage and routes
 // here. We redeem the ticket to list the accounts, let the user pick a business unit, then exchange
 // the ticket for a token for that account and land on /leads — bypassing the login page entirely. ===
-const BU_LABEL = { signage: 'Signage', jhes: 'JHES' };
-const BU_COLOR = { signage: '#4f46e5', jhes: '#ea580c' };
-const BU_DESC  = { signage: 'Digital Signage Solutions', jhes: 'AV & Communication Systems' };
+const BU_LABEL = { signage: 'Signage', jhes: 'JHES', surveillance: 'Surveillance' };
+const BU_COLOR = { signage: '#4f46e5', jhes: '#ea580c', surveillance: '#0891b2' };
+const BU_DESC  = { signage: 'Digital Signage Solutions', jhes: 'Jio Hospitality & Entertainment Services', surveillance: 'Surveillance & Security Solutions' };
 
 export default function SsoSelectPage() {
   const navigate = useNavigate();

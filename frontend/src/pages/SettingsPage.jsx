@@ -2,29 +2,46 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getManagedUsers, addUser, updateUser, setUserActive, deleteUser, resetBdPassword } from '../services/api';
+import { getManagedUsers, addUser, updateUser, setUserActive, deleteUser, resetBdPassword, setForecastAccess, getTat, updateTat } from '../services/api';
+import { BU_CONFIG } from '../utils/constants';
 import { IS_PROD } from '../env';
 
-const ROLE_LABEL = { pmo: 'PMO · Admin', bd: 'BD · User' };
-const ROLE_COLOR = { pmo: '#4f46e5', bd: '#0891b2' };
+const ROLE_LABEL = { super_admin: 'Admin', business_admin: 'Business Admin', pmo: 'PMO · Manager', bd: 'BD · User', forecast: 'Forecast · Dashboard only' };
+const ROLE_COLOR = { super_admin: '#7c3aed', business_admin: '#4f46e5', pmo: '#0ea5e9', bd: '#0891b2', forecast: '#059669' };
 const EMPTY_FORM = { name: '', email: '', mobile: '', role: 'bd' };
+
+// Which roles the current actor may assign (mirrors the backend hierarchy).
+const ASSIGNABLE = {
+  super_admin: ['business_admin', 'pmo', 'bd', 'forecast'],
+  business_admin: ['pmo', 'bd', 'forecast'],
+  pmo: ['bd'],
+};
+const ROLE_OPTION_LABEL = { business_admin: 'Business Admin', pmo: 'PMO — Admin', bd: 'BD — User', forecast: 'Forecast — Dashboard only' };
 
 // Add/Edit user modal. `initial` seeds the fields (edit); when null it's an add.
 // `lockRole` disables the role field (used when a user edits their own account — they must not
 // change their own role).
-function UserFormModal({ mode, initial, busy, lockRole, onSubmit, onClose }) {
-  const [form, setForm] = useState(initial || EMPTY_FORM);
+function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmit, onClose }) {
+  // Default to BD (the most common addition and lowest privilege). The role is a required, clearly
+  // labelled dropdown, so the admin picks Business Admin / PMO / Forecast explicitly when they want one.
+  const [form, setForm] = useState(initial || { ...EMPTY_FORM, role: (assignableRoles && assignableRoles.includes('bd')) ? 'bd' : ((assignableRoles && assignableRoles[0]) || 'bd') });
   const [err, setErr] = useState('');
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     const name = form.name.trim(), email = form.email.trim(), mobile = form.mobile.trim();
     if (!name || !email || !mobile || !form.role) return setErr('All fields are required.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setErr('Enter a valid email address.');
     if (!/^\d{10}$/.test(mobile)) return setErr('Mobile must be exactly 10 digits.');
     setErr('');
-    onSubmit({ name, email, mobile, role: form.role });
+    // Await the save so a server error (e.g. duplicate email) is shown INSIDE the modal rather than on
+    // the page behind it — otherwise a failed add looks like nothing happened.
+    try {
+      await onSubmit({ name, email, mobile, role: form.role });
+    } catch (er) {
+      setErr(er.message || 'Could not save user. Please try again.');
+    }
   };
 
   return (
@@ -51,9 +68,9 @@ function UserFormModal({ mode, initial, busy, lockRole, onSubmit, onClose }) {
             <div>
               <label className="field-label">Role *</label>
               <select className="input" value={form.role} onChange={set('role')} disabled={lockRole} required>
-                <option value="bd">BD — User</option>
-                <option value="pmo">PMO — Admin</option>
+                {(assignableRoles || ['bd']).map(r => <option key={r} value={r}>{ROLE_OPTION_LABEL[r] || r}</option>)}
               </select>
+              {form.role === 'forecast' && <p style={{ fontSize: 11, color: '#059669', margin: '5px 0 0' }}>This user will only be able to sign in to the Forecast dashboard.</p>}
               {lockRole && <p style={{ fontSize: 11, color: '#94a3b8', margin: '5px 0 0' }}>You cannot change your own role.</p>}
             </div>
             {err && <p style={{ fontSize: 12, color: '#dc2626', margin: 0 }}>{err}</p>}
@@ -79,9 +96,50 @@ export default function SettingsPage() {
   const [modal, setModal] = useState(null); // null | { mode: 'add' } | { mode: 'edit', user }
   const [resetTarget, setResetTarget] = useState(null); // user id currently showing the reset form
   const [resetValue, setResetValue] = useState('');
+  const [transferFor, setTransferFor] = useState(null); // { user, leadCount } — BD delete needs lead transfer
+  const [transferTo, setTransferTo] = useState('unassigned');
+  // The global Admin (super_admin) is not tied to any business, so the console opens business-neutral —
+  // they pick a business tab before its users load. Everyone else is fixed to their own business.
+  const [manageBusiness, setManageBusiness] = useState(user.role === 'super_admin' ? null : user.business_unit);
 
-  const refresh = () => getManagedUsers(user.business_unit).then(setUsers).catch(() => setUsers([]));
-  useEffect(() => { refresh(); }, [user.business_unit]); // eslint-disable-line
+  // Stage TAT (days-per-stage) editor for the Lead Confidence Scoring engine — per platform. Only a
+  // business's PMO / Business Admin may edit; the per-stage weightage is a fixed constant (read-only).
+  const [tatStages, setTatStages] = useState([]); // [{ stage, tat_days, weight }]
+  const [tatBusy, setTatBusy] = useState(false);
+  const [tatMsg, setTatMsg] = useState('');
+  const [tatModal, setTatModal] = useState(false); // TAT table lives in a modal to keep Settings compact
+  const canEditTat = user.role === 'pmo' || user.role === 'business_admin';
+
+  const refresh = () => {
+    if (!manageBusiness) { setUsers([]); return; }
+    getManagedUsers(manageBusiness).then(setUsers).catch(() => setUsers([]));
+  };
+  useEffect(() => { refresh(); }, [manageBusiness]); // eslint-disable-line
+
+  useEffect(() => {
+    setTatMsg('');
+    if (!manageBusiness) { setTatStages([]); return; }
+    getTat(manageBusiness).then(d => setTatStages(d.stages || [])).catch(() => setTatStages([]));
+  }, [manageBusiness]);
+
+  const setTatDay = (stage, val) => setTatStages(rows => rows.map(r => r.stage === stage ? { ...r, tat_days: val } : r));
+
+  const saveTat = async () => {
+    setTatBusy(true); setTatMsg('');
+    try {
+      const tats = {};
+      for (const r of tatStages) tats[r.stage] = parseInt(r.tat_days, 10);
+      const d = await updateTat(manageBusiness, tats);
+      setTatStages(d.stages || []);
+      setTatMsg('TAT saved — confidence scores recalculated.');
+    } catch (e) {
+      setTatMsg(e.response?.data?.message || 'Error saving TAT');
+    } finally { setTatBusy(false); }
+  };
+
+  // Can the current actor manage this user row? (mirrors the backend rules — gates the row actions)
+  const canActOn = (u) => (ASSIGNABLE[user.role] || []).includes(u.role)
+    && (user.role === 'super_admin' || u.business_unit === user.business_unit);
 
   const handleSubmit = async (data) => {
     setBusy(true); setMsg('');
@@ -90,7 +148,7 @@ export default function SettingsPage() {
         await updateUser(modal.user.id, data);
         setMsg(`Updated ${data.name}.`);
       } else {
-        const created = await addUser(user.business_unit, data);
+        const created = await addUser(manageBusiness, data);
         setMsg(IS_PROD
           ? `Added ${data.name}. They can sign in through the portal (SSO).`
           : `Added ${data.name}. Starting password is "${created.defaultPassword}" — share it; they can change it under Password after logging in.`);
@@ -98,7 +156,9 @@ export default function SettingsPage() {
       setModal(null);
       refresh();
     } catch (err) {
-      setMsg(err.response?.data?.message || 'Error saving user');
+      const m = err.response?.data?.message || 'Error saving user';
+      setMsg(m);
+      throw new Error(m); // rethrow so the modal can surface it to the user (see UserFormModal.submit)
     } finally { setBusy(false); }
   };
 
@@ -116,13 +176,42 @@ export default function SettingsPage() {
   };
 
   const handleDelete = async (u) => {
-    if (!window.confirm(`Permanently delete ${u.name}? This cannot be undone. If they own any leads, delete will be blocked — disable them instead.`)) return;
+    if (!window.confirm(`Permanently delete ${u.name}? This cannot be undone.`)) return;
     setBusy(true); setMsg('');
     try {
-      await deleteUser(u.id);
-      setMsg(`Permanently deleted ${u.name}.`); refresh();
+      const res = await deleteUser(u.id);
+      setMsg(res.message || `Permanently deleted ${u.name}.`); refresh();
     } catch (err) {
-      setMsg(err.response?.data?.message || 'Error deleting user');
+      const data = err.response?.data;
+      // If the account owns leads, the backend asks us to choose a transfer target first.
+      if (err.response?.status === 409 && data?.requiresReassign) {
+        setTransferFor({ user: u, leadCount: data.leadCount });
+        setTransferTo('unassigned');
+      } else {
+        setMsg(data?.message || 'Error deleting user');
+      }
+    } finally { setBusy(false); }
+  };
+
+  const confirmTransferDelete = async () => {
+    const u = transferFor.user;
+    setBusy(true); setMsg('');
+    try {
+      const res = await deleteUser(u.id, transferTo);
+      setMsg(res.message || `Deleted ${u.name}.`);
+      setTransferFor(null); refresh();
+    } catch (err) {
+      setMsg(err.response?.data?.message || 'Error transferring leads');
+    } finally { setBusy(false); }
+  };
+
+  const handleForecastAccess = async (u) => {
+    setBusy(true); setMsg('');
+    try {
+      const res = await setForecastAccess(u.id, !u.forecast_access);
+      setMsg(res.message); refresh();
+    } catch (err) {
+      setMsg(err.response?.data?.message || 'Error updating forecast access');
     } finally { setBusy(false); }
   };
 
@@ -141,13 +230,14 @@ export default function SettingsPage() {
     } finally { setBusy(false); }
   };
 
-  const buLabel = user.business_unit === 'jhes' ? 'JHES' : 'Signage';
+  const isSuper = user.role === 'super_admin';
+  const buLabel = manageBusiness ? ((BU_CONFIG[manageBusiness] || {}).label || manageBusiness) : '';
 
   return (
     <Layout>
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px' }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Settings</h1>
-        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Manage your team and account</p>
+        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{isSuper ? 'Admin Console' : 'Settings'}</h1>
+        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{isSuper ? 'Manage users and roles across all businesses' : 'Manage your team and account'}</p>
       </div>
 
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -159,9 +249,28 @@ export default function SettingsPage() {
         </div>
 
         <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-            <p className="section-title" style={{ margin: 0 }}>Manage Users — {buLabel}</p>
-            <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => setModal({ mode: 'add' })}>+ Add User</button>
+          {isSuper && (
+            <div style={{ marginBottom: 12 }}>
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 6px' }}>
+                Admin — choose a business to manage its users. Create a <b>Business Admin</b> to hand off day-to-day management of that business.
+              </p>
+              <div style={{ display: 'inline-flex', gap: 4, background: '#f1f5f9', borderRadius: 8, padding: 3 }}>
+                {Object.keys(BU_CONFIG).map(bu => {
+                  const on = manageBusiness === bu;
+                  return (
+                    <button key={bu} type="button" onClick={() => setManageBusiness(bu)}
+                      style={{ border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                        background: on ? '#fff' : 'transparent', color: on ? '#0f172a' : '#64748b', boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}>
+                      {BU_CONFIG[bu].label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, gap: 10, flexWrap: 'wrap' }}>
+            <p className="section-title" style={{ margin: 0 }}>Manage Users{buLabel ? ` — ${buLabel}` : ''}</p>
+            <button className="btn btn-primary btn-sm" disabled={busy || !manageBusiness} onClick={() => setModal({ mode: 'add' })}>+ Add User</button>
           </div>
           <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 14px' }}>
             PMO users are admins; BD users are the sales team. Use Edit to change a user's details.
@@ -169,7 +278,8 @@ export default function SettingsPage() {
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {users.length === 0 && <p style={{ fontSize: 13, color: '#94a3b8' }}>No users yet — add one above.</p>}
+            {!manageBusiness && <p style={{ fontSize: 13, color: '#94a3b8' }}>Select a business above to manage its users.</p>}
+            {manageBusiness && users.length === 0 && <p style={{ fontSize: 13, color: '#94a3b8' }}>No users yet — add one above.</p>}
             {users.map(u => (
               <div key={u.id} style={{ paddingBottom: 8, borderBottom: '1px solid #f1f5f9', opacity: u.active ? 1 : 0.55 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -182,16 +292,24 @@ export default function SettingsPage() {
                     <div style={{ fontSize: 11, color: '#94a3b8' }}>{ROLE_LABEL[u.role] || u.role}{u.email ? ` · ${u.email}` : ''}{u.mobile ? ` · ${u.mobile}` : ''}</div>
                   </div>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                    <button className="btn btn-sm" disabled={busy} onClick={() => setModal({ mode: 'edit', user: { name: u.name, email: u.email || '', mobile: u.mobile || '', role: u.role, id: u.id } })}>Edit</button>
-                    {!IS_PROD && u.role === 'bd' && u.active && (
+                    {(canActOn(u) || u.id === user.id) && (
+                      <button className="btn btn-sm" disabled={busy} onClick={() => setModal({ mode: 'edit', user: { name: u.name, email: u.email || '', mobile: u.mobile || '', role: u.role, id: u.id } })}>Edit</button>
+                    )}
+                    {!IS_PROD && u.role === 'bd' && u.active && canActOn(u) && (
                       <button className="btn btn-sm" disabled={busy} onClick={() => openReset(u.id)}>
                         {resetTarget === u.id ? 'Cancel' : 'Reset Password'}
                       </button>
                     )}
-                    {u.id !== user.id && (
+                    {u.role === 'bd' && canActOn(u) && (
+                      <button className="btn btn-sm" disabled={busy} onClick={() => handleForecastAccess(u)} title="Toggle Forecast dashboard access"
+                        style={u.forecast_access ? { borderColor: '#a7f3d0', color: '#059669' } : undefined}>
+                        {u.forecast_access ? '📦 Forecast ✓' : '📦 Forecast'}
+                      </button>
+                    )}
+                    {u.id !== user.id && canActOn(u) && (
                       <button className="btn btn-sm" disabled={busy} onClick={() => handleToggleActive(u)}>{u.active ? 'Disable' : 'Enable'}</button>
                     )}
-                    {u.id !== user.id && (
+                    {u.id !== user.id && canActOn(u) && (
                       <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => handleDelete(u)}>Delete</button>
                     )}
                   </div>
@@ -210,6 +328,23 @@ export default function SettingsPage() {
           {msg && <p style={{ fontSize: 12, marginTop: 12, color: msg.toLowerCase().includes('error') ? '#dc2626' : '#059669' }}>{msg}</p>}
         </div>
 
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div>
+              <p className="section-title" style={{ margin: 0 }}>Lead Scoring — Stage TAT{buLabel ? ` — ${buLabel}` : ''}</p>
+              <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 0' }}>
+                Turn-around days per stage that drive the win-confidence decay — {canEditTat ? 'editable independently per business.' : "managed by this business's PMO / Business Admin."}
+              </p>
+            </div>
+            {manageBusiness && (
+              <button className="btn btn-sm" style={{ flexShrink: 0 }} onClick={() => { setTatMsg(''); setTatModal(true); }}>
+                {canEditTat ? '⚙ Edit Stage TAT' : '👁 View Stage TAT'}
+              </button>
+            )}
+          </div>
+          {!manageBusiness && <p style={{ fontSize: 13, color: '#94a3b8', margin: '10px 0 0' }}>Select a business above to view its stage TAT.</p>}
+        </div>
+
         <div className="card" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: '#92400e', margin: '0 0 4px' }}>💡 Weekly targets</p>
           <p style={{ fontSize: 12, color: '#92400e', margin: 0 }}>Global and per-BD weekly pipeline targets are editable directly on the Dashboard page.</p>
@@ -222,9 +357,87 @@ export default function SettingsPage() {
           initial={modal.mode === 'edit' ? modal.user : null}
           busy={busy}
           lockRole={modal.mode === 'edit' && modal.user.id === user.id}
+          assignableRoles={ASSIGNABLE[user.role] || []}
           onSubmit={handleSubmit}
           onClose={() => { if (!busy) setModal(null); }}
         />
+      )}
+
+      {tatModal && (
+        <div className="modal-overlay" onClick={() => !tatBusy && setTatModal(false)}>
+          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <span style={{ fontWeight: 700, fontSize: 15 }}>Stage TAT{buLabel ? ` — ${buLabel}` : ''}</span>
+              <button className="btn btn-sm" onClick={() => setTatModal(false)} disabled={tatBusy}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 14px' }}>
+                <b>TAT</b> is how many days a lead may sit in each stage before its win-confidence begins to decay.
+                The <b>weightage</b> (each stage's base confidence) and the decay formula are fixed constants shown for
+                reference only — just the TAT is editable.
+              </p>
+              {!canEditTat && (
+                <p style={{ fontSize: 12, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px', margin: '0 0 12px' }}>
+                  Stage TAT can only be changed by this business's <b>PMO</b> or <b>Business Admin</b>. You can view the values below.
+                </p>
+              )}
+              {tatStages.length === 0 ? <p style={{ fontSize: 13, color: '#94a3b8' }}>Loading…</p> : (
+                <table className="data-table" style={{ width: '100%' }}>
+                  <thead>
+                    <tr><th>Stage</th><th style={{ textAlign: 'center' }}>Weightage (%)</th><th style={{ textAlign: 'center' }}>TAT (days)</th></tr>
+                  </thead>
+                  <tbody>
+                    {tatStages.map(r => (
+                      <tr key={r.stage}>
+                        <td style={{ fontWeight: 600 }}>{r.stage}</td>
+                        <td style={{ textAlign: 'center', color: '#64748b' }} title="Fixed base confidence weight — not editable">{r.weight}%</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input className="input" style={{ width: 90, textAlign: 'center', display: 'inline-block' }} type="number" min={1} max={365}
+                            value={r.tat_days} disabled={!canEditTat} onChange={e => setTatDay(r.stage, e.target.value)} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: '10px 0 0' }}>PO Received is terminal (no TAT). Allowed range 1–365 days.</p>
+              {tatMsg && <p style={{ fontSize: 12, margin: '10px 0 0', color: tatMsg.toLowerCase().includes('error') ? '#dc2626' : '#059669' }}>{tatMsg}</p>}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+                <button className="btn" onClick={() => setTatModal(false)} disabled={tatBusy}>Close</button>
+                {canEditTat && <button className="btn btn-primary" disabled={tatBusy} onClick={saveTat}>{tatBusy ? 'Saving…' : 'Save TAT'}</button>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {transferFor && (
+        <div className="modal-overlay" onClick={() => !busy && setTransferFor(null)}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <span style={{ fontWeight: 700, fontSize: 15 }}>Transfer leads before deleting</span>
+              <button className="btn btn-sm" onClick={() => setTransferFor(null)} disabled={busy}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 13, color: '#334155', margin: '0 0 14px' }}>
+                <strong>{transferFor.user.name}</strong> owns <strong>{transferFor.leadCount}</strong> lead(s). Choose who to transfer them to — then the account will be deleted.
+              </p>
+              <label className="field-label">Transfer leads to</label>
+              <select className="input" value={transferTo} onChange={e => setTransferTo(e.target.value)}>
+                <option value="unassigned">Unassigned — holding account</option>
+                {users.filter(x => x.id !== transferFor.user.id && x.active && ['bd', 'pmo'].includes(x.role)).map(x => (
+                  <option key={x.id} value={x.id}>{x.name} ({ROLE_LABEL[x.role] || x.role})</option>
+                ))}
+              </select>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 18 }}>
+                <button className="btn" onClick={() => setTransferFor(null)} disabled={busy}>Cancel</button>
+                <button className="btn btn-danger" onClick={confirmTransferDelete} disabled={busy}>
+                  {busy ? 'Working…' : 'Transfer & Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </Layout>
   );

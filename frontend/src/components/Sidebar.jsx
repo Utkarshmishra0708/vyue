@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { BU_CONFIG } from '../utils/constants';
+import { BU_CONFIG, ROLE_LABEL } from '../utils/constants';
 import { IS_PROD } from '../env';
 
 const NAV_ICONS = {
-  leads: '📋', dashboard: '📊', reports: '📁', settings: '⚙️', 'change-password': '🔒',
+  leads: '📋', dashboard: '📊', forecast: '📦', reports: '📁', settings: '⚙️', 'change-password': '🔒', voc: '🗣️',
 };
 
 export default function Sidebar() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isSuperAdmin, isConsoleOnly, canForecast } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebarCollapsed') === '1');
@@ -25,27 +25,42 @@ export default function Sidebar() {
   };
 
   const bu = BU_CONFIG[user.business_unit] || BU_CONFIG.signage;
-  const navItems = [
-    { path: '/leads', label: 'Leads' },
-    { path: '/dashboard', label: 'Dashboard' },
-    ...(isAdmin ? [{ path: '/reports', label: 'Reports' }] : []),
-    ...(isAdmin ? [{ path: '/settings', label: 'Settings' }] : []),
-    // Self-service password change is DEV-ONLY; production is SSO-only.
-    ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
-  ];
+  // A console-only session (Admin signed in via Admin Login) sees ONLY the Admin Console — no business
+  // pages — so it stays fully decoupled from Signage/any business. Everyone else (including the same
+  // super_admin signed in through a business card) gets the full operational nav for their business.
+  const navItems = isConsoleOnly
+    ? [
+        { path: '/settings', label: 'Admin Console' },
+        ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
+      ]
+    : [
+        { path: '/leads', label: 'Leads' },
+        { path: '/dashboard', label: 'Dashboard' },
+        // VOC (Voice of Customer) is Surveillance-only — never shown for other businesses.
+        ...(user.business_unit === 'surveillance' ? [{ path: '/voc', label: 'VOC' }] : []),
+        ...(canForecast ? [{ path: '/forecast', label: 'Forecast' }] : []),
+        ...(isAdmin ? [{ path: '/reports', label: 'Reports' }] : []),
+        ...(isAdmin ? [{ path: '/settings', label: isSuperAdmin ? 'Admin Console' : 'Settings' }] : []),
+        // Self-service password change is DEV-ONLY; production is SSO-only.
+        ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
+      ];
 
   return (
     <aside style={{
       width: collapsed ? 64 : 220, flexShrink: 0, background: '#0f172a', color: '#cbd5e1',
-      display: 'flex', flexDirection: 'column', minHeight: '100vh', transition: 'width .15s',
+      display: 'flex', flexDirection: 'column', height: '100vh', position: 'sticky', top: 0,
+      alignSelf: 'flex-start', transition: 'width .15s',
     }}>
-      {/* Logo doubles as a home button → Leads (the app's home page). */}
+      {/* Logo → the app's main entry page ("Select your business to continue"). That screen is the
+          pre-login landing, so reaching it ends the current session (same as Sign out): in standalone
+          dev it lands on the business-selection screen; in production it returns to the Jioautify
+          portal. Works for every role and both business units. */}
       <button
         type="button"
-        onClick={() => navigate('/leads')}
+        onClick={logout}
         onMouseEnter={() => setLogoHover(true)}
         onMouseLeave={() => setLogoHover(false)}
-        title="Sales CRM — Home"
+        title="Back to main page (business selection)"
         style={{
           padding: '16px', borderBottom: '1px solid #1e293b', borderTop: 'none', borderLeft: 'none', borderRight: 'none',
           display: 'flex', alignItems: 'center', gap: 10, width: '100%', cursor: 'pointer', textAlign: 'left',
@@ -66,7 +81,7 @@ export default function Sidebar() {
         {!collapsed && <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>Sales CRM</div>}
       </button>
 
-      <nav style={{ flex: 1, padding: '12px 8px' }}>
+      <nav style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
         {navItems.map(item => {
           const active = location.pathname === item.path;
           return (
@@ -91,7 +106,7 @@ export default function Sidebar() {
         {!collapsed && (
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{user.name}</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>{user.role} · {bu.label}</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>{ROLE_LABEL[user.role] || user.role}{isConsoleOnly ? ' · All businesses' : ` · ${bu.label}`}</div>
           </div>
         )}
         <button onClick={logout} className="btn btn-sm" style={{ width: '100%', justifyContent: 'center', background: '#1e293b', borderColor: '#334155', color: '#e2e8f0' }}>

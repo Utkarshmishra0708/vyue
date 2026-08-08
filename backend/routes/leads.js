@@ -1,10 +1,17 @@
 const router = require('express').Router();
-const { sequelize, Lead, LeadContact, ActivityLog, StageHistory, User } = require('../models');
+const { sequelize, Lead, LeadContact, ActivityLog, StageHistory, User, DropdownOption, GlobalPo } = require('../models');
 const { authenticate, adminOnly } = require('../middleware/auth');
 const { leadScopeWhere } = require('../middleware/scope');
+const { applyHoldTransition, scoringFieldsForSave } = require('../services/scoringEngine');
 const { Op } = require('sequelize');
 
 router.use(authenticate);
+
+// A 'forecast' account can only see the Forecast dashboard — it has no access to lead data.
+router.use((req, res, next) => {
+  if (req.user.role === 'forecast') return res.status(403).json({ message: 'Forecast accounts can only access the Forecast dashboard.' });
+  next();
+});
 
 // Phases that have their own dedicated date column on the lead.
 const PHASE_DATE_MAP = {
@@ -17,20 +24,24 @@ const PHASE_DATE_MAP = {
 };
 
 const FIELD_LABELS = {
+  property_type: 'Property Type', property_category: 'Property Category',
   customer_name: 'Customer Name', city: 'City', state: 'State', lead_source: 'Lead Source',
-  channel_partner_name: 'Channel Partner', kam_name: 'KAM Name', new_or_renewal: 'New/Renewal',
+  channel_partner_name: 'Channel Partner', kam_name: 'KAM Name', affiliate_name: 'Affiliate Name', new_or_renewal: 'New/Renewal',
   lead_temperature: 'Lead Rating', competitor: 'Competitor', quantity: 'Quantity',
   potential_tcv_lakhs: 'Potential TCV (L)', contract_period_months: 'Contract Period (Mo)',
   po_validity_months: 'PO Validity (Mo)', phase: 'Phase', next_followup_date: 'Next Follow-Up Date',
-  po_expected_date: 'PO Expected Date', lost_reason: 'Lost Reason', po_actual_value_lakhs: 'Actual PO Value (L)',
+  po_expected_date: 'PO Expected Date', service_start_date: 'Service Start Date', service_end_date: 'Service End Date',
+  po_number: 'PO Number', lost_reason: 'Lost Reason', po_actual_value_lakhs: 'Actual PO Value (L)',
   includes_platform: 'Service: Platform', platform_rate: 'Platform Rate', platform_qty: 'Platform Qty',
   includes_cms: 'Service: CMS', cms_rate: 'CMS Rate', cms_qty: 'CMS Qty',
   includes_connectivity: 'Service: Connectivity', connectivity_rate: 'Connectivity Rate', connectivity_qty: 'Connectivity Qty',
   includes_display: 'Service: Display', display_rate: 'Display Rate', display_qty: 'Display Qty',
   includes_device: 'Service: Device', device_sku: 'Device SKU', device_cost_type: 'Device Cost Type',
-  device_rate: 'Device Rate', device_qty: 'Device Qty', device_requested_date: 'Device Requested Date',
+  device_rate: 'Device Rate', device_qty: 'Device Qty', device_requested_date: 'Device Expected Date',
   includes_amc: 'Service: AMC', amc_rate: 'AMC Rate', amc_qty: 'AMC Qty',
   includes_installation: 'Service: Installation', installation_rate: 'Installation Rate', installation_qty: 'Installation Qty',
+  includes_iptv: 'Service: IPTV', iptv_rate: 'IPTV Rate', iptv_qty: 'IPTV Qty',
+  includes_jhes: 'Service: JHES', jhes_rate: 'JHES Rate', jhes_qty: 'JHES Qty',
   jhes_product: 'JHES Product', additional_notes: 'Additional Notes',
 };
 
@@ -42,6 +53,8 @@ const TCV_SERVICES = [
   { key: 'cms',          nature: 'opex' },
   { key: 'connectivity', nature: 'opex' },
   { key: 'amc',          nature: 'opex' },
+  { key: 'iptv',         nature: 'opex' },   // JHES only in the UI; other BUs never tick it (→ 0)
+  { key: 'jhes',         nature: 'opex' },   // JHES only in the UI; other BUs never tick it (→ 0)
   { key: 'display',      nature: 'capex' },
   { key: 'installation', nature: 'capex' },
 ];
@@ -74,6 +87,27 @@ function computeTcvLakhs(body) {
   const { opexLakhs, capexLakhs } = computeTcvBreakdown(body);
   const tcv = opexLakhs + capexLakhs;
   return tcv > 0 ? +tcv.toFixed(2) : 0;
+}
+
+// Surveillance leads carry a variable services list (JSON), not per-service columns. TCV split, in
+// lakhs: OPEX = rate × qty × contract months (recurring), CAPEX = rate × qty (one-time).
+function computeSurveillanceBreakdown(services, months) {
+  const m = parseInt(months, 10) || 0;
+  let opex = 0, capex = 0;
+  for (const s of (Array.isArray(services) ? services : [])) {
+    const r = parseFloat(s.rate) || 0;
+    const q = parseInt(s.qty, 10) || 0;
+    if (!r || !q) continue;
+    if (s.nature === 'opex') opex += r * q * m; else capex += r * q;
+  }
+  return { opexLakhs: opex / 100000, capexLakhs: capex / 100000 };
+}
+
+// Normalise a surveillance services array to the persisted shape (only ticked rows with a rate & qty).
+function cleanSurveillanceServices(services) {
+  return (Array.isArray(services) ? services : [])
+    .filter(s => s && (parseFloat(s.rate) || 0) > 0 && (parseInt(s.qty, 10) || 0) > 0)
+    .map(s => ({ label: String(s.label || ''), nature: s.nature === 'opex' ? 'opex' : 'capex', rate: parseFloat(s.rate) || 0, qty: parseInt(s.qty, 10) || 0 }));
 }
 
 // Date-only helpers — deliberately avoid toISOString()/UTC conversion.
@@ -117,15 +151,20 @@ function normalizePayload(body, { isCreate, existing }) {
   const tcvManual = !!body.tcv_manual;
   const months = parseInt(body.contract_period_months, 10) || null;
   const years = months ? months / 12 : null;
+  const isSurveillance = body.business_unit === 'surveillance';
+  const survServices = isSurveillance ? cleanSurveillanceServices(body.surveillance_services) : null;
   let tcv, acv;
   if (tcvManual) {
     // Hand-typed TCV has no service breakdown, so annualise the whole value evenly.
     tcv = parseFloat(body.potential_tcv_lakhs) || 0;
     acv = tcv && years ? +(tcv / years).toFixed(2) : 0;
   } else {
-    // Auto-calc: OPEX is annualised across the contract term, but CAPEX (one-time) is realised in
-    // full in year 1 — so first-year ACV = OPEX/years + full CAPEX.
-    const { opexLakhs, capexLakhs } = computeTcvBreakdown(body);
+    // Auto-calc from services. OPEX is annualised across the contract term, CAPEX (one-time) is
+    // realised in full in year 1 → first-year ACV = OPEX/years + full CAPEX. Surveillance uses its
+    // JSON services list; signage/jhes use their per-service columns.
+    const { opexLakhs, capexLakhs } = isSurveillance
+      ? computeSurveillanceBreakdown(survServices, months)
+      : computeTcvBreakdown(body);
     tcv = +(opexLakhs + capexLakhs).toFixed(2);
     const opexPerYear = years ? opexLakhs / years : opexLakhs;
     acv = +(opexPerYear + capexLakhs).toFixed(2);
@@ -140,6 +179,8 @@ function normalizePayload(body, { isCreate, existing }) {
   const deviceQty = svcQty(body.includes_device, body.device_qty);
   const amcQty = svcQty(body.includes_amc, body.amc_qty);
   const installationQty = svcQty(body.includes_installation, body.installation_qty);
+  const iptvQty = svcQty(body.includes_iptv, body.iptv_qty);
+  const jhesQty = svcQty(body.includes_jhes, body.jhes_qty);
   // `quantity` stays the sum of the original hardware/service lines so the device Forecast
   // (which falls back to it) is unaffected; AMC/installation counts live in their own columns.
   const totalQty = platformQty + cmsQty + connQty + displayQty + deviceQty;
@@ -151,11 +192,18 @@ function normalizePayload(body, { isCreate, existing }) {
     customer_name: body.customer_name,
     owner_id: body.owner_id,
     business_unit: body.business_unit || 'signage',
+    // Account Mix (all businesses).
+    property_type: body.property_type || null,
+    property_category: body.property_category || null,
+    // A lead is always an Individual PO. global_po_id links it to a chain (null = standalone property).
+    po_type: 'individual',
+    global_po_id: body.global_po_id ? (parseInt(body.global_po_id, 10) || null) : null,
     city: body.city || null,
     state: body.state || null,
     lead_source: body.lead_source || null,
     channel_partner_name: body.lead_source === 'Channel Partner' ? (body.channel_partner_name || null) : null,
     kam_name: body.lead_source === 'KAM' ? (body.kam_name || null) : null,
+    affiliate_name: body.lead_source === 'Lead Affiliate' ? (body.affiliate_name || null) : null,
     new_or_renewal: body.new_or_renewal || null,
     lead_temperature: body.lead_temperature || null,
     competitor: body.competitor || null,
@@ -163,7 +211,8 @@ function normalizePayload(body, { isCreate, existing }) {
     potential_tcv_lakhs: tcv,
     tcv_manual: tcvManual,
     contract_period_months: months,
-    po_validity_months: body.po_validity_months ? (parseInt(body.po_validity_months, 10) || null) : null,
+    // PO validity is derived automatically from the contract period (same duration).
+    po_validity_months: months,
     acv_lakhs: acv,
     contract_value_lakhs: phase === 'PO Received' ? tcv : null,
     phase,
@@ -178,6 +227,8 @@ function normalizePayload(body, { isCreate, existing }) {
     includes_device: !!body.includes_device,
     includes_amc: !!body.includes_amc,
     includes_installation: !!body.includes_installation,
+    includes_iptv: !!body.includes_iptv,
+    includes_jhes: !!body.includes_jhes,
     platform_rate: body.includes_platform && body.platform_rate ? parseFloat(body.platform_rate) : null,
     cms_rate: body.includes_cms && body.cms_rate ? parseFloat(body.cms_rate) : null,
     connectivity_rate: body.includes_connectivity && body.connectivity_rate ? parseFloat(body.connectivity_rate) : null,
@@ -185,6 +236,8 @@ function normalizePayload(body, { isCreate, existing }) {
     device_rate: body.includes_device && body.device_rate ? parseFloat(body.device_rate) : null,
     amc_rate: body.includes_amc && body.amc_rate ? parseFloat(body.amc_rate) : null,
     installation_rate: body.includes_installation && body.installation_rate ? parseFloat(body.installation_rate) : null,
+    iptv_rate: body.includes_iptv && body.iptv_rate ? parseFloat(body.iptv_rate) : null,
+    jhes_rate: body.includes_jhes && body.jhes_rate ? parseFloat(body.jhes_rate) : null,
     platform_qty: platformQty || null,
     cms_qty: cmsQty || null,
     connectivity_qty: connQty || null,
@@ -192,15 +245,26 @@ function normalizePayload(body, { isCreate, existing }) {
     device_qty: deviceQty || null,
     amc_qty: amcQty || null,
     installation_qty: installationQty || null,
+    iptv_qty: iptvQty || null,
+    jhes_qty: jhesQty || null,
+    // JHES only: a device quantity of 0 is a valid value (device bundled at no unit count), so persist
+    // it as 0 rather than nulling it. Other businesses keep the "0 → null" behaviour.
+    ...(body.business_unit === 'jhes' && body.includes_device ? { device_qty: deviceQty } : {}),
     device_sku: body.includes_device ? (body.device_sku || null) : null,
     // Device cost nature: BD's choice, defaulting to capex when a device is included; null otherwise.
     device_cost_type: body.includes_device ? (body.device_cost_type === 'opex' ? 'opex' : 'capex') : null,
     device_requested_date: body.includes_device ? (body.device_requested_date || null) : null,
     jhes_product: body.business_unit === 'jhes' ? (body.jhes_product || null) : null,
+    services_json: isSurveillance ? JSON.stringify(survServices || []) : null,
     additional_notes: body.additional_notes || null,
     po_document_url: body.po_document_url !== undefined ? body.po_document_url : (existing ? existing.po_document_url : null),
+    // PO number (identifier) — captured only for a won deal, alongside the PO document.
+    po_number: phase === 'PO Received' ? (body.po_number ? String(body.po_number).trim() : null) : null,
     lost_reason: phase === 'Lost' ? (body.lost_reason || null) : null,
     po_actual_value_lakhs: (phase === 'PO Received' && body.po_actual_value_lakhs) ? parseFloat(body.po_actual_value_lakhs) : null,
+    // Service period is captured only once a deal is won (PO Received).
+    service_start_date: phase === 'PO Received' ? (body.service_start_date || null) : null,
+    service_end_date: phase === 'PO Received' ? (body.service_end_date || null) : null,
   };
 
   // Phase date handling — only touched on an actual phase transition.
@@ -218,6 +282,37 @@ function normalizePayload(body, { isCreate, existing }) {
 
 function defaultFollowup() {
   return addDaysLocal(localDateString(), 14);
+}
+
+// Signage channel partners are a managed dropdown (field_name 'channel_partner'). When a signage lead
+// is saved with a channel partner name that isn't in the list yet (i.e. entered via the form's
+// "Other" option), add it so it's offered in the dropdown for future leads.
+async function ensureChannelPartnerOption(payload, transaction) {
+  if (payload.lead_source !== 'Channel Partner') return;
+  const value = (payload.channel_partner_name || '').trim();
+  if (!value) return;
+  const bu = payload.business_unit;
+  const maxOrder = (await DropdownOption.max('sort_order', { where: { field_name: 'channel_partner', business_unit: bu }, transaction })) || 0;
+  await DropdownOption.findOrCreate({
+    where: { field_name: 'channel_partner', business_unit: bu, value },
+    defaults: { field_name: 'channel_partner', business_unit: bu, value, sort_order: maxOrder + 1, active: true },
+    transaction,
+  });
+}
+
+// JHES only: the Lead Affiliate is a managed dropdown (field_name 'lead_affiliate'). When a JHES lead is
+// saved with an affiliate name entered via the form's "Other" option, add it for future selections.
+async function ensureLeadAffiliateOption(payload, transaction) {
+  if (payload.business_unit !== 'jhes') return;
+  if (payload.lead_source !== 'Lead Affiliate') return;
+  const value = (payload.affiliate_name || '').trim();
+  if (!value) return;
+  const maxOrder = (await DropdownOption.max('sort_order', { where: { field_name: 'lead_affiliate', business_unit: 'jhes' }, transaction })) || 0;
+  await DropdownOption.findOrCreate({
+    where: { field_name: 'lead_affiliate', business_unit: 'jhes', value },
+    defaults: { field_name: 'lead_affiliate', business_unit: 'jhes', value, sort_order: maxOrder + 1, active: true },
+    transaction,
+  });
 }
 
 // Diff two field sets and return one activity_log-shaped row per change.
@@ -296,6 +391,7 @@ router.get('/:id', async (req, res) => {
       include: [
         { model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] },
         { model: LeadContact, as: 'contacts' },
+        { model: GlobalPo, as: 'globalPo' },
         { model: ActivityLog, as: 'activity', order: [['createdAt', 'DESC']] },
         { model: StageHistory, as: 'stageHistory', order: [['changed_at', 'ASC']] },
       ],
@@ -319,8 +415,23 @@ router.post('/', async (req, res) => {
 
     const { payload } = normalizePayload(body, { isCreate: true });
 
+    // Validate the chain link (if any): the Global PO must exist and belong to the same business.
+    if (payload.global_po_id) {
+      const chain = await GlobalPo.findByPk(payload.global_po_id, { transaction: t });
+      if (!chain || chain.business_unit !== payload.business_unit) {
+        await t.rollback();
+        return res.status(400).json({ message: 'Invalid chain (Global PO) selection.' });
+      }
+    }
+
+    // Confidence scoring: stamp last-activity + hold fields, then compute the initial confidence.
+    applyHoldTransition(payload, null, true, body);
+    Object.assign(payload, await scoringFieldsForSave(payload, null));
+
     const maxSrNo = await Lead.max('sr_no') || 0;
     const lead = await Lead.create({ ...payload, sr_no: maxSrNo + 1, created_by: req.user.id, updated_by: req.user.id }, { transaction: t });
+    await ensureChannelPartnerOption(payload, t);
+    await ensureLeadAffiliateOption(payload, t);
 
     // Contacts
     if (Array.isArray(body.contacts) && body.contacts.length) {
@@ -374,12 +485,28 @@ router.put('/:id', async (req, res) => {
     const before = existing.toJSON();
     const { payload, phaseChanged, fromPhase } = normalizePayload(body, { isCreate: false, existing: before });
 
+    // Validate the chain link (if any): the Global PO must exist and belong to the same business.
+    if (payload.global_po_id) {
+      const chain = await GlobalPo.findByPk(payload.global_po_id, { transaction: t });
+      if (!chain || chain.business_unit !== payload.business_unit) {
+        await t.rollback();
+        return res.status(400).json({ message: 'Invalid chain (Global PO) selection.' });
+      }
+    }
+
+    // Confidence scoring: apply the On-Hold freeze/resume transition + last-activity stamp, then
+    // recompute confidence (a save is a touchpoint → active leads reset to their stage base weight).
+    applyHoldTransition(payload, before, false, body);
+    Object.assign(payload, await scoringFieldsForSave(payload, before));
+
     // Use a static UPDATE (not existing.update) so the write does NOT rely on Sequelize's
     // per-instance dirty-tracking. In the mounted (STB) process that dirty-tracking was flagging
     // every data field as "unchanged", so instance.update() emitted only `SET updated_at=?` and the
     // real edits (phase, service fields, etc.) were silently dropped — while the transaction still
     // committed, so it looked like a no-op. A static update always writes the given columns.
     await Lead.update({ ...payload, updated_by: req.user.id }, { where: { id: existing.id }, transaction: t });
+    await ensureChannelPartnerOption(payload, t);
+    await ensureLeadAffiliateOption(payload, t);
 
     // Contacts — replace-all, matching original app behavior
     if (Array.isArray(body.contacts)) {
@@ -421,9 +548,20 @@ router.put('/bulk/update', adminOnly, async (req, res) => {
 
     const updates = { updated_by: req.user.id };
     if (owner_id) updates.owner_id = owner_id;
-    if (phase) { updates.phase = phase; updates.phase_changed_at = new Date(); }
+    if (phase) {
+      updates.phase = phase;
+      updates.phase_changed_at = new Date();
+      // A phase change is a touchpoint → reset the decay clock, and clear any hold freeze when the
+      // bulk move is to an active (non-hold) stage.
+      updates.last_activity_at = new Date();
+      if (phase !== 'On Hold') {
+        Object.assign(updates, { hold_frozen_confidence: null, hold_entered_at: null, hold_end_date: null, pre_hold_stage: null });
+      }
+    }
 
     await Lead.update(updates, { where: { id: { [Op.in]: ids } } });
+    // Refresh confidence for the affected leads immediately (recomputes all; cheap at this scale).
+    if (phase) { try { await require('../services/scoringEngine').recomputeAll(); } catch (e) { /* non-fatal */ } }
     return res.json({ message: `Updated ${ids.length} lead(s)` });
   } catch (err) {
     return res.status(500).json({ message: err.message });

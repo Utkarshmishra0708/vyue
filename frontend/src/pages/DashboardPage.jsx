@@ -52,6 +52,11 @@ export default function DashboardPage() {
     if (isAdmin && filterBD) params.set('bd', filterBD);
     navigate(`/leads?${params}`);
   };
+  const navigateWithConf = (conf) => {
+    const params = new URLSearchParams({ conf });
+    if (isAdmin && filterBD) params.set('bd', filterBD);
+    navigate(`/leads?${params}`);
+  };
   // Funnel band click → Leads filtered to every phase at or beyond the clicked stage (the leads
   // counted as having "reached" it), so the resulting list matches the count shown on the band.
   const navigateReached = (stage) => {
@@ -72,8 +77,24 @@ export default function DashboardPage() {
   const overdue = filtered.filter(isOverdue);
   const openTCV = active.reduce((s, l) => s + (parseFloat(l.potential_tcv_lakhs) || 0), 0);
   const wonTCV = won.reduce((s, l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
-  const weightedForecast = filtered.filter(l => !['Lost', 'PO Received'].includes(l.phase))
-    .reduce((s, l) => s + (parseFloat(l.potential_tcv_lakhs) || 0) * ((STAGE_WIN_PCT[l.phase] || 0) / 100), 0);
+
+  // --- Pipeline Confidence (win-probability) over the ACTIVE pipeline. Uses the per-lead confidence
+  // score + last-week baseline from the Lead Confidence Scoring engine. ---
+  const confScored = active.filter(l => l.confidence_score !== null && l.confidence_score !== undefined);
+  const confAvg = confScored.length ? Math.round(confScored.reduce((s, l) => s + Number(l.confidence_score), 0) / confScored.length) : null;
+  const confWithPrev = confScored.filter(l => l.confidence_prev !== null && l.confidence_prev !== undefined);
+  const confCur = confWithPrev.length ? confWithPrev.reduce((s, l) => s + Number(l.confidence_score), 0) / confWithPrev.length : null;
+  const confPrevAvg = confWithPrev.length ? confWithPrev.reduce((s, l) => s + Number(l.confidence_prev), 0) / confWithPrev.length : null;
+  const confTrend = (confCur === null || confPrevAvg === null) ? 'flat' : (confCur > confPrevAvg + 0.5 ? 'up' : confCur < confPrevAvg - 0.5 ? 'down' : 'flat');
+  const confBandOf = (l) => { const c = Number(l.confidence_score); return c >= 60 ? 'high' : c >= 30 ? 'medium' : 'low'; };
+  const confHigh = confScored.filter(l => confBandOf(l) === 'high').length;
+  const confMedium = confScored.filter(l => confBandOf(l) === 'medium').length;
+  const confLow = confScored.filter(l => confBandOf(l) === 'low').length;
+  const confLosing = confScored
+    .filter(l => l.confidence_prev != null && Number(l.confidence_score) < Number(l.confidence_prev) - 0.5)
+    .map(l => ({ id: l.id, customer_name: l.customer_name, phase: l.phase, score: Number(l.confidence_score), drop: Number(l.confidence_prev) - Number(l.confidence_score) }))
+    .sort((a, b) => b.drop - a.drop)
+    .slice(0, 5);
 
   // Data quality — only mandatory fields (State/City are optional, so excluded)
   const missingTCV = filtered.filter(l => !l.potential_tcv_lakhs || parseFloat(l.potential_tcv_lakhs) === 0).length;
@@ -157,6 +178,8 @@ export default function DashboardPage() {
 
   // Ticker follows the same BD filter as the rest of the dashboard.
   const overdueForTicker = filtered.filter(isOverdue);
+  // On Hold leads are surfaced on their own ticker for team-wide visibility (scoring spec Section 7.2).
+  const onHoldForTicker = filtered.filter(l => l.phase === 'On Hold');
 
   // Annual BD performance — BDs see only their own; admin sees all BDs, or just the selected one.
   const currentYear = new Date().getFullYear();
@@ -233,9 +256,27 @@ export default function DashboardPage() {
           );
         })()}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+        {/* On-Hold ticker — any On Hold lead is surfaced team-wide (Section 7.2 of the scoring spec). */}
+        {onHoldForTicker.length > 0 && (() => {
+          const text = onHoldForTicker
+            .map(l => `${l.customer_name} · ${l.owner?.name?.split(' ')[0]}${l.hold_end_date ? ` · Resume ${fmtDate(l.hold_end_date)}` : ''}`)
+            .join('     •     ');
+          const duration = Math.max(18, onHoldForTicker.length * 6);
+          return (
+            <div style={{ background: '#0ea5e9', color: '#fff', borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontWeight: 700, flexShrink: 0 }}>❄ ON HOLD</span>
+              <div className="marquee" style={{ flex: 1 }}>
+                <div className="marquee__track" style={{ animationDuration: `${duration}s` }}>
+                  <span style={{ paddingRight: 48 }}>{text}</span>
+                  <span style={{ paddingRight: 48 }} aria-hidden="true">{text}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           <Kpi icon="💰" label="Open Pipeline" value={`₹${openTCV.toFixed(1)}L`} sub={`${active.length} active`} onClick={() => navigateWithFilter('active')} />
-          <Kpi icon="🎯" label="Weighted Forecast" value={`₹${weightedForecast.toFixed(1)}L`} sub="TCV × stage win %" />
           <Kpi icon="🏆" label="Won TCV" value={`₹${wonTCV.toFixed(1)}L`} sub={`${won.length} deals`} onClick={() => navigateWithFilter('won')} />
           <Kpi icon="🔥" label="Hot Leads" value={String(hot.length)} sub="Tap to view" onClick={() => navigateWithFilter('hot')} />
           <Kpi icon="⏰" label="Overdue Follow-Ups" value={String(overdue.length)} sub="Tap to view" onClick={() => navigateWithFilter('overdue')} />
@@ -445,6 +486,55 @@ export default function DashboardPage() {
                   ))}
                 </tbody>
               </table>
+            )}
+          </div>
+
+          <div className="card">
+            <p className="section-title">Pipeline Confidence</p>
+            {confScored.length === 0 ? (
+              <p style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>No active leads to score yet.</p>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 34, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{confAvg}%</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: confTrend === 'up' ? '#16a34a' : confTrend === 'down' ? '#dc2626' : '#94a3b8' }}>
+                    {confTrend === 'up' ? '▲ up' : confTrend === 'down' ? '▼ down' : '● flat'} vs last week
+                  </span>
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>avg win-confidence · {confScored.length} active</span>
+                </div>
+                {/* Band mix bar */}
+                <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 10, background: '#f1f5f9' }}>
+                  {confHigh > 0 && <div style={{ flex: confHigh, background: '#22c55e' }} />}
+                  {confMedium > 0 && <div style={{ flex: confMedium, background: '#f59e0b' }} />}
+                  {confLow > 0 && <div style={{ flex: confLow, background: '#cbd5e1' }} />}
+                </div>
+                {/* Clickable band tiles */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
+                  {[['high', 'High ≥60', '#16a34a', confHigh], ['medium', 'Medium 30–59', '#b45309', confMedium], ['low', 'Low <30', '#64748b', confLow]].map(([key, label, color, count]) => (
+                    <button key={key} onClick={() => navigateWithConf(key)} title={`View ${count} ${label} lead(s)`}
+                      style={{ textAlign: 'left', border: '1px solid #e2e8f0', borderRadius: 10, padding: '8px 10px', background: '#fff', cursor: 'pointer' }}>
+                      <div style={{ fontSize: 20, fontWeight: 800, color }}>{count}</div>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>{label}</div>
+                    </button>
+                  ))}
+                </div>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#334155', margin: '0 0 6px' }}>📉 Losing confidence this week</p>
+                {confLosing.length === 0 ? (
+                  <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>No active leads dropped this week.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {confLosing.map(l => (
+                      <div key={l.id} onClick={() => navigate('/leads')} title="Open Leads"
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, cursor: 'pointer' }}>
+                        <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {l.customer_name} <span style={{ color: '#94a3b8', fontWeight: 400 }}>· {l.phase}</span>
+                        </span>
+                        <span style={{ color: '#dc2626', fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>{Math.round(l.score)}% ▼ −{Math.round(l.drop)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
 

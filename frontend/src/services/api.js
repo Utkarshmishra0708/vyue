@@ -62,7 +62,9 @@ export const getManagedUsers= (businessUnit)                  => api.get('/users
 export const addUser        = (businessUnit, data)            => api.post('/users', { ...data, business_unit: businessUnit }).then(r => r.data);
 export const updateUser     = (id, data)                      => api.put(`/users/${id}`, data).then(r => r.data);
 export const setUserActive  = (id, active)                    => api.put(`/users/${id}/active`, { active }).then(r => r.data);
-export const deleteUser     = (id)                            => api.delete(`/users/${id}`).then(r => r.data);
+export const setForecastAccess = (id, forecastAccess)         => api.put(`/users/${id}/forecast-access`, { forecast_access: forecastAccess }).then(r => r.data);
+// reassignTo: undefined (fails with 409 if the user owns leads), 'unassigned', or a target user id.
+export const deleteUser     = (id, reassignTo)                => api.delete(`/users/${id}`, reassignTo ? { data: { reassign_to: reassignTo } } : undefined).then(r => r.data);
 
 // Leads
 export const getLeads       = (params)                        => api.get('/leads', { params }).then(r => r.data);
@@ -71,6 +73,23 @@ export const createLead     = (data)                          => api.post('/lead
 export const updateLead     = (id, data)                      => api.put(`/leads/${id}`, data).then(r => r.data);
 export const deleteLead     = (id)                            => api.delete(`/leads/${id}`).then(r => r.data);
 export const bulkUpdateLeads= (ids, patch)                    => api.put('/leads/bulk/update', { ids, ...patch }).then(r => r.data);
+
+// Global POs (chains) — reference-only chain records with derived device-pool status. getGlobalPos
+// lists chains (each with { status: {consumed, remaining, exceeded} }); getGlobalPo adds contributors.
+export const getGlobalPos   = ()                              => api.get('/global-pos').then(r => r.data);
+export const getGlobalPo    = (id)                            => api.get(`/global-pos/${id}`).then(r => r.data);
+export const createGlobalPo = (data)                          => api.post('/global-pos', data).then(r => r.data);
+export const updateGlobalPo = (id, data)                      => api.put(`/global-pos/${id}`, data).then(r => r.data);
+export const deleteGlobalPo = (id)                            => api.delete(`/global-pos/${id}`).then(r => r.data);
+
+// VOC (Voice of Customer) — Surveillance business only.
+export const getVocs        = (params)                        => api.get('/voc', { params }).then(r => r.data);
+export const getVocStats    = ()                              => api.get('/voc/stats').then(r => r.data);
+export const getVoc         = (id)                            => api.get(`/voc/${id}`).then(r => r.data);
+export const createVoc      = (data)                          => api.post('/voc', data).then(r => r.data);
+export const updateVoc      = (id, data)                      => api.put(`/voc/${id}`, data).then(r => r.data);
+export const addVocComment  = (id, note)                      => api.post(`/voc/${id}/comment`, { note }).then(r => r.data);
+export const deleteVoc      = (id)                            => api.delete(`/voc/${id}`).then(r => r.data);
 
 // Activity log / stage history
 export const getActivityLog = (leadId)                        => api.get('/activity-log', { params: { lead_id: leadId } }).then(r => r.data);
@@ -83,8 +102,17 @@ export const getForecastDevices = ()                          => api.get('/forec
 export const getSettings    = ()                              => api.get('/settings').then(r => r.data);
 export const setSetting     = (key, value)                    => api.put(`/settings/${key}`, { value }).then(r => r.data);
 
-// Dropdowns
-export const getDropdowns   = ()                              => api.get('/dropdowns').then(r => r.data);
+// Stage TAT config (PMO / Business Admin) — per-platform TAT days-per-stage for the confidence engine.
+// getTat returns { business_unit, stages: [{ stage, tat_days, weight }] }; updateTat takes { stage: days }.
+export const getTat         = (businessUnit)                  => api.get('/sla', { params: { business_unit: businessUnit } }).then(r => r.data);
+export const updateTat      = (businessUnit, tats)            => api.put('/sla', { business_unit: businessUnit, tats }).then(r => r.data);
+
+// Dropdowns (per-business). getDropdowns returns { field_name: [values] } for the caller's business.
+export const getDropdowns          = ()                       => api.get('/dropdowns').then(r => r.data);
+// Management (Super/Business Admin): full option rows (id + value) for one field, add, and remove.
+export const getDropdownsManage    = (fieldName)              => api.get('/dropdowns/manage', { params: { field_name: fieldName } }).then(r => r.data);
+export const addDropdownOption     = (fieldName, value)       => api.post('/dropdowns', { field_name: fieldName, value }).then(r => r.data);
+export const removeDropdownOption  = (id)                     => api.delete(`/dropdowns/${id}`).then(r => r.data);
 
 // Uploads
 export const uploadPoDocument = (leadId, file) => {

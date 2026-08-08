@@ -1,5 +1,24 @@
 import React, { useState } from 'react';
 import { PHASE_BADGE } from '../utils/constants';
+import { hasConfidence, confidenceTrend } from '../utils/leadHelpers';
+
+// Small confidence chip for a Kanban card: coloured by score band with a week-over-week trend mark.
+function ConfChip({ lead }) {
+  if (!hasConfidence(lead)) return null;
+  const c = Math.round(Number(lead.confidence_score));
+  const t = confidenceTrend(lead);
+  const bg = c >= 60 ? '#dcfce7' : c >= 30 ? '#fef3c7' : '#f1f5f9';
+  const fg = c >= 60 ? '#166534' : c >= 30 ? '#92400e' : '#475569';
+  const mark = t === 'up' ? <span style={{ color: '#16a34a' }}>▲</span>
+    : t === 'down' ? <span style={{ color: '#dc2626' }}>▼</span>
+    : t === 'hold' ? <span style={{ color: '#0ea5e9' }}>❄</span>
+    : <span style={{ color: '#94a3b8', fontSize: 8 }}>●</span>;
+  return (
+    <span title="Win-confidence score" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: bg, color: fg, borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 700 }}>
+      {c}% {mark}
+    </span>
+  );
+}
 
 const COLUMNS = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
 
@@ -59,7 +78,10 @@ export default function KanbanView({ leads, onOpen, onPhaseChange }) {
                     cursor: 'grab', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
                     padding: 10, boxShadow: '0 1px 2px rgba(15,23,42,.06)',
                   }}>
-                  <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 4px', color: '#0f172a' }}>{l.customer_name}</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 4px', color: '#0f172a' }}>{l.customer_name}</p>
+                    <ConfChip lead={l} />
+                  </div>
                   <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{l.owner?.name?.split(' ')[0]} · ₹{l.potential_tcv_lakhs}L</p>
                 </div>
               ))}

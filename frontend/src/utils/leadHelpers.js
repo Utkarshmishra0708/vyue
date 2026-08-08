@@ -1,4 +1,4 @@
-import { PHASE_DATE_MAP, TAT_DAYS, SIGNAGE_SERVICES } from './constants';
+import { PHASE_DATE_MAP, TAT_DAYS, ALL_SERVICES } from './constants';
 
 // Auto-calculated Total Contract Value, in lakhs (₹ / 100,000), from a lead/form's ticked services:
 //   opex  → qty × rate × contract months   (recurring)
@@ -18,7 +18,7 @@ export function computeTcvBreakdown(form) {
     if (!r || !q) return;
     if (nature === 'opex') opex += r * q * months; else capex += r * q;
   };
-  for (const svc of SIGNAGE_SERVICES) {
+  for (const svc of ALL_SERVICES) {
     add(form[`includes_${svc.key}`], form[`${svc.key}_rate`], form[`${svc.key}_qty`], svc.nature);
   }
   add(form.includes_device, form.device_rate, form.device_qty, form.device_cost_type === 'opex' ? 'opex' : 'capex');
@@ -102,6 +102,23 @@ export function getPOExpiryDays(lead) {
   const expiry = new Date(lead.po_received_date);
   expiry.setMonth(expiry.getMonth() + lead.po_validity_months);
   return daysBetween(new Date(), expiry);
+}
+
+// --- Lead Confidence Score (server-computed; see backend/services/scoring.js) -----------------
+// The confidence % lives on the lead as `confidence_score` (current) and `confidence_prev`
+// (~1-week-ago baseline). These helpers format it and derive the week-over-week trend arrow.
+export function hasConfidence(lead) {
+  return lead && lead.confidence_score !== null && lead.confidence_score !== undefined;
+}
+// 'up' | 'down' | 'flat' — current vs the weekly baseline. On Hold reads as 'hold' (frozen).
+export function confidenceTrend(lead) {
+  if (!lead || lead.phase === 'On Hold') return 'hold';
+  const cur = lead.confidence_score, prev = lead.confidence_prev;
+  if (cur === null || cur === undefined || prev === null || prev === undefined) return 'flat';
+  const c = Number(cur), p = Number(prev);
+  if (c > p + 0.01) return 'up';
+  if (c < p - 0.01) return 'down';
+  return 'flat';
 }
 
 // Phase → progression score (30% weight). Lost is excluded from scoring entirely.

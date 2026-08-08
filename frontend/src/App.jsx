@@ -1,13 +1,14 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { PrivateRoute, AdminRoute } from './components/PrivateRoute';
+import { PrivateRoute, AdminRoute, ForecastRoute } from './components/PrivateRoute';
 import LoginPage from './pages/LoginPage';
 import LeadsPage from './pages/LeadsPage';
 import DashboardPage from './pages/DashboardPage';
 import ForecastPage from './pages/ForecastPage';
 import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
+import VocPage from './pages/VocPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
 import SsoSelectPage from './pages/SsoSelectPage';
 import { GLOBAL_CSS } from './globalStyles';
@@ -54,7 +55,8 @@ export default function App() {
             {/* Public */}
             <Route path="/" element={<LoginPage />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/forecast" element={<ForecastPage />} />
+            {/* Forecast is now login-gated (PMO default, or a PMO grant). */}
+            <Route path="/forecast" element={<ForecastRoute><ForecastPage /></ForecastRoute>} />
             {/* === JIOAUTIFY INTEGRATION: SSO account chooser (prod handoff for emails with two BU
                 accounts). Redeems the ticket stashed by captureSsoFromUrl, then bypasses login. === */}
             <Route path="/sso-select" element={<SsoSelectPage />} />
@@ -62,6 +64,8 @@ export default function App() {
             {/* Authenticated — any role */}
             <Route path="/leads"            element={<PrivateRoute><LeadsPage /></PrivateRoute>} />
             <Route path="/dashboard"        element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
+            {/* VOC (Voice of Customer) — Surveillance only (gated inside the page + API). */}
+            <Route path="/voc"              element={<PrivateRoute><VocPage /></PrivateRoute>} />
             {/* Self-service password change is DEV-ONLY; production is SSO-only. */}
             {!IS_PROD && (
               <Route path="/change-password"  element={<PrivateRoute><ChangePasswordPage /></PrivateRoute>} />

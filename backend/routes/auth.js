@@ -35,7 +35,9 @@ router.post('/login', passwordAuthDevOnly, async (req, res) => {
     const user = await User.findOne({ where });
     if (!user)                 return res.status(401).json({ message: 'Invalid credentials' });
     if (!user.active)          return res.status(403).json({ message: 'User is inactive' });
-    if (!['admin', 'pmo'].includes(user.role)) return res.status(403).json({ message: 'Not an admin account' });
+    // super_admin/business_admin/pmo sign into the full app; a 'forecast' account signs in to the
+    // Forecast dashboard only. (BDs use /auth/bd-login.)
+    if (!['super_admin', 'business_admin', 'pmo', 'forecast'].includes(user.role)) return res.status(403).json({ message: 'This account cannot sign in here' });
     if (!user.password_hash)   return res.status(401).json({ message: 'Invalid credentials' });
 
     const ok = await bcrypt.compare(password, user.password_hash);

@@ -16,11 +16,14 @@ const User = sequelize.define('User', {
   // add/edit modal makes it mandatory for users created or edited through the app.
   mobile:        { type: DataTypes.STRING(32), allowNull: true },
   password_hash: { type: DataTypes.STRING(255), allowNull: true },
-  role:          { type: DataTypes.ENUM('admin', 'pmo', 'bd'), allowNull: false, defaultValue: 'bd' },
-  business_unit: { type: DataTypes.ENUM('signage', 'jhes'), unique: 'email_business_unit', allowNull: false, defaultValue: 'signage' },
+  role:          { type: DataTypes.ENUM('super_admin', 'business_admin', 'pmo', 'bd', 'forecast'), allowNull: false, defaultValue: 'bd' },
+  business_unit: { type: DataTypes.ENUM('signage', 'jhes', 'surveillance'), unique: 'email_business_unit', allowNull: false, defaultValue: 'signage' },
   initials:      { type: DataTypes.STRING(8) },
   color:         { type: DataTypes.STRING(32), defaultValue: 'bg-indigo-500' },
   active:        { type: DataTypes.BOOLEAN, defaultValue: true },
+  // Grants access to the (now login-gated) Forecast dashboard. PMOs get it by default; a PMO can
+  // grant it to any other user from Settings.
+  forecast_access: { type: DataTypes.BOOLEAN, defaultValue: false },
   sort_order:    { type: DataTypes.INTEGER, defaultValue: 0 },
   last_seen:     { type: DataTypes.DATE },
 }, { tableName: 'users', underscored: true });
@@ -35,12 +38,20 @@ const Lead = sequelize.define('Lead', {
   sr_no:                   { type: DataTypes.INTEGER, unique: true },
   customer_name:           { type: DataTypes.STRING(255), allowNull: false },
   owner_id:                { type: DataTypes.INTEGER, allowNull: false },
-  business_unit:           { type: DataTypes.ENUM('signage', 'jhes'), allowNull: false, defaultValue: 'signage' },
+  business_unit:           { type: DataTypes.ENUM('signage', 'jhes', 'surveillance'), allowNull: false, defaultValue: 'signage' },
+  // Account Mix — captured at the top of the lead form (all businesses).
+  property_type:           { type: DataTypes.STRING(32) },   // Chain | Standalone | Other
+  property_category:       { type: DataTypes.STRING(64) },   // Hotel | Hospital | BFSI | Retail | …
+  // A lead is always an Individual (Local) PO — the funnel entity. Global POs live in global_pos, not
+  // here. global_po_id is the nullable chain link (null = standalone property; see migration 014).
+  po_type:                 { type: DataTypes.ENUM('individual', 'global'), allowNull: false, defaultValue: 'individual' },
+  global_po_id:            { type: DataTypes.INTEGER },
   city:                    { type: DataTypes.STRING(255) },
   state:                   { type: DataTypes.STRING(255) },
   lead_source:             { type: DataTypes.STRING(64) },
   channel_partner_name:    { type: DataTypes.STRING(255) },
   kam_name:                { type: DataTypes.STRING(255) },
+  affiliate_name:          { type: DataTypes.STRING(255) },
   new_or_renewal:          { type: DataTypes.ENUM('New', 'Renewal', 'Expansion') },
   lead_temperature:        { type: DataTypes.ENUM('Hot', 'Warm', 'Cold') },
   competitor:              { type: DataTypes.STRING(255) },
@@ -55,12 +66,27 @@ const Lead = sequelize.define('Lead', {
   contract_value_lakhs:    { type: DataTypes.DECIMAL(12, 2) },
   phase:                   { type: DataTypes.STRING(32), defaultValue: 'New' },
   phase_changed_at:        { type: DataTypes.DATE },
+  // --- Lead Confidence Scoring (see backend/services/scoring.js + migration 013) ---
+  // last_activity_at anchors the decay clock: SLA breaches are measured from the last touchpoint.
+  last_activity_at:        { type: DataTypes.DATE },
+  confidence_score:        { type: DataTypes.DECIMAL(5, 2) },   // current computed confidence (0-100)
+  confidence_prev:         { type: DataTypes.DECIMAL(5, 2) },   // ~1-week-ago baseline for the trend arrow
+  confidence_prev_at:      { type: DataTypes.DATE },
+  confidence_computed_at:  { type: DataTypes.DATE },
+  // On-Hold freeze: value captured at hold entry, when it began, the editable resume/end date, and the
+  // stage to restore on manual resume (the pipeline stage never changes while On Hold).
+  hold_frozen_confidence:  { type: DataTypes.DECIMAL(5, 2) },
+  hold_entered_at:         { type: DataTypes.DATE },
+  hold_end_date:           { type: DataTypes.DATEONLY },
+  pre_hold_stage:          { type: DataTypes.STRING(32) },
   start_date:              { type: DataTypes.DATEONLY },
   qualified_date:          { type: DataTypes.DATEONLY },
   demo_date:               { type: DataTypes.DATEONLY },
   proposal_date:           { type: DataTypes.DATEONLY },
   negotiation_date:        { type: DataTypes.DATEONLY },
   po_received_date:        { type: DataTypes.DATEONLY },
+  service_start_date:      { type: DataTypes.DATEONLY },
+  service_end_date:        { type: DataTypes.DATEONLY },
   po_expected_date:        { type: DataTypes.DATEONLY },
   next_followup_date:      { type: DataTypes.DATEONLY },
   includes_platform:       { type: DataTypes.BOOLEAN, defaultValue: false },
@@ -70,6 +96,8 @@ const Lead = sequelize.define('Lead', {
   includes_device:         { type: DataTypes.BOOLEAN, defaultValue: false },
   includes_amc:            { type: DataTypes.BOOLEAN, defaultValue: false },
   includes_installation:   { type: DataTypes.BOOLEAN, defaultValue: false },
+  includes_iptv:           { type: DataTypes.BOOLEAN, defaultValue: false },
+  includes_jhes:           { type: DataTypes.BOOLEAN, defaultValue: false },
   device_sku:              { type: DataTypes.STRING(64) },
   // Device cost nature is chosen per lead by the BD (all other services have a fixed nature).
   device_cost_type:        { type: DataTypes.ENUM('capex', 'opex') },
@@ -81,6 +109,8 @@ const Lead = sequelize.define('Lead', {
   device_rate:             { type: DataTypes.DECIMAL(12, 2) },
   amc_rate:                { type: DataTypes.DECIMAL(12, 2) },
   installation_rate:       { type: DataTypes.DECIMAL(12, 2) },
+  iptv_rate:               { type: DataTypes.DECIMAL(12, 2) },
+  jhes_rate:               { type: DataTypes.DECIMAL(12, 2) },
   platform_qty:            { type: DataTypes.INTEGER },
   cms_qty:                 { type: DataTypes.INTEGER },
   connectivity_qty:        { type: DataTypes.INTEGER },
@@ -88,9 +118,16 @@ const Lead = sequelize.define('Lead', {
   device_qty:              { type: DataTypes.INTEGER },
   amc_qty:                 { type: DataTypes.INTEGER },
   installation_qty:        { type: DataTypes.INTEGER },
+  iptv_qty:                { type: DataTypes.INTEGER },
+  jhes_qty:                { type: DataTypes.INTEGER },
   jhes_product:            { type: DataTypes.STRING(255) },
   additional_notes:        { type: DataTypes.TEXT },
+  // Surveillance-only: ticked services as JSON [{ label, nature, rate, qty }]. Null for signage/jhes,
+  // which use their own per-service columns.
+  services_json:           { type: DataTypes.TEXT },
   po_document_url:         { type: DataTypes.STRING(512) },
+  // Identifier for the received PO — captured once a PO document is attached at PO Received.
+  po_number:               { type: DataTypes.STRING(64) },
   lost_reason:             { type: DataTypes.STRING(255) },
   po_actual_value_lakhs:   { type: DataTypes.DECIMAL(12, 2) },
   created_by:              { type: DataTypes.INTEGER },
@@ -147,11 +184,84 @@ const Setting = sequelize.define('Setting', {
 }, { tableName: 'settings', underscored: true, createdAt: false });
 
 // --------------------------------------------------------------------------
+// GlobalPo — chain/account-level reference record (a hotel chain, etc). NOT a funnel entity: it has
+// no stage and no confidence score. Individual (Local) POs (leads) link to it via leads.global_po_id.
+// Consumed devices are DERIVED from linked leads at PO Received (see services/chainPool.js).
+// --------------------------------------------------------------------------
+const GlobalPo = sequelize.define('GlobalPo', {
+  id:                  { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  business_unit:       { type: DataTypes.ENUM('signage', 'jhes', 'surveillance'), allowNull: false, defaultValue: 'signage' },
+  chain_name:          { type: DataTypes.STRING(255), allowNull: false },
+  device_total:        { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  price_lakhs:         { type: DataTypes.DECIMAL(14, 2) },
+  expected_start_date: { type: DataTypes.DATEONLY },
+  expected_end_date:   { type: DataTypes.DATEONLY },
+  created_by:          { type: DataTypes.INTEGER },
+  updated_by:          { type: DataTypes.INTEGER },
+}, { tableName: 'global_pos', underscored: true });
+
+// --------------------------------------------------------------------------
+// Voc — Voice of Customer entry (Surveillance business only). Captures customer feedback / feature
+// gaps / config mismatches found during sales & deployment, for product roadmap planning.
+// --------------------------------------------------------------------------
+const Voc = sequelize.define('Voc', {
+  id:                   { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  voc_no:               { type: DataTypes.INTEGER, unique: true },
+  business_unit:        { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'surveillance' },
+  date_of_entry:        { type: DataTypes.DATEONLY },
+  customer_name:        { type: DataTypes.STRING(255), allowNull: false },
+  total_account_value_lakhs: { type: DataTypes.DECIMAL(14, 2) },
+  bd_owner_id:          { type: DataTypes.INTEGER },
+  pmo_owner:            { type: DataTypes.STRING(255) },
+  region_state:         { type: DataTypes.STRING(255) },
+  customer_segment:     { type: DataTypes.STRING(64) },
+  product_solution:     { type: DataTypes.STRING(255) },   // multi-select, stored comma-separated
+  voc_type:             { type: DataTypes.STRING(64) },
+  description:          { type: DataTypes.TEXT },
+  business_impact:      { type: DataTypes.STRING(64) },
+  revenue_impact_lakhs: { type: DataTypes.DECIMAL(14, 2) },
+  competitor:           { type: DataTypes.STRING(255) },
+  priority:             { type: DataTypes.STRING(32) },
+  attachment_url:       { type: DataTypes.STRING(512) },
+  status:               { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'New' },
+  product_remarks:      { type: DataTypes.TEXT },
+  target_release:       { type: DataTypes.STRING(128) },
+  closure_date:         { type: DataTypes.DATEONLY },
+  created_by:           { type: DataTypes.INTEGER },
+  updated_by:           { type: DataTypes.INTEGER },
+}, { tableName: 'vocs', underscored: true });
+
+// VocActivity — audit trail for a VOC (created / status change / field update / comment).
+const VocActivity = sequelize.define('VocActivity', {
+  id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  voc_id:        { type: DataTypes.INTEGER, allowNull: false },
+  user_name:     { type: DataTypes.STRING(255) },
+  action_type:   { type: DataTypes.STRING(64) },
+  field_changed: { type: DataTypes.STRING(64) },
+  old_value:     { type: DataTypes.TEXT },
+  new_value:     { type: DataTypes.TEXT },
+  note:          { type: DataTypes.TEXT },
+}, { tableName: 'voc_activity', underscored: true, updatedAt: false });
+
+// --------------------------------------------------------------------------
+// SlaConfig — per-platform SLA (days) per pipeline stage. Only the SLA is platform-specific;
+// base weights and hourglass jumps are fixed constants in backend/services/scoring.js.
+// --------------------------------------------------------------------------
+const SlaConfig = sequelize.define('SlaConfig', {
+  id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  business_unit: { type: DataTypes.STRING(32), allowNull: false },
+  stage:         { type: DataTypes.STRING(32), allowNull: false },
+  sla_days:      { type: DataTypes.INTEGER, allowNull: false },
+}, { tableName: 'sla_config', underscored: true });
+
+// --------------------------------------------------------------------------
 // DropdownOption — extensible dropdowns (phases, sources, ratings…)
 // --------------------------------------------------------------------------
 const DropdownOption = sequelize.define('DropdownOption', {
   id:         { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   field_name: { type: DataTypes.STRING(64), allowNull: false },
+  // Which business this option belongs to (per-business lists). Null = legacy/global.
+  business_unit: { type: DataTypes.STRING(32) },
   value:      { type: DataTypes.STRING(128), allowNull: false },
   sort_order: { type: DataTypes.INTEGER, defaultValue: 0 },
   active:     { type: DataTypes.BOOLEAN, defaultValue: true },
@@ -172,6 +282,15 @@ ActivityLog.belongsTo(Lead,    { foreignKey: 'lead_id' });
 Lead.hasMany(StageHistory,     { foreignKey: 'lead_id',    as: 'stageHistory', onDelete: 'CASCADE' });
 StageHistory.belongsTo(Lead,   { foreignKey: 'lead_id' });
 
+// Individual PO (lead) → Global PO (chain). onDelete SET NULL: removing a chain makes its properties
+// standalone rather than cascading a delete.
+Lead.belongsTo(GlobalPo,       { foreignKey: 'global_po_id', as: 'globalPo' });
+GlobalPo.hasMany(Lead,         { foreignKey: 'global_po_id', as: 'individualPos', onDelete: 'SET NULL' });
+
+Voc.belongsTo(User,            { foreignKey: 'bd_owner_id', as: 'bdOwner' });
+Voc.hasMany(VocActivity,       { foreignKey: 'voc_id', as: 'activity', onDelete: 'CASCADE' });
+VocActivity.belongsTo(Voc,     { foreignKey: 'voc_id' });
+
 module.exports = {
   sequelize,
   User,
@@ -181,4 +300,8 @@ module.exports = {
   StageHistory,
   Setting,
   DropdownOption,
+  SlaConfig,
+  GlobalPo,
+  Voc,
+  VocActivity,
 };
