@@ -69,6 +69,8 @@ export default function LeadForm({ lead, onSave, onCancel }) {
   const [dropdowns, setDropdowns] = useState({});              // per-business dropdown options
   const [cpOther, setCpOther] = useState(false);               // "Other — enter a new name" selected
   const [affOther, setAffOther] = useState(false);             // Lead Affiliate "Other" (JHES only)
+  const [ptOther, setPtOther] = useState(false);               // Property Type "Other" → manual entry
+  const [pcOther, setPcOther] = useState(false);               // Property Category "Other" → manual entry
   const channelPartners = dropdowns.channel_partner || [];
   const affiliates = dropdowns.lead_affiliate || [];
   const deviceSkus = dropdowns.device_sku || [];
@@ -150,11 +152,14 @@ export default function LeadForm({ lead, onSave, onCancel }) {
       setPhaseChanged(false);
       setPoType('individual');            // an existing lead is always an Individual PO
       setLinkToChain(!!lead.global_po_id);
+      // A stored Account Mix value not in the fixed list is a manually-entered "Other" value.
+      setPtOther(!!lead.property_type && !PROPERTY_TYPES.includes(lead.property_type));
+      setPcOther(!!lead.property_category && !PROPERTY_CATEGORIES.includes(lead.property_category));
     } else {
       // Both business units capture the same itemized services now, so TCV auto-calculates for both
       // (the BD can still override it by hand).
       setForm({ ...emptyForm, owner_id: !isAdmin ? user.id : '', next_followup_date: addDaysStr(todayStr(), 14), tcv_manual: false, device_rate: isJHES ? '0' : '' });
-      setPoType('individual'); setLinkToChain(false); setGlobalForm(emptyGlobal); setCpOther(false); setAffOther(false);
+      setPoType('individual'); setLinkToChain(false); setGlobalForm(emptyGlobal); setCpOther(false); setAffOther(false); setPtOther(false); setPcOther(false);
       // Start with one empty POC row — name & email are mandatory (at least one contact required).
       setContacts([{ name: '', phone: '', email: '', designation: '' }]);
       setSurvServices({});
@@ -374,21 +379,38 @@ export default function LeadForm({ lead, onSave, onCancel }) {
         )}
       </section>
 
-      {/* Account Mix — captured before the customer details (all businesses). */}
+      {/* Account Mix — captured before the customer details (all businesses). Optional; "Other" lets the
+          user type a custom value. */}
       <section>
         <p className="section-title">Account Mix</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <Field label="Property Type" required>
-            <select required className="input" value={form.property_type} onChange={e => set('property_type', e.target.value)}>
+          <Field label="Property Type">
+            <select className="input" value={ptOther ? 'Other' : form.property_type}
+              onChange={e => {
+                if (e.target.value === 'Other') { setPtOther(true); set('property_type', ''); }
+                else { setPtOther(false); set('property_type', e.target.value); }
+              }}>
               <option value="">Select type</option>
               {PROPERTY_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
+            {ptOther && (
+              <input className="input" style={{ marginTop: 8 }} placeholder="Enter property type"
+                value={form.property_type} onChange={e => set('property_type', e.target.value)} />
+            )}
           </Field>
-          <Field label="Property Category" required>
-            <select required className="input" value={form.property_category} onChange={e => set('property_category', e.target.value)}>
+          <Field label="Property Category">
+            <select className="input" value={pcOther ? 'Other' : form.property_category}
+              onChange={e => {
+                if (e.target.value === 'Other') { setPcOther(true); set('property_category', ''); }
+                else { setPcOther(false); set('property_category', e.target.value); }
+              }}>
               <option value="">Select category</option>
               {PROPERTY_CATEGORIES.map(c => <option key={c}>{c}</option>)}
             </select>
+            {pcOther && (
+              <input className="input" style={{ marginTop: 8 }} placeholder="Enter property category"
+                value={form.property_category} onChange={e => set('property_category', e.target.value)} />
+            )}
           </Field>
         </div>
       </section>
