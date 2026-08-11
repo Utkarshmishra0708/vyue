@@ -109,8 +109,10 @@ export default function Sidebar() {
             <div style={{ fontSize: 11, color: '#64748b' }}>{ROLE_LABEL[user.role] || user.role}{isConsoleOnly ? ' · All businesses' : ` · ${bu.label}`}</div>
           </div>
         )}
+        {/* Returns to the main page (business selection). Reaching the pre-login landing ends the
+            session, so this uses the same action as sign-out — just labelled "Back". */}
         <button onClick={logout} className="btn btn-sm" style={{ width: '100%', justifyContent: 'center', background: '#1e293b', borderColor: '#334155', color: '#e2e8f0' }}>
-          {collapsed ? '⎋' : 'Sign out'}
+          {collapsed ? '←' : '← Back'}
         </button>
         <button onClick={toggle} className="btn btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 6, background: 'transparent', borderColor: '#1e293b', color: '#64748b' }}>
           {collapsed ? '»' : '« Collapse'}
