@@ -33,7 +33,7 @@ function TrendArrow({ trend }) {
 }
 
 export default function LeadsPage() {
-  const { user, isAdmin, canForecast } = useAuth();
+  const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -221,7 +221,6 @@ export default function LeadsPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {canForecast && <button className="btn" onClick={() => navigate('/forecast')}>📊 Forecast</button>}
           <button className="btn" onClick={() => setShowChains(true)}>🏢 Chains</button>
           <button className="btn" onClick={exportExcel}>Export Excel</button>
           <button className="btn" onClick={exportPdf}>Export PDF</button>
