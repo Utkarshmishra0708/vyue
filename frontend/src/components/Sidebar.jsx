@@ -10,7 +10,7 @@ const NAV_ICONS = {
 };
 
 export default function Sidebar() {
-  const { user, login, logout, isAdmin, isSuperAdmin, isConsoleOnly, canView, canSeeActivityFeed } = useAuth();
+  const { user, login, logout, isAdmin, isSuperAdmin, isCrossPlatform, isConsoleOnly, canView, canSeeActivityFeed } = useAuth();
   const [switching, setSwitching] = useState(false);
 
   // N1: hop to another platform's account in the same session. We swap the token via login(), then
@@ -44,29 +44,21 @@ export default function Sidebar() {
   };
 
   const bu = BU_CONFIG[user.business_unit] || BU_CONFIG.signage;
-  // A console-only session (Admin signed in via Admin Login) sees ONLY the Admin Console — no business
-  // pages — so it stays fully decoupled from Signage/any business. Everyone else (including the same
-  // super_admin signed in through a business card) gets the full operational nav for their business.
+  // Console-only (Global Admin via the Admin button): shows ONLY the Admin Console — no business
+  // pages. Business logins get the full operational nav for their platform.
   const navItems = isConsoleOnly
     ? [
         { path: '/settings', label: 'Admin Console' },
         ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
       ]
     : [
-        // The four general modules ALWAYS appear (RBAC spec): a module the user can't open stays
-        // visible but greyed (disabled), and clicking it shows an access message rather than the
-        // content — it is never hidden. Settings/Activity/VOC are outside the per-module model.
         { path: '/leads',     label: 'Leads',     disabled: !canView('leads') },
         { path: '/dashboard', label: 'Dashboard', disabled: !canView('dashboard') },
-        // VOC (Voice of Customer) is Surveillance-only — never shown for other businesses.
         ...(user.business_unit === 'surveillance' ? [{ path: '/voc', label: 'VOC' }] : []),
         { path: '/forecast',  label: 'Forecast',  disabled: !canView('forecast') },
         { path: '/reports',   label: 'Reports',   disabled: !canView('reports') },
-        // Global activity feed (J1) — Business Admin / Global Admin by role, a Manager only if
-        // granted, a Team Member never. Gated on the resolved feed grant, not on lead access.
         ...(canSeeActivityFeed ? [{ path: '/activity', label: 'Activity' }] : []),
         ...(isAdmin ? [{ path: '/settings', label: isSuperAdmin ? 'Admin Console' : 'Settings' }] : []),
-        // Self-service password change is DEV-ONLY; production is SSO-only.
         ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
       ];
 
@@ -134,10 +126,10 @@ export default function Sidebar() {
       </nav>
 
       <div style={{ padding: 12, borderTop: '1px solid #1e293b' }}>
-        {/* Platform switcher (N1): shown only when this person holds an account on more than one
-            platform (a Global Admin). Switching hops to that platform's account in the same session,
-            no re-login. A single-platform user (PMO/BD) never sees it. */}
-        {!collapsed && !isConsoleOnly && Array.isArray(user.platforms) && user.platforms.length > 1 && (
+        {/* Platform switcher: ONLY for Global Admins (isCrossPlatform). Business Admin, Manager,
+            and Team Member see only their own business — no switcher, even if their email happens
+            to exist on another platform under a different role. */}
+        {!collapsed && !isConsoleOnly && isCrossPlatform && Array.isArray(user.platforms) && user.platforms.length > 1 && (
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: '#64748b', marginBottom: 4 }}>PLATFORM</div>
             <select

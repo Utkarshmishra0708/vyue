@@ -465,6 +465,7 @@ router.post('/', requireModule('leads', 'full'), async (req, res) => {
       lead_id: lead.id, lead_sr_no: lead.sr_no, customer_name: lead.customer_name,
       user_name: req.user.name, user_id: req.user.id, user_email: req.user.email,
       action_type: 'lead_created', note: 'New lead created',
+      business_unit: req.user.business_unit,
     }, { transaction: t });
 
     await t.commit();
@@ -541,7 +542,10 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
     }
 
     const rows = diffActivity(before, payload, existing.id, existing.sr_no, existing.customer_name, req.user);
-    if (rows.length) await ActivityLog.bulkCreate(rows, { transaction: t });
+    if (rows.length) {
+      for (const r of rows) r.business_unit = req.user.business_unit;
+      await ActivityLog.bulkCreate(rows, { transaction: t });
+    }
 
     await t.commit();
     const full = await Lead.findByPk(existing.id, { include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] }] });

@@ -9,8 +9,8 @@ import { getManagedUsers, addUser, updateUser, setUserActive, deleteUser, resetB
 import { BU_CONFIG } from '../utils/constants';
 import { IS_PROD } from '../env';
 
-const ROLE_LABEL = { super_admin: 'Global Admin', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Team Member', forecast: 'Forecast · Dashboard only' };
-const ROLE_COLOR = { super_admin: '#7c3aed', business_admin: '#4f46e5', pmo: '#0ea5e9', bd: '#0891b2', forecast: '#059669' };
+const ROLE_LABEL = { super_admin: 'Global Admin', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Team Member' };
+const ROLE_COLOR = { super_admin: '#7c3aed', business_admin: '#4f46e5', pmo: '#0ea5e9', bd: '#0891b2' };
 const EMPTY_FORM = { name: '', email: '', mobile: '', role: 'bd' };
 
 // Which roles the current actor may assign (mirrors the backend hierarchy, Themes E2/E3/E4/E5):

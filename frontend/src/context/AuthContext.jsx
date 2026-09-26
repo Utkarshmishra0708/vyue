@@ -8,9 +8,8 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  // Was this session started via the "Admin Login" button (global Admin Console) rather than a
-  // business sign-in? The same super_admin account is also the Signage admin, so we distinguish the
-  // two experiences by HOW the user logged in, not by their role. Persisted so it survives reloads.
+  // Global Admin console-only session: logged in via the "Global Admin" button → goes straight to
+  // Admin Console (Settings) to manage users, roles, and access across all businesses.
   const [consoleMode, setConsoleMode] = useState(() => localStorage.getItem('salescrm_console') === '1');
 
   // On mount, if a token exists, hydrate the user via /api/auth/me.
@@ -50,7 +49,6 @@ export function AuthProvider({ children }) {
 
   const login = useCallback((token, u) => {
     localStorage.setItem('salescrm_token', token);
-    // LoginPage sets/clears salescrm_console just before this call to mark the session type.
     setConsoleMode(localStorage.getItem('salescrm_console') === '1');
     setUser(u);
   }, []);
@@ -87,13 +85,13 @@ export function AuthProvider({ children }) {
   const canAct            = !isReadOnlyAdmin;
   // Legacy flag: the role value OR the new grant. Kept so existing checks keep working.
   const isSuperAdmin    = !!(user && (user.role === 'super_admin' || user.is_super_admin));
-  // Console-only session: a super_admin who signed in through the Admin Login button. The app shows
-  // ONLY the Admin Console for them — no business Leads/Dashboard/Forecast/Reports.
-  const isConsoleOnly   = !!(consoleMode && user && user.role === 'super_admin');
+  // Console-only session: GA logged in via the Global Admin button → sees only Admin Console
+  // (user management, role grants, access config). Business-scoped logins clear this flag.
+  const isConsoleOnly   = !!(consoleMode && user && (user.role === 'super_admin' || user.is_super_admin));
   const isBusinessAdmin = user && user.role === 'business_admin';
   const isBD            = user && user.role === 'bd';
-  // A 'forecast' account can see ONLY the Forecast dashboard.
-  const isForecastOnly  = user && user.role === 'forecast';
+  // N3: forecast role removed — Forecast is a regular in-platform module now.
+  const isForecastOnly  = false;
   // Full user management (assign PMO/BD/Forecast, and — for super_admin — Business Admins across
   // businesses). A PMO can still add BDs; that's handled per-action, not by this flag.
   const canManageUsers  = user && (user.role === 'super_admin' || user.role === 'business_admin');

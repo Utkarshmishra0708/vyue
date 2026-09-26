@@ -56,10 +56,8 @@ export default function App() {
             {/* Public */}
             <Route path="/" element={<LoginPage />} />
             <Route path="/login" element={<LoginPage />} />
-            {/* Forecast is now login-gated (PMO default, or a PMO grant). */}
-            {/* Gated purely on the Forecast module level now — ForecastRoute's legacy
-                forecast_access check would be a second, conflicting switch for the same thing. */}
-            <Route path="/forecast" element={<ModuleRoute module="forecast"><ForecastPage /></ModuleRoute>} />
+            {/* N3: Forecast is a regular in-platform module — no standalone login. */}
+            <Route path="/forecast" element={<PrivateRoute><ModuleRoute module="forecast"><ForecastPage /></ModuleRoute></PrivateRoute>} />
             {/* === JIOAUTIFY INTEGRATION: SSO account chooser (prod handoff for emails with two BU
                 accounts). Redeems the ticket stashed by captureSsoFromUrl, then bypasses login. === */}
             <Route path="/sso-select" element={<SsoSelectPage />} />

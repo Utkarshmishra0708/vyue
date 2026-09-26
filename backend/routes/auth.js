@@ -55,25 +55,48 @@ const passwordAuthDevOnly = (req, res, next) => {
   next();
 };
 
-// POST /api/auth/login — admin/PMO login with email + password (dev only)
+// POST /api/auth/login — unified credential login (N1). Dev-only (production is SSO).
+//
+// The login screen sends { identifier, password, business_unit, role? }.
+//   • Global Admin (role='super_admin'): `identifier` is an email; the account must hold a
+//     super_admin_scope grant. No business_unit.
+//   • Platform login (business_unit set, no role): `identifier` is an email or a full name.
+//     The backend finds the user on that platform by email first, then by name, regardless of
+//     role. The user's role and module access are determined by what the admin assigned — the
+//     login screen does not ask for a role.
+//   • Legacy: { email, password, business_unit } still works for backward compatibility.
 router.post('/login', passwordAuthDevOnly, async (req, res) => {
   try {
-    const { email, password, business_unit } = req.body;
-    if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
+    const { identifier, password, business_unit, role,
+            /* legacy field */
+            email: legacyEmail } = req.body;
+    const ident = (identifier || legacyEmail || '').trim();
+    if (!ident || !password) return res.status(400).json({ message: 'Credentials required' });
 
-    // Scope the lookup to the chosen business unit when supplied. The same corporate email may hold a
-    // separate account per business unit (signage / jhes) — see migration 002 — so matching on email
-    // alone would return whichever row happens to come first and log a JHES admin into signage (or
-    // vice-versa). With business_unit set, each PMO signs into their own business unit's account.
-    const where = { email };
-    if (business_unit) where.business_unit = business_unit;
-    const user = await User.findOne({ where });
-    if (!user)                 return res.status(401).json({ message: 'Invalid credentials' });
-    if (!user.active)          return res.status(403).json({ message: 'User is inactive' });
-    // super_admin/business_admin/pmo sign into the full app; a 'forecast' account signs in to the
-    // Forecast dashboard only. (BDs use /auth/bd-login.)
-    if (!['super_admin', 'business_admin', 'pmo', 'forecast'].includes(user.role)) return res.status(403).json({ message: 'This account cannot sign in here' });
-    if (!user.password_hash)   return res.status(401).json({ message: 'Invalid credentials' });
+    let user;
+
+    if (role === 'super_admin' || (!role && !business_unit && !legacyEmail)) {
+      // --- Global Admin login: email with a super_admin_scope grant ---
+      const { Op } = require('sequelize');
+      user = await User.findOne({
+        where: { email: ident, super_admin_scope: { [Op.ne]: null } },
+      });
+    } else if (business_unit) {
+      // --- Platform login: find by email first, then by name, on this platform ---
+      // Try email match (covers Business Admin, Manager, and any Team Member with an email)
+      user = await User.findOne({ where: { email: ident, business_unit } });
+      // Fallback: match by full name on this platform (Team Members typically have no email)
+      if (!user) {
+        user = await User.findOne({ where: { name: ident, business_unit } });
+      }
+    } else {
+      // Legacy: email-only lookup (old frontend without business_unit)
+      user = await User.findOne({ where: { email: ident } });
+    }
+
+    if (!user)                return res.status(401).json({ message: 'Invalid credentials' });
+    if (!user.active)         return res.status(403).json({ message: 'User is inactive' });
+    if (!user.password_hash)  return res.status(401).json({ message: 'Invalid credentials' });
 
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
@@ -85,19 +108,17 @@ router.post('/login', passwordAuthDevOnly, async (req, res) => {
   }
 });
 
-// POST /api/auth/bd-login — BD login with { userId, password }.
-// Each BD has their own bcrypt-hashed password (set by PMO on creation,
-// changeable by the BD themselves via /auth/change-password afterward).
+// POST /api/auth/bd-login — legacy BD login with { userId, password }.
+// Kept for backward compatibility; the new login screen uses /auth/login instead.
 router.post('/bd-login', passwordAuthDevOnly, async (req, res) => {
   try {
     const { userId, password } = req.body;
     if (!userId || !password) return res.status(400).json({ message: 'BD id and password required' });
 
     const user = await User.findByPk(userId);
-    if (!user)                return res.status(404).json({ message: 'BD not found' });
-    if (!user.active)         return res.status(403).json({ message: 'BD is inactive' });
-    if (user.role !== 'bd')   return res.status(403).json({ message: 'Not a BD account' });
-    if (!user.password_hash)  return res.status(500).json({ message: 'This BD has no password set. Ask PMO to reset it.' });
+    if (!user)                return res.status(404).json({ message: 'User not found' });
+    if (!user.active)         return res.status(403).json({ message: 'User is inactive' });
+    if (!user.password_hash)  return res.status(500).json({ message: 'No password set. Ask a Manager to reset it.' });
 
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ message: 'Incorrect password' });

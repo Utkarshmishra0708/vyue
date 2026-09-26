@@ -43,8 +43,9 @@ api.interceptors.response.use(
 // these; pages never call axios directly.
 // --------------------------------------------------------------------------
 
-// Auth
-export const login          = (email, password, businessUnit) => api.post('/auth/login', { email, password, business_unit: businessUnit }).then(r => r.data);
+// Auth — N1 unified login: { identifier, password, business_unit?, role? }
+export const login          = (identifier, password, businessUnit, role) => api.post('/auth/login', { identifier, password, business_unit: businessUnit, role }).then(r => r.data);
+// Legacy BD login (kept for backward compat; new LoginPage uses unified login)
 export const bdLogin        = (userId, password)              => api.post('/auth/bd-login', { userId, password }).then(r => r.data);
 export const getMe          = ()                              => api.get('/auth/me').then(r => r.data);
 // N1: switch the signed-in Global Admin to their account on another platform, no re-login.

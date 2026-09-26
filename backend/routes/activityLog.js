@@ -9,9 +9,10 @@ router.use(authenticate);
 
 const canReadLeadData = requireAnyModule(['leads', 'dashboard', 'reports'], 'read');
 
-// Is this caller admin-tier (per-platform admin or cross-platform Global Admin)? Only they see
-// permission entries — those reveal who can do what, which is as sensitive as the settings screen.
-const isAdminTier = (u) => ['super_admin', 'business_admin', 'pmo'].includes(u.role) || isSuperAdmin(u);
+// Is this caller admin-tier for permission visibility? Only Business Admin and Global Admin see
+// permission entries — a Manager with activity-feed access sees leads/chains/SLA but NOT who
+// has what access, because that is as sensitive as the Settings screen itself.
+const isAdminTier = (u) => ['super_admin', 'business_admin'].includes(u.role) || isSuperAdmin(u);
 
 // The global feed (J1) is gated separately from lead-read: Business Admin / Global Admin by role,
 // Manager only if granted, Team Member never. The per-lead Activity tab (GET /) is unaffected.
@@ -63,11 +64,15 @@ router.get('/feed', requireActivityFeed, async (req, res) => {
     and.push({ entity_type: { [Op.in]: types } });
 
     // --- platform ---
-    // Scoped to the business the caller signed into, plus the null-business entries that a Super
-    // Admin grant produces (those are cross-platform by nature). A Super Admin sees only the
-    // business they logged into, matching the Leads / Dashboard scope — logging into Signage shows
-    // Signage activity, not JHES.
-    and.push({ [Op.or]: [{ business_unit: req.user.business_unit }, { business_unit: null }] });
+    // Scoped to the business the caller signed into. NULL-business entries (cross-platform admin
+    // actions like Super Admin grants) are included only when they are admin-only types — lead,
+    // chain, and SLA events must always carry a business_unit and never leak across platforms.
+    and.push({
+      [Op.or]: [
+        { business_unit: req.user.business_unit },
+        ...(admin ? [{ business_unit: null, entity_type: { [Op.in]: ADMIN_ONLY_TYPES } }] : []),
+      ],
+    });
 
     // --- BD scoping: a BD only ever sees activity on leads they own ---
     if (req.user.role === 'bd') {
@@ -138,9 +143,13 @@ router.get('/feed', requireActivityFeed, async (req, res) => {
 router.get('/feed/filters', requireActivityFeed, async (req, res) => {
   try {
     const admin = isAdminTier(req.user);
-    // Scoped to the business the caller signed into (plus null-business grant events), matching the
-    // feed itself — a Super Admin logged into Signage filters Signage activity, not JHES.
-    const where = { [Op.or]: [{ business_unit: req.user.business_unit }, { business_unit: null }] };
+    // Scoped to the business the caller signed into, matching the feed query above.
+    const where = {
+      [Op.or]: [
+        { business_unit: req.user.business_unit },
+        ...(admin ? [{ business_unit: null, entity_type: { [Op.in]: ADMIN_ONLY_TYPES } }] : []),
+      ],
+    };
 
     // How many visible events each account is responsible for.
     const counted = await ActivityLog.findAll({

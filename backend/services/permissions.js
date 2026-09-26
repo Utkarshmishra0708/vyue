@@ -61,10 +61,8 @@ function defaultPermissionsFor(user) {
   if (PERMISSION_MANAGER_ROLES.includes(role)) {
     return { leads: 'full', dashboard: 'full', forecast: 'full', reports: 'full' };
   }
-  if (role === 'forecast') {
-    // Forecast-only account: the dashboard plus the Sent-to-SCM tick it already had.
-    return { leads: 'none', dashboard: 'none', forecast: 'edit', reports: 'none' };
-  }
+  // N3: forecast role removed. If a legacy row with role='forecast' is somehow loaded, treat it
+  // the same as a Team Member with forecast access.
   return {
     leads: 'full',                                       // Team Members create their own leads
     dashboard: 'read',

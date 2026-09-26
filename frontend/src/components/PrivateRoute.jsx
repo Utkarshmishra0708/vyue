@@ -51,15 +51,12 @@ export function ModuleRoute({ module, minLevel = 'read', children }) {
 export { MODULES };
 
 export function PrivateRoute({ children }) {
-  const { isAuthenticated, isForecastOnly, isConsoleOnly, loading } = useAuth();
+  const { isAuthenticated, isConsoleOnly, loading } = useAuth();
   const location = useLocation();
 
   if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
-  // A forecast-only account can access nothing but the Forecast dashboard.
-  if (isForecastOnly) return <Navigate to="/forecast" replace />;
-  // A console-only session (signed in via Admin Login) is confined to the Admin Console; the only
-  // PrivateRoute page it may reach is its own password change.
+  // Console-only GA session → confined to Admin Console; password change is the only other page.
   if (isConsoleOnly && location.pathname !== '/change-password') return <Navigate to="/settings" replace />;
   return children;
 }
@@ -71,20 +68,13 @@ export function AdminRoute({ children }) {
   if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   if (!isAdmin) return <Navigate to="/leads" replace />;
-  // Console-only sessions get the Admin Console (Settings) but not business admin pages like Reports.
+  // Console-only GA → only Settings, not Reports or other admin pages.
   if (isConsoleOnly && location.pathname !== '/settings') return <Navigate to="/settings" replace />;
   return children;
 }
 
-// Forecast dashboard: requires login AND forecast access (PMO/admin by default, or a PMO grant).
+// N3: Forecast is now a regular in-platform module, gated by ModuleRoute. ForecastRoute kept for
+// backward compatibility but defers entirely to ModuleRoute.
 export function ForecastRoute({ children }) {
-  const { isAuthenticated, canForecast, isConsoleOnly, loading } = useAuth();
-  const location = useLocation();
-
-  if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
-  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
-  // The Forecast dashboard is a business view, so a console-only session is sent to the Admin Console.
-  if (isConsoleOnly) return <Navigate to="/settings" replace />;
-  if (!canForecast) return <Navigate to="/leads" replace />;
-  return children;
+  return <ModuleRoute module="forecast">{children}</ModuleRoute>;
 }
