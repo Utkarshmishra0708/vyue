@@ -2,31 +2,80 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getManagedUsers, addUser, updateUser, setUserActive, deleteUser, resetBdPassword, setForecastAccess, getTat, updateTat } from '../services/api';
+import PermissionsModal from '../components/PermissionsModal';
+import SuperAdminsPanel from '../components/SuperAdminsPanel';
+import PermissionMatrix, { PermissionLegend } from '../components/PermissionMatrix';
+import { getManagedUsers, addUser, updateUser, setUserActive, deleteUser, resetBdPassword, getTat, updateTat, setActivityFeedAccess } from '../services/api';
 import { BU_CONFIG } from '../utils/constants';
 import { IS_PROD } from '../env';
 
-const ROLE_LABEL = { super_admin: 'Admin', business_admin: 'Business Admin', pmo: 'PMO · Manager', bd: 'BD · User', forecast: 'Forecast · Dashboard only' };
+const ROLE_LABEL = { super_admin: 'Global Admin', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Team Member', forecast: 'Forecast · Dashboard only' };
 const ROLE_COLOR = { super_admin: '#7c3aed', business_admin: '#4f46e5', pmo: '#0ea5e9', bd: '#0891b2', forecast: '#059669' };
 const EMPTY_FORM = { name: '', email: '', mobile: '', role: 'bd' };
 
-// Which roles the current actor may assign (mirrors the backend hierarchy).
+// Which roles the current actor may assign (mirrors the backend hierarchy, Themes E2/E3/E4/E5):
+//   Global Admin  → Business Admin, Manager, Team Member
+//   Business Admin→ Manager, Team Member (own platform)
+//   Manager       → Manager, Team Member (own platform)
 const ASSIGNABLE = {
-  super_admin: ['business_admin', 'pmo', 'bd', 'forecast'],
-  business_admin: ['pmo', 'bd', 'forecast'],
-  pmo: ['bd'],
+  super_admin: ['business_admin', 'pmo', 'bd'],
+  business_admin: ['pmo', 'bd'],
+  pmo: ['pmo', 'bd'],
 };
-const ROLE_OPTION_LABEL = { business_admin: 'Business Admin', pmo: 'PMO — Admin', bd: 'BD — User', forecast: 'Forecast — Dashboard only' };
+// Account type — deliberately NOT a role picker. Module access already governs what a user can do;
+// the only things it cannot express are how the person signs in and whether they see their own
+// leads or everyone's. That is all this control chooses. The underlying role is set from it.
+//   primary: the two types that cover almost every account
+//   extra:   kept so existing capability isn't lost, tucked behind a disclosure
+const ACCOUNT_TYPES = {
+  bd: {
+    label: 'Team Member',
+    blurb: 'Sees only their own leads · own activity only',
+    primary: true,
+    perms: { leads: 'full', dashboard: 'read', forecast: 'none', reports: 'none' },
+  },
+  pmo: {
+    label: 'Manager',
+    blurb: 'Configurable module access · can open Settings · can add team',
+    primary: true,
+    perms: { leads: 'full', dashboard: 'full', forecast: 'full', reports: 'full' },
+  },
+  business_admin: {
+    label: 'Business Admin',
+    blurb: 'Full access to every module on this platform · granted by a Global Admin',
+    perms: { leads: 'full', dashboard: 'full', forecast: 'full', reports: 'full' },
+  },
+};
 
-// Add/Edit user modal. `initial` seeds the fields (edit); when null it's an add.
-// `lockRole` disables the role field (used when a user edits their own account — they must not
-// change their own role).
+// Add/Edit user modal — access-first. There is no role dropdown: what a user can DO is chosen in
+// the module Access grid below. The small "Account type" control above it only settles the two
+// things module access cannot express — how the person signs in, and whether they see their own
+// leads or everyone's — and the underlying role is derived from it.
+//
+// On edit the grid is omitted: access for an existing user is changed with the 🔐 Access button on
+// their row, so there is exactly one place to do it.
 function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmit, onClose }) {
-  // Default to BD (the most common addition and lowest privilege). The role is a required, clearly
-  // labelled dropdown, so the admin picks Business Admin / PMO / Forecast explicitly when they want one.
-  const [form, setForm] = useState(initial || { ...EMPTY_FORM, role: (assignableRoles && assignableRoles.includes('bd')) ? 'bd' : ((assignableRoles && assignableRoles[0]) || 'bd') });
+  const allowed = (assignableRoles && assignableRoles.length ? assignableRoles : ['bd'])
+    .filter(r => ACCOUNT_TYPES[r]);
+  const firstAllowed = allowed.includes('bd') ? 'bd' : allowed[0];
+  const [form, setForm] = useState(initial || { ...EMPTY_FORM, role: firstAllowed });
+  // Access starts from the account type's sensible default and is freely editable from there.
+  const [perms, setPerms] = useState(ACCOUNT_TYPES[firstAllowed]?.perms || ACCOUNT_TYPES.bd.perms);
+  // Once the admin edits the grid we stop overwriting it when they switch account type.
+  const [permsTouched, setPermsTouched] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [err, setErr] = useState('');
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const pickType = (role) => {
+    setForm(f => ({ ...f, role }));
+    if (!permsTouched) setPerms(ACCOUNT_TYPES[role].perms);
+  };
+  const editPerms = (next) => { setPermsTouched(true); setPerms(next); };
+
+  const primary = allowed.filter(r => ACCOUNT_TYPES[r].primary);
+  const extra = allowed.filter(r => !ACCOUNT_TYPES[r].primary);
+  const isAdd = mode !== 'edit';
 
   const submit = async (e) => {
     e.preventDefault();
@@ -38,15 +87,38 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
     // Await the save so a server error (e.g. duplicate email) is shown INSIDE the modal rather than on
     // the page behind it — otherwise a failed add looks like nothing happened.
     try {
-      await onSubmit({ name, email, mobile, role: form.role });
+      await onSubmit({ name, email, mobile, role: form.role, ...(isAdd ? { permissions: perms } : {}) });
     } catch (er) {
       setErr(er.message || 'Could not save user. Please try again.');
     }
   };
 
+  const TypeOption = ({ role }) => {
+    const t = ACCOUNT_TYPES[role];
+    const on = form.role === role;
+    return (
+      <label
+        style={{
+          display: 'flex', alignItems: 'flex-start', gap: 9, padding: '9px 11px', borderRadius: 8,
+          border: '1px solid ' + (on ? '#c7d2fe' : '#e2e8f0'), background: on ? '#eef2ff' : '#fff',
+          cursor: lockRole ? 'not-allowed' : 'pointer', opacity: lockRole && !on ? 0.5 : 1,
+        }}
+      >
+        <input
+          type="radio" name="account-type" checked={on} disabled={lockRole}
+          onChange={() => pickType(role)} style={{ marginTop: 2, cursor: 'inherit' }}
+        />
+        <span>
+          <span style={{ fontSize: 13, fontWeight: 600, display: 'block' }}>{t.label}</span>
+          <span style={{ fontSize: 11, color: '#64748b' }}>{t.blurb}</span>
+        </span>
+      </label>
+    );
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: isAdd ? 620 : 460 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span style={{ fontWeight: 700, fontSize: 15 }}>{mode === 'edit' ? 'Edit User' : 'Add User'}</span>
           <button className="btn btn-sm" onClick={onClose}>✕</button>
@@ -65,14 +137,35 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
               <label className="field-label">Mobile *</label>
               <input className="input" value={form.mobile} onChange={set('mobile')} placeholder="10-digit mobile number" inputMode="numeric" maxLength={10} required />
             </div>
+
             <div>
-              <label className="field-label">Role *</label>
-              <select className="input" value={form.role} onChange={set('role')} disabled={lockRole} required>
-                {(assignableRoles || ['bd']).map(r => <option key={r} value={r}>{ROLE_OPTION_LABEL[r] || r}</option>)}
-              </select>
-              {form.role === 'forecast' && <p style={{ fontSize: 11, color: '#059669', margin: '5px 0 0' }}>This user will only be able to sign in to the Forecast dashboard.</p>}
-              {lockRole && <p style={{ fontSize: 11, color: '#94a3b8', margin: '5px 0 0' }}>You cannot change your own role.</p>}
+              <label className="field-label">Account type *</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {primary.map(r => <TypeOption key={r} role={r} />)}
+                {showMore && extra.map(r => <TypeOption key={r} role={r} />)}
+              </div>
+              {extra.length > 0 && !lockRole && (
+                <button type="button" onClick={() => setShowMore(v => !v)}
+                  style={{ border: 'none', background: 'none', color: '#4f46e5', fontSize: 11, cursor: 'pointer', padding: '6px 0 0' }}>
+                  {showMore ? '- Fewer account types' : '+ More account types (' + extra.length + ')'}
+                </button>
+              )}
+              {lockRole && <p style={{ fontSize: 11, color: '#94a3b8', margin: '5px 0 0' }}>You cannot change your own account type.</p>}
             </div>
+
+            {isAdd && (
+              <div>
+                <label className="field-label">Module access *</label>
+                <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 8px' }}>
+                  Pre-filled from the account type — adjust anything you like. Changeable later from
+                  the 🔐 Access button on their row.
+                </p>
+                <PermissionMatrix value={perms} onChange={editPerms} idPrefix="new-user" compact />
+                <div style={{ height: 10 }} />
+                <PermissionLegend />
+              </div>
+            )}
+
             {err && <p style={{ fontSize: 12, color: '#dc2626', margin: 0 }}>{err}</p>}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
               <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
@@ -88,7 +181,7 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
 }
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, isCrossPlatform, canAct } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [msg, setMsg] = useState('');
@@ -108,7 +201,11 @@ export default function SettingsPage() {
   const [tatBusy, setTatBusy] = useState(false);
   const [tatMsg, setTatMsg] = useState('');
   const [tatModal, setTatModal] = useState(false); // TAT table lives in a modal to keep Settings compact
-  const canEditTat = user.role === 'pmo' || user.role === 'business_admin';
+  // Per-module access editor (RBAC). Same admin tier that already manages users.
+  const [permTarget, setPermTarget] = useState(null); // { id, name } | null
+  // A Read-only Super Admin gets the view-only variant of this too — the backend refuses the write
+  // either way, but the spec is that they see no edit affordance anywhere.
+  const canEditTat = canAct && (user.role === 'pmo' || user.role === 'business_admin');
 
   const refresh = () => {
     if (!manageBusiness) { setUsers([]); return; }
@@ -138,8 +235,10 @@ export default function SettingsPage() {
   };
 
   // Can the current actor manage this user row? (mirrors the backend rules — gates the row actions)
-  const canActOn = (u) => (ASSIGNABLE[user.role] || []).includes(u.role)
-    && (user.role === 'super_admin' || u.business_unit === user.business_unit);
+  // A Read-only Super Admin sees zero action buttons anywhere, so this gate folds in canAct.
+  const canActOn = (u) => canAct
+    && (ASSIGNABLE[user.role] || []).includes(u.role)
+    && (user.role === 'super_admin' || isCrossPlatform || u.business_unit === user.business_unit);
 
   const handleSubmit = async (data) => {
     setBusy(true); setMsg('');
@@ -175,6 +274,25 @@ export default function SettingsPage() {
     } finally { setBusy(false); }
   };
 
+  // J1: grant/revoke a Manager's platform-wide Activity feed. Only a Global Admin (Read+Write) or a
+  // Business Admin may set it, and only for a Manager (pmo). A Manager can never grant it — to self or
+  // to another Manager — so the button is shown only when the actor is super_admin/business_admin.
+  const canGrantFeed = canAct && (user.role === 'super_admin' || user.role === 'business_admin');
+  const handleToggleFeed = async (u) => {
+    const next = !u.activity_feed_access;
+    const verb = next ? 'Grant' : 'Revoke';
+    if (!window.confirm(`${verb} the platform-wide Activity feed for ${u.name}? ${next
+      ? 'They will see every user’s activity on this platform.'
+      : 'They will see only their own per-lead activity.'}`)) return;
+    setBusy(true); setMsg('');
+    try {
+      await setActivityFeedAccess(u.id, next);
+      setMsg(`${verb}ed Activity feed for ${u.name}.`); refresh();
+    } catch (err) {
+      setMsg(err.response?.data?.message || 'Error updating Activity feed access');
+    } finally { setBusy(false); }
+  };
+
   const handleDelete = async (u) => {
     if (!window.confirm(`Permanently delete ${u.name}? This cannot be undone.`)) return;
     setBusy(true); setMsg('');
@@ -205,15 +323,6 @@ export default function SettingsPage() {
     } finally { setBusy(false); }
   };
 
-  const handleForecastAccess = async (u) => {
-    setBusy(true); setMsg('');
-    try {
-      const res = await setForecastAccess(u.id, !u.forecast_access);
-      setMsg(res.message); refresh();
-    } catch (err) {
-      setMsg(err.response?.data?.message || 'Error updating forecast access');
-    } finally { setBusy(false); }
-  };
 
   const openReset = (id) => { setResetTarget(id === resetTarget ? null : id); setResetValue(''); };
 
@@ -270,7 +379,7 @@ export default function SettingsPage() {
           )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, gap: 10, flexWrap: 'wrap' }}>
             <p className="section-title" style={{ margin: 0 }}>Manage Users{buLabel ? ` — ${buLabel}` : ''}</p>
-            <button className="btn btn-primary btn-sm" disabled={busy || !manageBusiness} onClick={() => setModal({ mode: 'add' })}>+ Add User</button>
+            {canAct && <button className="btn btn-primary btn-sm" disabled={busy || !manageBusiness} onClick={() => setModal({ mode: 'add' })}>+ Add User</button>}
           </div>
           <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 14px' }}>
             PMO users are admins; BD users are the sales team. Use Edit to change a user's details.
@@ -292,7 +401,7 @@ export default function SettingsPage() {
                     <div style={{ fontSize: 11, color: '#94a3b8' }}>{ROLE_LABEL[u.role] || u.role}{u.email ? ` · ${u.email}` : ''}{u.mobile ? ` · ${u.mobile}` : ''}</div>
                   </div>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                    {(canActOn(u) || u.id === user.id) && (
+                    {canAct && (canActOn(u) || u.id === user.id) && (
                       <button className="btn btn-sm" disabled={busy} onClick={() => setModal({ mode: 'edit', user: { name: u.name, email: u.email || '', mobile: u.mobile || '', role: u.role, id: u.id } })}>Edit</button>
                     )}
                     {!IS_PROD && u.role === 'bd' && u.active && canActOn(u) && (
@@ -300,10 +409,20 @@ export default function SettingsPage() {
                         {resetTarget === u.id ? 'Cancel' : 'Reset Password'}
                       </button>
                     )}
-                    {u.role === 'bd' && canActOn(u) && (
-                      <button className="btn btn-sm" disabled={busy} onClick={() => handleForecastAccess(u)} title="Toggle Forecast dashboard access"
-                        style={u.forecast_access ? { borderColor: '#a7f3d0', color: '#059669' } : undefined}>
-                        {u.forecast_access ? '📦 Forecast ✓' : '📦 Forecast'}
+                    {/* Forecast is one of the four modules in the Access editor now, so a separate
+                        per-user Forecast toggle would be a second, conflicting control for the
+                        same thing. Access is the single place it is granted. */}
+                    {canActOn(u) && (
+                      <button className="btn btn-sm" disabled={busy} onClick={() => setPermTarget({ id: u.id, name: u.name })}
+                        title="Set per-module access levels (Leads, Dashboard, Forecast, Reports)">🔐 Access</button>
+                    )}
+                    {/* J1: per-Manager Activity-feed grant. Only for Managers, and only a Global Admin /
+                        Business Admin can set it. Business Admin / Global Admin get the feed by role, so
+                        no toggle is shown for them; a Team Member never sees the feed, so none for them. */}
+                    {u.role === 'pmo' && canGrantFeed && (
+                      <button className="btn btn-sm" disabled={busy} onClick={() => handleToggleFeed(u)}
+                        title="Grant or revoke this Manager's access to the platform-wide Activity feed">
+                        {u.activity_feed_access ? '🕒 Feed: On' : '🕒 Feed: Off'}
                       </button>
                     )}
                     {u.id !== user.id && canActOn(u) && (
@@ -327,6 +446,10 @@ export default function SettingsPage() {
           </div>
           {msg && <p style={{ fontSize: 12, marginTop: 12, color: msg.toLowerCase().includes('error') ? '#dc2626' : '#059669' }}>{msg}</p>}
         </div>
+
+        {/* Cross-platform Super Admins — its own section, outside any single platform's user list,
+            because the grant spans every platform at once. Visible only to Super Admins. */}
+        {isCrossPlatform && <SuperAdminsPanel />}
 
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
@@ -438,6 +561,16 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Per-module access levels (RBAC). Settings itself is never listed — it stays role-gated. */}
+      {permTarget && (
+        <PermissionsModal
+          userId={permTarget.id}
+          userName={permTarget.name}
+          onClose={() => setPermTarget(null)}
+          onSaved={(m) => { setMsg(m); refresh(); }}
+        />
       )}
     </Layout>
   );

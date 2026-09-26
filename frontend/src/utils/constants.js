@@ -66,7 +66,7 @@ export const TAT_DAYS = 14;
 
 // Human-readable role labels (roles are stored lowercase/snake_case).
 export const ROLE_LABEL = {
-  super_admin: 'Admin', business_admin: 'Business Admin', pmo: 'PMO', bd: 'BD', forecast: 'Forecast',
+  super_admin: 'Global Admin', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Team Member', forecast: 'Forecast',
 };
 
 // Indian States and Union Territories. Most CRMs present these in one "State / UT" dropdown, grouped

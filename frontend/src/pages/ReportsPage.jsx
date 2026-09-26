@@ -90,7 +90,7 @@ export default function ReportsPage() {
       title: 'Sales CRM — Custom Report',
       subtitle: `${filtered.length} lead${filtered.length > 1 ? 's' : ''} · generated ${fmtDate(new Date())}`,
       tables: [{
-        columns: ['Sr', 'Customer', 'State', 'BD', 'Phase', 'New/Renewal', 'TCV (₹L)', 'PO Expected', 'Source', 'Created'],
+        columns: ['Sr', 'Customer', 'State', 'Team Member', 'Phase', 'New/Renewal', 'TCV (₹L)', 'PO Expected', 'Source', 'Created'],
         rows: filtered.map(l => [
           l.sr_no, l.customer_name, l.state || '—', l.owner?.name?.split(' ')[0] || '', l.phase, l.new_or_renewal,
           l.potential_tcv_lakhs, l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '—', l.lead_source, fmtDate(l.createdAt),
@@ -121,7 +121,7 @@ export default function ReportsPage() {
             <input type="date" className="input" style={{ marginBottom: 6 }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
             <input type="date" className="input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
-          <MultiSelect label="BD" options={bds.map(b => b.name)} selected={selBDs} onChange={setSelBDs} width={200} />
+          <MultiSelect label="Team Member" options={bds.map(b => b.name)} selected={selBDs} onChange={setSelBDs} width={200} />
           <MultiSelect label="Phase" options={PHASES} selected={selPhases} onChange={setSelPhases} width={200} />
           <MultiSelect label="Lead Source" options={sourceOpts} selected={selSources} onChange={setSelSources} width={200} />
           <MultiSelect label="New/Renewal" options={renewalOpts} selected={selRenewals} onChange={setSelRenewals} width={200} />

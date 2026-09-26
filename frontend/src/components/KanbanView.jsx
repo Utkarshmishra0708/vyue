@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { PHASE_BADGE } from '../utils/constants';
 import { hasConfidence, confidenceTrend } from '../utils/leadHelpers';
+import { sortByPriority } from '../utils/leadPriority';
 
 // Small confidence chip for a Kanban card: coloured by score band with a week-over-week trend mark.
 function ConfChip({ lead }) {
@@ -43,7 +44,9 @@ export default function KanbanView({ leads, onOpen, onPhaseChange }) {
   return (
     <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12 }}>
       {COLUMNS.map(col => {
-        const items = leads.filter(l => l.phase === col);
+        // Cards within a column follow the shared prioritization order (confidence → chain
+        // → TCV; stage is constant inside a column). See utils/leadPriority.js.
+        const items = sortByPriority(leads.filter(l => l.phase === col));
         const cs = COLUMN_STYLE[col] || { bg: '#f1f5f9', accent: '#64748b' };
         const isOver = overCol === col;
         return (

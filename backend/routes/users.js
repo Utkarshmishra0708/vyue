@@ -1,7 +1,21 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const { User, Lead } = require('../models');
+const { Op } = require('sequelize');
+const audit = require('../services/audit');
 const { authenticate, adminOnly } = require('../middleware/auth');
+const {
+  MODULES, MODULE_LABELS, LEVELS, LEVEL_LABELS, effectivePermissions, sanitizePermissions,
+  isSuperAdmin, superAdminScope, isSuperAdminWrite,
+} = require('../services/permissions');
+
+// Only an existing Super Admin may create, change or revoke another. Deliberately NOT delegable to
+// platform-level admins — a Signage PMO must not be able to mint cross-platform access.
+function superAdminOnly(req, res, next) {
+  if (!req.user) return res.status(401).json({ message: 'Unauthenticated' });
+  if (isSuperAdmin(req.user)) return next();
+  return res.status(403).json({ message: 'Only a Super Admin can manage Super Admin access.' });
+}
 
 const COLOR_ROTATION = ['bg-violet-500', 'bg-sky-500', 'bg-emerald-500', 'bg-amber-500', 'bg-orange-500', 'bg-teal-500', 'bg-rose-500', 'bg-indigo-500'];
 const DEFAULT_BD_PASSWORD = '123456'; // system default — the BD is expected to change it after first login
@@ -121,7 +135,9 @@ router.get('/manage', authenticate, adminOnly, async (req, res) => {
     const where = { role: ['super_admin', 'business_admin', 'pmo', 'bd', 'forecast'] };
     // Non-super-admins only ever see their own business's users. super_admin may switch business via
     // the business_unit query param (defaulting to their own).
-    where.business_unit = req.user.role === 'super_admin' ? (req.query.business_unit || req.user.business_unit) : req.user.business_unit;
+    // A cross-platform Super Admin may inspect any platform's user list via ?business_unit=;
+    // everyone else is pinned to their own.
+    where.business_unit = isSuperAdmin(req.user) ? (req.query.business_unit || req.user.business_unit) : req.user.business_unit;
     const users = await User.findAll({
       where,
       attributes: { exclude: ['password_hash'] },
@@ -146,26 +162,27 @@ function validateUserPayload({ name, email, mobile, role }) {
   return null;
 }
 
-// Role hierarchy — which roles each admin-tier actor may create/edit/delete/manage.
-//   super_admin    → Business Admin, PMO, BD, Forecast (in ANY business)
-//   business_admin → PMO, BD, Forecast (their business)
-//   pmo            → BD only (their business)
+// Role hierarchy — which roles each actor may create/edit/delete/manage (Themes E2/E3/E4/E5).
+//   super_admin (Global Admin) → Business Admin, Manager, Team Member (in ANY business)
+//   business_admin             → Manager, Team Member (their business)
+//   pmo (Manager)              → Manager, Team Member (their business)  [E4: Managers grant Managers]
+//   bd (Team Member)           → nothing
 const ASSIGNABLE_ROLES = {
-  super_admin:    ['business_admin', 'pmo', 'bd', 'forecast'],
-  business_admin: ['pmo', 'bd', 'forecast'],
-  pmo:            ['bd'],
+  super_admin:    ['business_admin', 'pmo', 'bd'],
+  business_admin: ['pmo', 'bd'],
+  pmo:            ['pmo', 'bd'],
 };
 const canManageRole = (actorRole, targetRole) => (ASSIGNABLE_ROLES[actorRole] || []).includes(targetRole);
 
 // The business a created user lands in: super_admin may target any business; everyone else is confined
 // to their own.
-const resolveBusinessUnit = (actor, requestedBu) => (actor.role === 'super_admin' ? (requestedBu || actor.business_unit) : actor.business_unit);
+const resolveBusinessUnit = (actor, requestedBu) => (isSuperAdmin(actor) ? (requestedBu || actor.business_unit) : actor.business_unit);
 
 // Can `actor` manage the existing `target` user? Must be allowed by the role hierarchy AND (unless the
 // actor is super_admin) within the actor's own business.
 function canActOn(actor, target) {
   if (!canManageRole(actor.role, target.role)) return false;
-  if (actor.role !== 'super_admin' && target.business_unit !== actor.business_unit) return false;
+  if (!isSuperAdmin(actor) && target.business_unit !== actor.business_unit) return false;
   return true;
 }
 
@@ -204,9 +221,19 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
     const maxOrder = (await User.max('sort_order', { where: { business_unit, role } })) || 0;
     const password_hash = await bcrypt.hash(DEFAULT_BD_PASSWORD, 10);
 
+    // Module access is chosen in the same dialog as the account. When the caller supplies a map we
+    // store it verbatim; otherwise the role-derived default applies (services/permissions.js), so an
+    // older client that posts no permissions still creates a working account.
+    let module_permissions = null;
+    if (req.body.permissions) {
+      const { error, value } = sanitizePermissions(req.body.permissions);
+      if (error) return res.status(400).json({ message: error });
+      module_permissions = JSON.stringify(value);
+    }
+
     const created = await User.create({
       name: name.trim(), email: email.trim(), mobile: mobile.trim(), business_unit, role,
-      initials, color, sort_order: maxOrder + 1, active: true, password_hash,
+      initials, color, sort_order: maxOrder + 1, active: true, password_hash, module_permissions,
     });
     const safe = created.toJSON();
     delete safe.password_hash;
@@ -361,6 +388,176 @@ router.put('/:id/forecast-access', authenticate, adminOnly, async (req, res) => 
     return res.status(500).json({ message: err.message });
   }
 });
+
+// PUT /api/users/:id/activity-feed-access — grant/revoke a Manager's platform-wide Activity feed
+// (J1/E4). Body: { activity_feed_access: true|false }. Only a Global Admin or Business Admin may set
+// it — a Manager cannot grant it to themselves or another Manager. Meaningful only for Managers:
+// Business Admin/Global Admin see the feed by role, Team Members never.
+router.put('/:id/activity-feed-access', authenticate, adminOnly, async (req, res) => {
+  try {
+    // Only a Global Admin with Read+Write, or a Business Admin, may set it. A Read-only Global Admin
+    // makes no changes anywhere, and a Manager can never grant it (to self or another Manager).
+    if (!(isSuperAdminWrite(req.user) || req.user.role === 'business_admin')) {
+      return res.status(403).json({ message: 'Only a Global Admin (Read+Write) or Business Admin can grant activity-feed access.' });
+    }
+    const activity_feed_access = !!req.body.activity_feed_access;
+    const user = await User.findByPk(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!canActOn(req.user, user)) return res.status(403).json({ message: 'You are not allowed to manage this user.' });
+    if (user.role !== 'pmo') {
+      return res.status(400).json({ message: 'Activity-feed access applies to Managers only.' });
+    }
+    await User.update({ activity_feed_access }, { where: { id: user.id } });
+    return res.json({ message: `${activity_feed_access ? 'Granted' : 'Revoked'} activity-feed access for ${user.name}`, activity_feed_access });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/users/:id/permissions — the user's effective per-module map, for the permission editor.
+// Returns the resolved levels (role-derived defaults filled in) rather than the raw column, so the
+// editor always opens showing what is actually in force.
+router.get('/:id/permissions', authenticate, adminOnly, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!canActOn(req.user, user)) return res.status(403).json({ message: 'You are not allowed to manage this user.' });
+    return res.json({
+      id: user.id, name: user.name, role: user.role, business_unit: user.business_unit,
+      permissions: effectivePermissions(user),
+      modules: MODULES, levels: LEVELS,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// PUT /api/users/:id/permissions — body { permissions: { leads, dashboard, forecast, reports } }
+//
+// Restricted to the same admin tier that already manages users (adminOnly + canActOn), so this adds
+// no new privilege. Settings is deliberately not settable here: it stays role-gated.
+//
+// Note these levels are a CEILING, not a grant — the role and business_unit checks still run on
+// every request, so raising someone to Full Access cannot let them past a limit their role imposes
+// (a BD still sees only their own leads and still cannot delete).
+router.put('/:id/permissions', authenticate, adminOnly, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!canActOn(req.user, user)) return res.status(403).json({ message: 'You are not allowed to manage this user.' });
+
+    const { error, value } = sanitizePermissions(req.body.permissions || {});
+    if (error) return res.status(400).json({ message: error });
+
+    const before = effectivePermissions(user);
+    await User.update({ module_permissions: JSON.stringify(value) }, { where: { id: user.id } });
+
+    const changed = MODULES.filter(m => before[m] !== value[m])
+      .map(m => `${MODULE_LABELS[m]}: ${LEVEL_LABELS[before[m]]} → ${LEVEL_LABELS[value[m]]}`);
+
+    // One audit entry per module changed, so the feed reads "Leads: Edit → Full Access".
+    await audit.recordDiff(
+      { actor: req.user, entityType: 'permissions', entityId: user.id, subject: user.name,
+        businessUnit: user.business_unit, action: 'permission_update' },
+      MODULES.map(m => ({ field: `${MODULE_LABELS[m]} access`, from: LEVEL_LABELS[before[m]], to: LEVEL_LABELS[value[m]] })),
+    );
+    return res.json({
+      message: changed.length ? `Updated ${user.name}: ${changed.join(', ')}` : `No permission changes for ${user.name}`,
+      permissions: value,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// --------------------------------------------------------------------------
+// Cross-platform Super Admins — a dedicated section, deliberately NOT part of any single
+// platform's user list. Managed only by an existing Super Admin.
+// --------------------------------------------------------------------------
+
+// GET /api/users/super-admins — everyone currently holding the grant, across every platform.
+router.get('/super-admins', authenticate, superAdminOnly, async (req, res) => {
+  try {
+    const rows = await User.findAll({
+      where: { super_admin_scope: ['read', 'write'] },
+      attributes: { exclude: ['password_hash'] },
+      order: [['name', 'ASC']],
+    });
+    // Candidates to promote: any active account with an email (Super Admins sign in by email).
+    const candidates = await User.findAll({
+      where: { active: true, email: { [Op.ne]: null }, super_admin_scope: null },
+      attributes: ['id', 'name', 'email', 'role', 'business_unit'],
+      order: [['name', 'ASC']],
+    });
+    return res.json({
+      superAdmins: rows.map(u => ({
+        id: u.id, name: u.name, email: u.email, role: u.role,
+        business_unit: u.business_unit, active: u.active, scope: u.super_admin_scope,
+      })),
+      candidates,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// PUT /api/users/:id/super-admin — body { scope: 'read' | 'write' | null }
+//
+// The grant is ADDITIVE: it never touches the user's role or business_unit, so their existing
+// platform-specific role keeps working exactly as before. Revoking (null) likewise leaves the
+// platform role intact. Every change is written to the audit trail below.
+router.put('/:id/super-admin', authenticate, superAdminOnly, async (req, res) => {
+  try {
+    const raw = req.body.scope;
+    const scope = (raw === null || raw === '' || raw === undefined) ? null : raw;
+    if (scope !== null && scope !== 'read' && scope !== 'write') {
+      return res.status(400).json({ message: "scope must be 'read', 'write', or null to revoke" });
+    }
+
+    const user = await User.findByPk(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // You cannot change your own grant. Revoking it would immediately remove your ability to undo
+    // that, and downgrading yourself to Read-only would do the same — so another Super Admin has to
+    // make the change. Mirrors how the app already blocks self-Disable and self-Delete.
+    if (String(user.id) === String(req.user.id)) {
+      return res.status(400).json({ message: 'You cannot change your own Super Admin access — ask another Super Admin to do it.' });
+    }
+
+    if (scope && !user.email) {
+      return res.status(400).json({ message: 'A Super Admin signs in by email, so this account needs an email address first.' });
+    }
+    // Guard against removing the last write-capable Super Admin and locking everyone out.
+    const before = superAdminScope(user);
+    if (before === 'write' && scope !== 'write') {
+      const others = await User.count({ where: { super_admin_scope: 'write', active: true, id: { [Op.ne]: user.id } } });
+      if (others === 0) {
+        return res.status(400).json({ message: 'This is the last Read+Write Super Admin — promote another one before changing this.' });
+      }
+    }
+
+    await User.update({ super_admin_scope: scope }, { where: { id: user.id } });
+
+    // Audit: cross-platform, so business_unit stays null — those entries are admin-only in the feed.
+    const LABEL = { write: 'Read+Write', read: 'Read-only', null: 'None' };
+    await audit.record({
+      actor: req.user, entityType: 'permissions', entityId: user.id, subject: user.name,
+      businessUnit: null, action: 'super_admin_change', field: 'Super Admin access',
+      from: LABEL[before] || 'None', to: LABEL[scope] || 'None',
+      note: 'Cross-platform access',
+    });
+
+    const label = scope === 'write' ? 'Read+Write' : scope === 'read' ? 'Read-only' : 'revoked';
+    return res.json({
+      message: scope ? `${user.name} is now a Super Admin (${label}).` : `Super Admin access revoked for ${user.name}.`,
+      scope,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+
 
 // DELETE /api/users/:id — admin/PMO only. PERMANENTLY delete a BD or PMO. Blocked for your own
 // account, and blocked when the user still owns leads (owner_id is a RESTRICT foreign key) — disable

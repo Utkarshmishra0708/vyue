@@ -24,6 +24,17 @@ const User = sequelize.define('User', {
   // Grants access to the (now login-gated) Forecast dashboard. PMOs get it by default; a PMO can
   // grant it to any other user from Settings.
   forecast_access: { type: DataTypes.BOOLEAN, defaultValue: false },
+  // Per-module access levels as JSON: { leads|dashboard|forecast|reports: none|read|edit|full }.
+  // A second dimension alongside role and business_unit — see services/permissions.js. Null means
+  // "never configured", in which case the role-derived default applies.
+  module_permissions: { type: DataTypes.TEXT },
+  // Cross-platform Super Admin grant (migration 021). NULL = not a super admin. 'read' = sees every
+  // platform, changes nothing; 'write' = unrestricted everywhere. Additive to `role`, not a
+  // replacement, so a platform PMO can also hold it.
+  super_admin_scope: { type: DataTypes.ENUM('read', 'write') },
+  // Platform-wide Activity feed grant (migration 025, J1/E4). Business Admin and Global Admin see
+  // the feed by role; a Manager sees it only when this is set; a Team Member never does.
+  activity_feed_access: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   sort_order:    { type: DataTypes.INTEGER, defaultValue: 0 },
   last_seen:     { type: DataTypes.DATE },
 }, { tableName: 'users', underscored: true });
@@ -102,6 +113,11 @@ const Lead = sequelize.define('Lead', {
   // Device cost nature is chosen per lead by the BD (all other services have a fixed nature).
   device_cost_type:        { type: DataTypes.ENUM('capex', 'opex') },
   device_requested_date:   { type: DataTypes.DATEONLY },
+  // Manual 'Sent to SCM' handoff marker (migration 019). Shared state on the lead — not per-user —
+  // and never set or cleared automatically by any other change.
+  sent_to_scm:             { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  sent_to_scm_at:          { type: DataTypes.DATE },
+  sent_to_scm_by:          { type: DataTypes.STRING(255) },
   platform_rate:           { type: DataTypes.DECIMAL(12, 2) },
   cms_rate:                { type: DataTypes.DECIMAL(12, 2) },
   connectivity_rate:       { type: DataTypes.DECIMAL(12, 2) },
@@ -151,10 +167,22 @@ const LeadContact = sequelize.define('LeadContact', {
 // --------------------------------------------------------------------------
 const ActivityLog = sequelize.define('ActivityLog', {
   id:             { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  lead_id:        { type: DataTypes.INTEGER, allowNull: false },
+  // Nullable since migration 022: this table now records non-lead events too (chain / permissions /
+  // SLA), which have no lead. Lead events still set it, so the per-lead Activity tab is unchanged.
+  lead_id:        { type: DataTypes.INTEGER },
+  // What kind of thing changed — the global feed's category tag.
+  entity_type:    { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'lead' },
+  // Id of that thing (chain id, target user id…). Mirrors lead_id for lead events.
+  entity_id:      { type: DataTypes.INTEGER },
+  // Platform the event belongs to. NULL = cross-platform (e.g. a Super Admin grant).
+  business_unit:  { type: DataTypes.STRING(32) },
   lead_sr_no:     { type: DataTypes.INTEGER },
   customer_name:  { type: DataTypes.STRING(255) },
+  // WHO made the change. user_name is the display name at the time; user_id is the durable
+  // identity (names repeat and can be renamed) and user_email is what a reader recognises.
   user_name:      { type: DataTypes.STRING(255) },
+  user_id:        { type: DataTypes.INTEGER },
+  user_email:     { type: DataTypes.STRING(255) },
   action_type:    { type: DataTypes.STRING(64) },
   field_changed: { type: DataTypes.STRING(64) },
   old_value:      { type: DataTypes.TEXT },

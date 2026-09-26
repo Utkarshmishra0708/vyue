@@ -1,6 +1,9 @@
 const router = require('express').Router();
 const { sequelize, Lead, LeadContact, ActivityLog, StageHistory, User, DropdownOption, GlobalPo } = require('../models');
-const { authenticate, adminOnly } = require('../middleware/auth');
+const { authenticate, adminOnly, requireModule, requireAnyModule } = require('../middleware/auth');
+// Lead rows back three modules — the Leads list, the Dashboard and Reports all read them — so a
+// read is allowed if ANY of those grants it. Writes are specifically a Leads-module capability.
+const canReadLeadData = requireAnyModule(['leads', 'dashboard', 'reports'], 'read');
 const { leadScopeWhere } = require('../middleware/scope');
 const { applyHoldTransition, scoringFieldsForSave } = require('../services/scoringEngine');
 const { Op } = require('sequelize');
@@ -28,6 +31,7 @@ const FIELD_LABELS = {
   customer_name: 'Customer Name', city: 'City', state: 'State', lead_source: 'Lead Source',
   channel_partner_name: 'Channel Partner', kam_name: 'KAM Name', affiliate_name: 'Affiliate Name', new_or_renewal: 'New/Renewal',
   lead_temperature: 'Lead Rating', competitor: 'Competitor', quantity: 'Quantity',
+  sent_to_scm: 'Sent to SCM',
   potential_tcv_lakhs: 'Potential TCV (L)', contract_period_months: 'Contract Period (Mo)',
   po_validity_months: 'PO Validity (Mo)', phase: 'Phase', next_followup_date: 'Next Follow-Up Date',
   po_expected_date: 'PO Expected Date', service_start_date: 'Service Start Date', service_end_date: 'Service End Date',
@@ -330,7 +334,9 @@ function valuesEqual(o, n) {
   return os === ns;
 }
 
-function diffActivity(before, after, leadId, srNo, customerName, actingUser) {
+// `actor` is the full req.user, not a name string: names repeat across accounts (two are called
+// "PMO") and can be renamed, so the id and email are what actually identify who made the change.
+function diffActivity(before, after, leadId, srNo, customerName, actor) {
   const rows = [];
   for (const [key, label] of Object.entries(FIELD_LABELS)) {
     const o = before ? before[key] : undefined;
@@ -339,7 +345,8 @@ function diffActivity(before, after, leadId, srNo, customerName, actingUser) {
     const ns = n === null || n === undefined ? '' : String(n);
     if (!valuesEqual(o, n)) {
       rows.push({
-        lead_id: leadId, lead_sr_no: srNo, customer_name: customerName, user_name: actingUser,
+        lead_id: leadId, lead_sr_no: srNo, customer_name: customerName,
+        user_name: actor?.name, user_id: actor?.id ?? null, user_email: actor?.email ?? null,
         action_type: key === 'phase' ? 'phase_change' : 'field_update',
         field_changed: label, old_value: os || '(empty)', new_value: ns || '(empty)',
       });
@@ -351,7 +358,7 @@ function diffActivity(before, after, leadId, srNo, customerName, actingUser) {
 // --------------------------------------------------------------------------
 // GET /api/leads — list, scoped to owner for BDs, with filters
 // --------------------------------------------------------------------------
-router.get('/', async (req, res) => {
+router.get('/', canReadLeadData, async (req, res) => {
   try {
     const { phase, lead_temperature, lead_source, owner_id, search, overdue } = req.query;
     // business_unit is always taken from the authenticated user (leadScopeWhere) and cannot be
@@ -373,7 +380,13 @@ router.get('/', async (req, res) => {
 
     const leads = await Lead.findAll({
       where,
-      include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] }],
+      include: [
+        { model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] },
+        // Contacts (POCs) are included in the list now so the Leads export can carry them. The list
+        // is already scoped to what the caller may see (a BD only gets their own leads), so this
+        // exposes no contact the caller couldn't already open on the lead itself.
+        { model: LeadContact, as: 'contacts', attributes: ['name', 'phone', 'email', 'designation'] },
+      ],
       order: [['sr_no', 'ASC']],
     });
     return res.json(leads);
@@ -385,7 +398,7 @@ router.get('/', async (req, res) => {
 // --------------------------------------------------------------------------
 // GET /api/leads/:id — single lead with contacts, activity, stage history
 // --------------------------------------------------------------------------
-router.get('/:id', async (req, res) => {
+router.get('/:id', canReadLeadData, async (req, res) => {
   try {
     const lead = await Lead.findByPk(req.params.id, {
       include: [
@@ -407,7 +420,7 @@ router.get('/:id', async (req, res) => {
 // --------------------------------------------------------------------------
 // POST /api/leads — create
 // --------------------------------------------------------------------------
-router.post('/', async (req, res) => {
+router.post('/', requireModule('leads', 'full'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const body = { ...req.body };
@@ -450,7 +463,8 @@ router.post('/', async (req, res) => {
     // Activity log — creation event
     await ActivityLog.create({
       lead_id: lead.id, lead_sr_no: lead.sr_no, customer_name: lead.customer_name,
-      user_name: req.user.name, action_type: 'lead_created', note: 'New lead created',
+      user_name: req.user.name, user_id: req.user.id, user_email: req.user.email,
+      action_type: 'lead_created', note: 'New lead created',
     }, { transaction: t });
 
     await t.commit();
@@ -465,7 +479,7 @@ router.post('/', async (req, res) => {
 // --------------------------------------------------------------------------
 // PUT /api/leads/:id — update
 // --------------------------------------------------------------------------
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const existing = await Lead.findByPk(req.params.id, { transaction: t });
@@ -526,7 +540,7 @@ router.put('/:id', async (req, res) => {
       }, { transaction: t });
     }
 
-    const rows = diffActivity(before, payload, existing.id, existing.sr_no, existing.customer_name, req.user.name);
+    const rows = diffActivity(before, payload, existing.id, existing.sr_no, existing.customer_name, req.user);
     if (rows.length) await ActivityLog.bulkCreate(rows, { transaction: t });
 
     await t.commit();
@@ -541,7 +555,7 @@ router.put('/:id', async (req, res) => {
 // --------------------------------------------------------------------------
 // PUT /api/leads/bulk — bulk reassign or bulk phase change (admin only)
 // --------------------------------------------------------------------------
-router.put('/bulk/update', adminOnly, async (req, res) => {
+router.put('/bulk/update', adminOnly, requireModule('leads', 'edit'), async (req, res) => {
   try {
     const { ids, owner_id, phase } = req.body;
     if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ message: 'ids[] required' });
@@ -571,7 +585,7 @@ router.put('/bulk/update', adminOnly, async (req, res) => {
 // --------------------------------------------------------------------------
 // DELETE /api/leads/:id — admin only
 // --------------------------------------------------------------------------
-router.delete('/:id', adminOnly, async (req, res) => {
+router.delete('/:id', adminOnly, requireModule('leads', 'full'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const lead = await Lead.findByPk(req.params.id, { transaction: t });

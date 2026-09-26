@@ -31,6 +31,33 @@ export function computeTcvLakhs(form) {
   return tcv > 0 ? +tcv.toFixed(2) : '';
 }
 
+// The contract value used for PRIORITIZATION (see utils/leadPriority.js) — deliberately
+// narrower than computeTcvLakhs: the JHES platform line plus the device line, with IPTV
+// excluded. Always derived from the current rate/qty fields rather than the stored
+// potential_tcv_lakhs, so the ranking can't be skewed by a stale or hand-typed total.
+//
+// Forecast rows arrive with this already derived server-side as `price_tcv_lakhs` (the
+// forecast API withholds raw rates), so that value is used when present. Mirror of
+// priceFields() in backend/routes/forecast.js — keep the two in sync.
+export function priorityTcvLakhs(lead) {
+  if (lead == null) return 0;
+  const pre = parseFloat(lead.price_tcv_lakhs);
+  if (Number.isFinite(pre)) return pre;
+
+  const months = parseInt(lead.contract_period_months, 10) || 0;
+  const line = (included, rate, qty, nature) => {
+    if (!included) return 0;
+    const r = parseFloat(rate) || 0;
+    const q = parseInt(qty, 10) || 0;
+    if (!r || !q) return 0;
+    return (nature === 'opex' ? r * q * months : r * q) / 100000;
+  };
+  const jhes = line(lead.includes_jhes, lead.jhes_rate, lead.jhes_qty, 'opex');
+  const device = line(lead.includes_device, lead.device_rate, lead.device_qty, lead.device_cost_type === 'opex' ? 'opex' : 'capex');
+  const total = jhes + device;
+  return total > 0 ? +total.toFixed(2) : 0;
+}
+
 // First-year Annual Contract Value in lakhs. OPEX is annualised across the contract term; CAPEX
 // (one-time) is realised in full in year 1. For a hand-typed TCV (no service breakdown, e.g. JHES)
 // the whole value is annualised evenly. Returns null when it can't be computed.
@@ -55,6 +82,45 @@ export function stripHtml(html) {
   const div = document.createElement('div');
   div.innerHTML = html;
   return (div.textContent || div.innerText || '').trim();
+}
+
+// --- Contact (POC) helpers for exports --------------------------------------------------------
+// A lead can have several POCs (lead.contacts); the first is treated as the primary. These render
+// them for Excel so single-contact leads (the common case) read cleanly in dedicated columns while
+// multi-contact leads keep every contact rather than silently dropping the extras.
+
+// The primary contact's fields as a { name, phone, email, designation } object, blanks when absent.
+export function primaryContact(lead) {
+  const c = (lead && Array.isArray(lead.contacts) && lead.contacts[0]) || {};
+  return {
+    name: c.name || '',
+    phone: c.phone || '',
+    email: c.email || '',
+    designation: c.designation || '',
+  };
+}
+
+// One contact as a compact single-cell string: "Name (Designation) · phone · email".
+export function formatContact(c) {
+  if (!c) return '';
+  const bits = [];
+  if (c.name) bits.push(c.designation ? `${c.name} (${c.designation})` : c.name);
+  if (c.phone) bits.push(c.phone);
+  if (c.email) bits.push(c.email);
+  return bits.join(' · ');
+}
+
+// Every POC on the lead, one per line — for a single "All Contacts" export cell.
+export function formatAllContacts(lead) {
+  const list = (lead && Array.isArray(lead.contacts)) ? lead.contacts : [];
+  return list.map(formatContact).filter(Boolean).join('\n');
+}
+
+// Contacts after the primary, one per line — populated only when a lead has more than one POC, so
+// the dedicated primary-contact columns stay the everyday view.
+export function formatOtherContacts(lead) {
+  const list = (lead && Array.isArray(lead.contacts)) ? lead.contacts.slice(1) : [];
+  return list.map(formatContact).filter(Boolean).join('\n');
 }
 
 export function fmtDate(d) {

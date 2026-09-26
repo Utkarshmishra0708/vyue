@@ -59,7 +59,12 @@ function NatureChip({ nature }) {
 }
 
 export default function LeadForm({ lead, onSave, onCancel }) {
-  const { user, isAdmin, canManageDropdowns } = useAuth();
+  const { user, isAdmin, canManageDropdowns, canEdit, canFull, canAct } = useAuth();
+  // Per-module levels: Edit can change existing leads, Full can also create. Read-only opens the
+  // form purely to view — a disabled fieldset covers every input at once, so no control is missed.
+  const leadsReadOnly = !canAct || !canEdit('leads');
+  // 'Manage' opens the dropdown-option editors: module-level configuration, which Edit excludes.
+  const showManage = canAct && canManageDropdowns && canFull('leads');
   const isJHES = user.business_unit === 'jhes';
   const isSurveillance = user.business_unit === 'surveillance';
 
@@ -305,6 +310,12 @@ export default function LeadForm({ lead, onSave, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      {leadsReadOnly && (
+        <div style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#475569' }}>
+          👁 Read-only — you can view this lead but not change it.
+        </div>
+      )}
+      <fieldset disabled={leadsReadOnly} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 22 }}>
       {error && <div className="badge badge-red" style={{ padding: '8px 12px', fontSize: 13 }}>{error}</div>}
 
       {/* PO Type — chosen at creation. An existing lead is always an Individual PO. */}
@@ -448,7 +459,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
                 {form.lead_source && !sourceOpts.includes(form.lead_source) && <option value={form.lead_source}>{form.lead_source}</option>}
                 {sourceOpts.map(s => <option key={s}>{s}</option>)}
               </select>
-              {canManageDropdowns && <DropdownManager field="lead_source" label="Lead Source" onChange={loadDropdowns} />}
+              {showManage && <DropdownManager field="lead_source" label="Lead Source" onChange={loadDropdowns} />}
             </div>
           </Field>
           {form.lead_source === 'Channel Partner' && (
@@ -467,7 +478,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
                   {channelPartners.map(cp => <option key={cp} value={cp}>{cp}</option>)}
                   <option value="__other__">Other (enter name)…</option>
                 </select>
-                {canManageDropdowns && <DropdownManager field="channel_partner" label="Channel Partner" onChange={loadDropdowns} />}
+                {showManage && <DropdownManager field="channel_partner" label="Channel Partner" onChange={loadDropdowns} />}
               </div>
               {cpOther && (
                 <input required className="input" style={{ marginTop: 8 }} placeholder="Enter new channel partner name"
@@ -498,7 +509,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
                       {affiliates.map(a => <option key={a} value={a}>{a}</option>)}
                       <option value="__other__">Other (enter name)…</option>
                     </select>
-                    {canManageDropdowns && <DropdownManager field="lead_affiliate" label="Lead Affiliate" onChange={loadDropdowns} />}
+                    {showManage && <DropdownManager field="lead_affiliate" label="Lead Affiliate" onChange={loadDropdowns} />}
                   </div>
                   {affOther && (
                     <input required className="input" style={{ marginTop: 8 }} placeholder="Enter new affiliate name"
@@ -517,7 +528,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
                 {form.new_or_renewal && !renewalOpts.includes(form.new_or_renewal) && <option value={form.new_or_renewal}>{form.new_or_renewal}</option>}
                 {renewalOpts.map(r => <option key={r}>{r}</option>)}
               </select>
-              {canManageDropdowns && <DropdownManager field="new_or_renewal" label="New / Renewal" onChange={loadDropdowns} />}
+              {showManage && <DropdownManager field="new_or_renewal" label="New / Renewal" onChange={loadDropdowns} />}
             </div>
           </Field>
           <Field label="Lead Rating" required>
@@ -527,7 +538,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
                 {form.lead_temperature && !ratingOpts.includes(form.lead_temperature) && <option value={form.lead_temperature}>{form.lead_temperature}</option>}
                 {ratingOpts.map(r => <option key={r}>{r}</option>)}
               </select>
-              {canManageDropdowns && <DropdownManager field="lead_temperature" label="Lead Rating" onChange={loadDropdowns} />}
+              {showManage && <DropdownManager field="lead_temperature" label="Lead Rating" onChange={loadDropdowns} />}
             </div>
           </Field>
           <Field label="Competitor"><input className="input" value={form.competitor} onChange={e => set('competitor', e.target.value)} placeholder="Optional" /></Field>
@@ -645,7 +656,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
                           {form.device_sku && !deviceSkus.includes(form.device_sku) && <option value={form.device_sku}>{form.device_sku}</option>}
                           {deviceSkus.map(sku => <option key={sku} value={sku}>{sku}</option>)}
                         </select>
-                        {canManageDropdowns && <DropdownManager field="device_sku" label="Device SKU" onChange={loadDropdowns} />}
+                        {showManage && <DropdownManager field="device_sku" label="Device SKU" onChange={loadDropdowns} />}
                       </div>
                     </Field>
                     {form.device_sku && DEVICE_SKU_MAP[form.device_sku] && <Field label="Device Type"><input className="input" readOnly disabled value={DEVICE_SKU_MAP[form.device_sku]} style={{ background: '#f8fafc' }} /></Field>}
@@ -853,6 +864,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
         <button type="button" className="btn" onClick={onCancel}>Cancel</button>
         <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : (lead ? 'Save Changes' : (poType === 'global' ? 'Create Global PO' : 'Create Lead'))}</button>
       </div>
+      </fieldset>
     </form>
   );
 }

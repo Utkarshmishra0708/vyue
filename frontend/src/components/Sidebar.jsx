@@ -1,15 +1,34 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { switchPlatform } from '../services/api';
 import { BU_CONFIG, ROLE_LABEL } from '../utils/constants';
 import { IS_PROD } from '../env';
 
 const NAV_ICONS = {
-  leads: '📋', dashboard: '📊', forecast: '📦', reports: '📁', settings: '⚙️', 'change-password': '🔒', voc: '🗣️',
+  leads: '📋', dashboard: '📊', forecast: '📦', reports: '📁', activity: '🕒', settings: '⚙️', 'change-password': '🔒', voc: '🗣️',
 };
 
 export default function Sidebar() {
-  const { user, logout, isAdmin, isSuperAdmin, isConsoleOnly, canForecast } = useAuth();
+  const { user, login, logout, isAdmin, isSuperAdmin, isConsoleOnly, canView, canSeeActivityFeed } = useAuth();
+  const [switching, setSwitching] = useState(false);
+
+  // N1: hop to another platform's account in the same session. We swap the token via login(), then
+  // hard-reload — a platform switch changes every page's data (leads, dashboard, forecast, activity)
+  // and the user's permissions, so a reload re-fetches everything cleanly under the new account
+  // rather than trying to invalidate each mounted page's state individually.
+  const onSwitchPlatform = async (bu) => {
+    if (bu === user.business_unit || switching) return;
+    setSwitching(true);
+    try {
+      const data = await switchPlatform(bu);
+      login(data.token, data.user);          // updates the stored token
+      window.location.reload();              // re-bootstraps the whole app under the new platform
+    } catch {
+      window.alert('Could not switch platform. Please try again.');
+      setSwitching(false);
+    }
+  };
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebarCollapsed') === '1');
@@ -34,12 +53,18 @@ export default function Sidebar() {
         ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
       ]
     : [
-        { path: '/leads', label: 'Leads' },
-        { path: '/dashboard', label: 'Dashboard' },
+        // The four general modules ALWAYS appear (RBAC spec): a module the user can't open stays
+        // visible but greyed (disabled), and clicking it shows an access message rather than the
+        // content — it is never hidden. Settings/Activity/VOC are outside the per-module model.
+        { path: '/leads',     label: 'Leads',     disabled: !canView('leads') },
+        { path: '/dashboard', label: 'Dashboard', disabled: !canView('dashboard') },
         // VOC (Voice of Customer) is Surveillance-only — never shown for other businesses.
         ...(user.business_unit === 'surveillance' ? [{ path: '/voc', label: 'VOC' }] : []),
-        ...(canForecast ? [{ path: '/forecast', label: 'Forecast' }] : []),
-        ...(isAdmin ? [{ path: '/reports', label: 'Reports' }] : []),
+        { path: '/forecast',  label: 'Forecast',  disabled: !canView('forecast') },
+        { path: '/reports',   label: 'Reports',   disabled: !canView('reports') },
+        // Global activity feed (J1) — Business Admin / Global Admin by role, a Manager only if
+        // granted, a Team Member never. Gated on the resolved feed grant, not on lead access.
+        ...(canSeeActivityFeed ? [{ path: '/activity', label: 'Activity' }] : []),
         ...(isAdmin ? [{ path: '/settings', label: isSuperAdmin ? 'Admin Console' : 'Settings' }] : []),
         // Self-service password change is DEV-ONLY; production is SSO-only.
         ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
@@ -84,25 +109,51 @@ export default function Sidebar() {
       <nav style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
         {navItems.map(item => {
           const active = location.pathname === item.path;
+          // A greyed (No Access) module is muted and shows a lock, but stays clickable — clicking it
+          // lands on the module's access message (rendered by ModuleRoute), which is the required
+          // feedback rather than a dead, unclickable item.
+          const disabled = !!item.disabled;
           return (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? item.label : (disabled ? `${item.label} — no access` : undefined)}
               style={{
                 width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
                 padding: '9px 10px', marginBottom: 4, borderRadius: 8, border: 'none', cursor: 'pointer',
-                background: active ? '#4f46e5' : 'transparent', color: active ? '#fff' : '#94a3b8',
-                fontSize: 13, fontWeight: 600,
+                background: active ? (disabled ? '#1e293b' : '#4f46e5') : 'transparent',
+                color: disabled ? '#475569' : (active ? '#fff' : '#94a3b8'),
+                fontSize: 13, fontWeight: 600, opacity: disabled ? 0.7 : 1,
               }}>
               <span>{NAV_ICONS[item.path.slice(1)] || '•'}</span>
-              {!collapsed && item.label}
+              {!collapsed && <span style={{ flex: 1 }}>{item.label}</span>}
+              {!collapsed && disabled && <span style={{ fontSize: 11 }}>🔒</span>}
             </button>
           );
         })}
       </nav>
 
       <div style={{ padding: 12, borderTop: '1px solid #1e293b' }}>
+        {/* Platform switcher (N1): shown only when this person holds an account on more than one
+            platform (a Global Admin). Switching hops to that platform's account in the same session,
+            no re-login. A single-platform user (PMO/BD) never sees it. */}
+        {!collapsed && !isConsoleOnly && Array.isArray(user.platforms) && user.platforms.length > 1 && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: '#64748b', marginBottom: 4 }}>PLATFORM</div>
+            <select
+              value={user.business_unit}
+              disabled={switching}
+              onChange={(e) => onSwitchPlatform(e.target.value)}
+              style={{
+                width: '100%', padding: '7px 8px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', cursor: 'pointer',
+              }}>
+              {user.platforms.map(bu => (
+                <option key={bu} value={bu}>{(BU_CONFIG[bu] || {}).label || bu}</option>
+              ))}
+            </select>
+          </div>
+        )}
         {!collapsed && (
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{user.name}</div>

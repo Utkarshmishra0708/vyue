@@ -3,7 +3,8 @@
 // are DERIVED from linked leads at PO Received, so the figures are always live (see services/chainPool.js).
 const router = require('express').Router();
 const { GlobalPo, Lead } = require('../models');
-const { authenticate, adminOnly } = require('../middleware/auth');
+const { authenticate, adminOnly, requireModule, requireAnyModule } = require('../middleware/auth');
+const audit = require('../services/audit');
 const { chainStatus, leadDevices, WON_STAGE } = require('../services/chainPool');
 
 router.use(authenticate);
@@ -28,7 +29,7 @@ function statusOf(globalPo, pos) {
 
 // GET /api/global-pos — chains for the caller's business, each with live pool status (for the
 // chain-selection dropdown and the chains list).
-router.get('/', async (req, res) => {
+router.get('/', requireAnyModule(['leads', 'dashboard', 'reports'], 'read'), async (req, res) => {
   try {
     const chains = await GlobalPo.findAll({ where: { business_unit: req.user.business_unit }, order: [['chain_name', 'ASC']] });
     const out = [];
@@ -43,7 +44,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/global-pos/:id — detail: original/consumed/remaining/overage + contributing won POs.
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAnyModule(['leads', 'dashboard', 'reports'], 'read'), async (req, res) => {
   try {
     const c = await GlobalPo.findByPk(req.params.id);
     if (!c) return res.status(404).json({ message: 'Global PO not found' });
@@ -81,7 +82,7 @@ function parseChainBody(body) {
 }
 
 // POST /api/global-pos — create a chain reference record. Any non-forecast user (same as creating a lead).
-router.post('/', async (req, res) => {
+router.post('/', requireModule('leads', 'full'), async (req, res) => {
   try {
     const { out, errs } = parseChainBody(req.body);
     if (!out.chain_name) errs.push('Chain name is required');
@@ -90,6 +91,11 @@ router.post('/', async (req, res) => {
     const created = await GlobalPo.create({
       ...out, business_unit: req.user.business_unit, created_by: req.user.id, updated_by: req.user.id,
     });
+    await audit.record({
+      actor: req.user, entityType: 'chain', entityId: created.id, subject: created.chain_name,
+      businessUnit: created.business_unit, action: 'chain_created',
+      field: 'Chain', from: null, to: created.chain_name, note: 'Chain created',
+    });
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -97,14 +103,26 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/global-pos/:id — edit chain fields.
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireModule('leads', 'full'), async (req, res) => {
   try {
     const c = await GlobalPo.findByPk(req.params.id);
     if (!c) return res.status(404).json({ message: 'Global PO not found' });
     if (c.business_unit !== req.user.business_unit) return res.status(403).json({ message: 'Forbidden' });
     const { out, errs } = parseChainBody(req.body);
     if (errs.length) return res.status(400).json({ message: errs[0] });
+    const before = c.toJSON();
     await GlobalPo.update({ ...out, updated_by: req.user.id }, { where: { id: c.id } });
+    const CHAIN_LABELS = {
+      chain_name: 'Chain Name', device_total: 'Device Total', price_lakhs: 'Price (L)',
+      expected_start_date: 'Expected Start', expected_end_date: 'Expected End',
+    };
+    await audit.recordDiff(
+      { actor: req.user, entityType: 'chain', entityId: c.id, subject: out.chain_name || before.chain_name,
+        businessUnit: c.business_unit, action: 'field_update' },
+      Object.keys(CHAIN_LABELS)
+        .filter(k => k in out)
+        .map(k => ({ field: CHAIN_LABELS[k], from: before[k], to: out[k] })),
+    );
     return res.json(await GlobalPo.findByPk(c.id));
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -112,12 +130,17 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/global-pos/:id — admin only. Linked Individual POs become standalone (FK ON DELETE SET NULL).
-router.delete('/:id', adminOnly, async (req, res) => {
+router.delete('/:id', adminOnly, requireModule('leads', 'full'), async (req, res) => {
   try {
     const c = await GlobalPo.findByPk(req.params.id);
     if (!c) return res.status(404).json({ message: 'Global PO not found' });
     if (req.user.role !== 'super_admin' && c.business_unit !== req.user.business_unit) return res.status(403).json({ message: 'Forbidden' });
     await c.destroy();
+    await audit.record({
+      actor: req.user, entityType: 'chain', entityId: c.id, subject: c.chain_name,
+      businessUnit: c.business_unit, action: 'chain_deleted',
+      field: 'Chain', from: c.chain_name, to: null, note: 'Chain deleted',
+    });
     return res.json({ message: 'Global PO deleted' });
   } catch (err) {
     return res.status(500).json({ message: err.message });

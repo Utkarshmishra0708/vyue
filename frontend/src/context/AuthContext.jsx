@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { getMe } from '../services/api';
 import { IS_PROD } from '../env';
+import { meets } from '../utils/permissions';
 
 const AuthContext = createContext(null);
 
@@ -23,6 +24,29 @@ export function AuthProvider({ children }) {
       .catch(() => { localStorage.removeItem('salescrm_token'); setUser(null); })
       .finally(() => setLoading(false));
   }, []);
+
+  // Per-module permissions must take effect WITHOUT the user re-logging in. They live on the user
+  // row (never in the JWT), so the server already honours a change on the very next request; this
+  // re-poll is what makes the UI follow. Refreshing on window focus covers the realistic case —
+  // an admin changes access and tells the person — and the interval catches an idle open tab.
+  useEffect(() => {
+    if (!user) return undefined;
+    let cancelled = false;
+    const refresh = () => {
+      if (!localStorage.getItem('salescrm_token')) return;
+      getMe()
+        .then(fresh => { if (!cancelled) setUser(fresh); })
+        .catch(() => { /* transient failure — keep the current view, next poll retries */ });
+    };
+    // Safety net: if whatever set this user didn't carry a permission map, fetch one straight away
+    // rather than leaving the app to believe they have no modules until the next poll.
+    if (!user.permissions) refresh();
+    const onFocus = () => refresh();
+    window.addEventListener('focus', onFocus);
+    const timer = setInterval(refresh, 60000);
+    return () => { cancelled = true; window.removeEventListener('focus', onFocus); clearInterval(timer); };
+    // Re-arm only when the identity changes, not on every permission refresh.
+  }, [user?.id]);
 
   const login = useCallback((token, u) => {
     localStorage.setItem('salescrm_token', token);
@@ -52,7 +76,17 @@ export function AuthProvider({ children }) {
   // Admin tier — reaches Settings, Reports, bulk actions.
   const ADMIN_TIER      = ['super_admin', 'business_admin', 'pmo'];
   const isAdmin         = user && ADMIN_TIER.includes(user.role);
-  const isSuperAdmin    = user && user.role === 'super_admin';
+  // --- Cross-platform Super Admin (migration 021) -----------------------------------------
+  // A GRANT held alongside the platform role, so it is additive: a Signage PMO can also be a
+  // Super Admin without losing their platform role. Spans every platform automatically.
+  const superAdminScope   = user?.super_admin_scope || null;      // null | 'read' | 'write'
+  const isCrossPlatform   = !!user?.is_super_admin;
+  const isReadOnlyAdmin   = superAdminScope === 'read';
+  // A Read-only Super Admin makes no changes anywhere — every action affordance is hidden.
+  // `canAct` is the single question pages ask before rendering an edit/delete/toggle control.
+  const canAct            = !isReadOnlyAdmin;
+  // Legacy flag: the role value OR the new grant. Kept so existing checks keep working.
+  const isSuperAdmin    = !!(user && (user.role === 'super_admin' || user.is_super_admin));
   // Console-only session: a super_admin who signed in through the Admin Login button. The app shows
   // ONLY the Admin Console for them — no business Leads/Dashboard/Forecast/Reports.
   const isConsoleOnly   = !!(consoleMode && user && user.role === 'super_admin');
@@ -66,10 +100,34 @@ export function AuthProvider({ children }) {
   // Who can add/remove lead-form dropdown options (device SKUs, sources, partners, ratings, …): the
   // admin tier including PMO. Non-super roles are scoped to their own business by the API.
   const canManageDropdowns = user && (user.role === 'super_admin' || user.role === 'business_admin' || user.role === 'pmo');
-  // Forecast dashboard is login-gated: admin tier and forecast accounts always, plus anyone granted.
-  const canForecast     = user && (ADMIN_TIER.includes(user.role) || user.role === 'forecast' || !!user.forecast_access);
+  // Forecast access now comes from the per-module level (Settings -> Access), seeded from the
+  // legacy forecast_access flag by migration 020. Kept as a named flag because several components
+  // still read it, but it is no longer a separate switch.
+  const canForecast     = meets(user?.permissions, 'forecast', 'read');
 
-  const value = { user, loading, login, logout, isAuthenticated, isAdmin, isSuperAdmin, isConsoleOnly, isBusinessAdmin, isBD, isForecastOnly, canManageUsers, canManageDropdowns, canForecast };
+  // --- Per-module access levels (second dimension alongside role and business_unit) -------------
+  // The server resolves these and returns them on /api/auth/me; role-derived defaults are filled in
+  // there, so an empty map here means genuinely no access rather than "not configured".
+  const permissions = user?.permissions || {};
+  // can('leads', 'edit') — at least that level in that module.
+  const can = useCallback((module, minLevel = 'read') => meets(user?.permissions, module, minLevel), [user]);
+  // Convenience wrappers for the three questions pages actually ask.
+  const canView = useCallback((module) => meets(user?.permissions, module, 'read'), [user]);
+  const canEdit = useCallback((module) => meets(user?.permissions, module, 'edit'), [user]);
+  const canFull = useCallback((module) => meets(user?.permissions, module, 'full'), [user]);
+  // Who may open the permission editor. Server-side this is the same admin tier that already
+  // manages users, so it grants nothing new.
+  const canManagePermissions = !!user?.can_manage_permissions;
+  // Platform-wide Activity feed visibility (J1): Business Admin / Global Admin by role, a Manager
+  // only if granted, a Team Member never. Resolved server-side; the client just reads the boolean.
+  const canSeeActivityFeed = !!user?.can_see_activity_feed;
+
+  const value = {
+    user, loading, login, logout, isAuthenticated, isAdmin, isSuperAdmin, isConsoleOnly,
+    isBusinessAdmin, isBD, isForecastOnly, canManageUsers, canManageDropdowns, canForecast,
+    permissions, can, canView, canEdit, canFull, canManagePermissions,
+    superAdminScope, isCrossPlatform, isReadOnlyAdmin, canAct, canSeeActivityFeed,
+  };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

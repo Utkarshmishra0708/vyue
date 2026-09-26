@@ -9,7 +9,8 @@ import GlobalPosView from '../components/GlobalPosView';
 import { useAuth } from '../context/AuthContext';
 import { getLeads, getLead, deleteLead, updateLead, getBds, bulkUpdateLeads, getStageHistory, getDropdowns } from '../services/api';
 import { PHASE_BADGE } from '../utils/constants';
-import { fmtDate, isTATBreached, isOverdue, getPOExpiryDays, hasConfidence, confidenceTrend, buildRotMetrics, getRotState, stripHtml } from '../utils/leadHelpers';
+import { fmtDate, isTATBreached, isOverdue, getPOExpiryDays, hasConfidence, confidenceTrend, buildRotMetrics, getRotState, stripHtml, primaryContact, formatOtherContacts } from '../utils/leadHelpers';
+import { sortWithWonLast } from '../utils/leadPriority';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import { writeFormattedSheet } from '../utils/excelExport';
 
@@ -33,7 +34,12 @@ function TrendArrow({ trend }) {
 }
 
 export default function LeadsPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, canEdit, canFull, canAct } = useAuth();
+  // Create and delete are Full-Access capabilities. Chains is module-level configuration, which
+  // Edit deliberately excludes. Bulk update mutates records, so it needs Edit.
+  // canAct is false for a Read-only Super Admin, who sees no action affordance on any platform.
+  const leadsCanEdit = canAct && canEdit('leads');
+  const leadsCanFull = canAct && canFull('leads');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -90,9 +96,35 @@ export default function LeadsPage() {
     if (conf) setFilterConf(conf);
   }, [searchParams, isAdmin]);
 
+  // Deep link from the Forecast dashboard (?lead=<id>&from=forecast): open that lead's detail
+  // straight away, and offer a way back. The forecast's column selection is persisted client-side,
+  // so returning there restores the view the user left.
+  const deepLinkId = searchParams.get('lead');
+  const cameFromForecast = searchParams.get('from') === 'forecast';
+  const cameFromActivity = searchParams.get('from') === 'activity';
+  const [deepLinkError, setDeepLinkError] = useState('');
+  useEffect(() => {
+    if (!deepLinkId) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const full = await getLead(deepLinkId);
+        if (cancelled) return;
+        setTab('form'); setEditLead(full); setShowForm(true);
+      } catch {
+        // The forecast spans the whole business unit, but a Team Member may only read their own leads.
+        if (!cancelled) setDeepLinkError('That lead could not be opened — it may belong to another team member.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [deepLinkId]);
+
   const { lastEntry: rotLastEntry, teamAvg: rotTeamAvg } = useMemo(() => buildRotMetrics(stageHistory), [stageHistory]);
 
-  const filtered = useMemo(() => leads.filter(l => {
+  // Ranked with the shared prioritization order (stage → confidence → chain → TCV), with
+  // won leads pushed to the very end — see utils/leadPriority.js. Re-derived per render, so
+  // the list always reflects current scores rather than the server's sr_no ordering.
+  const filtered = useMemo(() => sortWithWonLast(leads.filter(l => {
     const s = search.toLowerCase();
     const matchSearch = !s || [l.customer_name, l.city, l.state, l.lead_source, l.competitor, l.device_sku]
       .some(f => f?.toLowerCase().includes(s));
@@ -103,7 +135,7 @@ export default function LeadsPage() {
       && (!filterBDs.length || filterBDs.includes(l.owner?.name))
       && (!filterOverdue || isOverdue(l))
       && (!filterConf || leadConfBand(l) === filterConf);
-  }), [leads, search, filterPhases, filterTemps, filterSources, filterBDs, filterOverdue, filterConf]);
+  })), [leads, search, filterPhases, filterTemps, filterSources, filterBDs, filterOverdue, filterConf]);
 
   const openCount = filtered.filter(l => !['Lost', 'On Hold', 'PO Received'].includes(l.phase)).length;
 
@@ -160,28 +192,75 @@ export default function LeadsPage() {
   const exportExcel = async () => {
     const toExport = selectedIds.size > 0 ? filtered.filter(l => selectedIds.has(l.id)) : filtered;
     const XLSX = await import('xlsx');
-    const rows = toExport.map(l => ({
-      'Sr No': l.sr_no, 'Business Unit': (l.business_unit || '').toUpperCase(), 'Customer': l.customer_name,
-      'City': l.city || '', 'State': l.state || '', 'Lead Owner': l.owner?.name || '',
-      'Lead Source': l.lead_source, 'Channel Partner': l.channel_partner_name || '', 'KAM Name': l.kam_name || '', 'Affiliate Name': l.affiliate_name || '',
-      'New/Renewal': l.new_or_renewal, 'Lead Rating': l.lead_temperature, 'Competitor': l.competitor || '',
-      'Quantity (Total)': l.quantity, 'Potential TCV (L)': l.potential_tcv_lakhs, 'Contract Period (Mo)': l.contract_period_months,
-      'PO Validity (Mo)': l.po_validity_months || '', 'ACV (L/yr)': l.acv_lakhs, 'Contract Value (L)': l.contract_value_lakhs || '',
-      'Phase': l.phase, 'Confidence %': l.confidence_score ?? '', 'Next Follow-Up': l.next_followup_date || '', 'PO Expected Date': l.po_expected_date || '',
-      'Service Start': l.service_start_date || '', 'Service End': l.service_end_date || '',
-      'Platform': l.includes_platform ? 'Yes' : '', 'Platform Rate (₹)': l.platform_rate || '', 'Platform Qty': l.platform_qty || '',
-      'CMS': l.includes_cms ? 'Yes' : '', 'CMS Rate (₹)': l.cms_rate || '', 'CMS Qty': l.cms_qty || '',
-      'Connectivity': l.includes_connectivity ? 'Yes' : '', 'Connectivity Rate (₹)': l.connectivity_rate || '', 'Connectivity Qty': l.connectivity_qty || '',
-      'AMC': l.includes_amc ? 'Yes' : '', 'AMC Rate (₹)': l.amc_rate || '', 'AMC Qty': l.amc_qty || '',
-      'Display': l.includes_display ? 'Yes' : '', 'Display Rate (₹)': l.display_rate || '', 'Display Qty': l.display_qty || '',
-      'Installation': l.includes_installation ? 'Yes' : '', 'Installation Rate (₹)': l.installation_rate || '', 'Installation Qty': l.installation_qty || '',
-      'IPTV': l.includes_iptv ? 'Yes' : '', 'IPTV Rate (₹)': l.iptv_rate || '', 'IPTV Qty': l.iptv_qty || '',
-      'JHES': l.includes_jhes ? 'Yes' : '', 'JHES Rate (₹)': l.jhes_rate || '', 'JHES Qty': l.jhes_qty || '',
-      'Device': l.includes_device ? 'Yes' : '', 'Device SKU': l.device_sku || '', 'Device Cost Type': l.device_cost_type ? l.device_cost_type.toUpperCase() : '', 'Device Rate (₹)': l.device_rate || '',
-      'Device Qty': l.device_qty || '', 'Device Requested Date': l.device_requested_date || '',
-      'JHES Product': l.jhes_product || '', 'Actual PO Value (L)': l.po_actual_value_lakhs || '', 'Lost Reason': l.lost_reason || '',
-      'Additional Notes': stripHtml(l.additional_notes), 'Created At': l.createdAt ? fmtDate(l.createdAt) : '',
-    }));
+
+    // Which service columns belong in this sheet depends on the business unit(s) being exported.
+    // Signage's per-service columns (Platform, CMS, AMC…) are meaningless on a JHES lead and
+    // vice-versa, so a single-business export only carries that business's services. Surveillance
+    // stores its services as a JSON list rather than per-service columns, so it gets one summary
+    // column. Device (hardware) is common to every business, so it rides along whenever any lead
+    // has one. A mixed super-admin export shows the union — still relevant to some row in the sheet.
+    const busPresent = new Set(toExport.map(l => l.business_unit).filter(Boolean));
+    const SERVICE_GROUPS = [
+      { key: 'platform',     bu: 'signage', label: 'Platform' },
+      { key: 'cms',          bu: 'signage', label: 'CMS' },
+      { key: 'connectivity', bu: 'signage', label: 'Connectivity' },
+      { key: 'amc',          bu: 'signage', label: 'AMC' },
+      { key: 'display',      bu: 'signage', label: 'Display' },
+      { key: 'installation', bu: 'signage', label: 'Installation' },
+      { key: 'jhes',         bu: 'jhes',    label: 'JHES' },
+      { key: 'iptv',         bu: 'jhes',    label: 'IPTV' },
+    ];
+    const activeServices = SERVICE_GROUPS.filter(g => busPresent.has(g.bu));
+    const showDevice = toExport.some(l => l.includes_device);
+    const showSurv = busPresent.has('surveillance');
+    const showJhesProduct = busPresent.has('jhes');
+
+    // Surveillance services (services_json: [{ label, nature, rate, qty }]) -> one readable cell.
+    const survServices = (l) => {
+      try {
+        const arr = l.services_json ? JSON.parse(l.services_json) : [];
+        return arr.filter(s => s && s.label).map(s => `${s.label} (₹${s.rate ?? 0} × ${s.qty ?? 0})`).join('; ');
+      } catch { return ''; }
+    };
+
+    const rows = toExport.map(l => {
+      const poc = primaryContact(l);
+      const row = {
+        'Sr No': l.sr_no, 'Business Unit': (l.business_unit || '').toUpperCase(), 'Customer': l.customer_name,
+        'City': l.city || '', 'State': l.state || '', 'Lead Owner': l.owner?.name || '',
+        // Contact / POC details (primary contact; any additional POCs listed in "Other Contacts").
+        'Contact Name': poc.name, 'Contact Phone': poc.phone, 'Contact Email': poc.email, 'Contact Designation': poc.designation,
+        'Other Contacts': formatOtherContacts(l),
+        'Lead Source': l.lead_source, 'Channel Partner': l.channel_partner_name || '', 'KAM Name': l.kam_name || '', 'Affiliate Name': l.affiliate_name || '',
+        'New/Renewal': l.new_or_renewal, 'Lead Rating': l.lead_temperature, 'Competitor': l.competitor || '',
+        'Quantity (Total)': l.quantity, 'Potential TCV (L)': l.potential_tcv_lakhs, 'Contract Period (Mo)': l.contract_period_months,
+        'PO Validity (Mo)': l.po_validity_months || '', 'ACV (L/yr)': l.acv_lakhs, 'Contract Value (L)': l.contract_value_lakhs || '',
+        'Phase': l.phase, 'Confidence %': l.confidence_score ?? '', 'Next Follow-Up': l.next_followup_date || '', 'PO Expected Date': l.po_expected_date || '',
+        'Service Start': l.service_start_date || '', 'Service End': l.service_end_date || '',
+      };
+
+      // Business-relevant per-service columns only.
+      for (const g of activeServices) {
+        row[g.label] = l[`includes_${g.key}`] ? 'Yes' : '';
+        row[`${g.label} Rate (₹)`] = l[`${g.key}_rate`] || '';
+        row[`${g.label} Qty`] = l[`${g.key}_qty`] || '';
+      }
+      if (showSurv) row['Surveillance Services'] = survServices(l);
+      if (showDevice) {
+        row['Device'] = l.includes_device ? 'Yes' : '';
+        row['Device SKU'] = l.device_sku || '';
+        row['Device Cost Type'] = l.device_cost_type ? l.device_cost_type.toUpperCase() : '';
+        row['Device Rate (₹)'] = l.device_rate || '';
+        row['Device Qty'] = l.device_qty || '';
+        row['Device Requested Date'] = l.device_requested_date || '';
+      }
+      if (showJhesProduct) row['JHES Product'] = l.jhes_product || '';
+      row['Actual PO Value (L)'] = l.po_actual_value_lakhs || '';
+      row['Lost Reason'] = l.lost_reason || '';
+      row['Additional Notes'] = stripHtml(l.additional_notes);
+      row['Created At'] = l.createdAt ? fmtDate(l.createdAt) : '';
+      return row;
+    });
     writeFormattedSheet(XLSX, rows, 'Leads', `Sales_CRM_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
@@ -194,7 +273,7 @@ export default function LeadsPage() {
       title: 'Sales CRM — Leads',
       subtitle: `${toExport.length} lead${toExport.length > 1 ? 's' : ''} · generated ${fmtDate(new Date())}`,
       tables: [{
-        columns: ['Sr', 'Customer', 'BD', 'Phase', 'Rating', 'TCV (₹L)', 'Conf %', 'Source', 'Next Follow-Up'],
+        columns: ['Sr', 'Customer', 'Team Member', 'Phase', 'Rating', 'TCV (₹L)', 'Conf %', 'Source', 'Next Follow-Up'],
         rows: toExport.map(l => [
           l.sr_no, l.customer_name, l.owner?.name?.split(' ')[0] || '', l.phase, l.lead_temperature,
           l.potential_tcv_lakhs, hasConfidence(l) ? `${Math.round(Number(l.confidence_score))}%` : '—', l.lead_source,
@@ -215,31 +294,39 @@ export default function LeadsPage() {
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {cameFromDashboard && <button className="btn btn-sm" onClick={() => navigate('/dashboard')}>← Dashboard</button>}
+          {cameFromForecast && <button className="btn btn-sm" onClick={() => navigate('/forecast')}>← Forecast</button>}
+          {cameFromActivity && <button className="btn btn-sm" onClick={() => navigate('/activity')}>← Activity</button>}
           <div>
             <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Leads</h1>
             <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{openCount} active · {filtered.length} total</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={() => setShowChains(true)}>🏢 Chains</button>
+          {leadsCanFull && <button className="btn" onClick={() => setShowChains(true)}>🏢 Chains</button>}
           <button className="btn" onClick={exportExcel}>Export Excel</button>
           <button className="btn" onClick={exportPdf}>Export PDF</button>
           <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
             <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, background: view === 'table' ? '#eef2ff' : '#fff' }} onClick={() => setView('table')}>Table</button>
             <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, background: view === 'kanban' ? '#eef2ff' : '#fff' }} onClick={() => setView('kanban')}>Kanban</button>
           </div>
-          <button className="btn btn-primary" onClick={openNew}>+ New Lead</button>
+          {leadsCanFull && <button className="btn btn-primary" onClick={openNew}>+ New Lead</button>}
         </div>
       </div>
 
       <div style={{ padding: 20 }}>
+        {deepLinkError && (
+          <div style={{ marginBottom: 16, background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 10, padding: '10px 14px', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <span>{deepLinkError}</span>
+            <button className="btn btn-sm" onClick={() => setDeepLinkError('')}>Dismiss</button>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 14px' }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginRight: 2 }}>Filters</span>
           <input className="input" style={{ width: 240 }} placeholder="Search customer, city, competitor…" value={search} onChange={e => setSearch(e.target.value)} />
           <MultiSelect label="Phase" options={PHASES} selected={filterPhases} onChange={setFilterPhases} />
           <MultiSelect label="Rating" options={ratingOpts} selected={filterTemps} onChange={setFilterTemps} />
           <MultiSelect label="Source" options={sourceOpts} selected={filterSources} onChange={setFilterSources} />
-          {isAdmin && <MultiSelect label="BD" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
+          {isAdmin && <MultiSelect label="Team Member" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#334155' }}>
             <input type="checkbox" checked={filterOverdue} onChange={e => setFilterOverdue(e.target.checked)} /> Overdue only
           </label>
@@ -278,7 +365,7 @@ export default function LeadsPage() {
               <thead>
                 <tr>
                   {isAdmin && <th></th>}
-                  <th>Sr</th><th>Customer</th>{isAdmin && <th>BD</th>}<th>Phase</th><th>Location</th>
+                  <th>Sr</th><th>Customer</th>{isAdmin && <th>Team Member</th>}<th>Phase</th><th>Location</th>
                   <th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>TCV (₹L)</th><th>Scoring</th><th>Next Follow-Up</th>
                 </tr>
               </thead>
@@ -336,7 +423,7 @@ export default function LeadsPage() {
             </table>
             {isAdmin && filtered.length > 0 && (
               <div style={{ padding: 10 }}>
-                <button className="btn btn-sm" onClick={selectAll}>Select all ({filtered.length})</button>
+                {leadsCanEdit && <button className="btn btn-sm" onClick={selectAll}>Select all ({filtered.length})</button>}
               </div>
             )}
           </div>
@@ -352,7 +439,7 @@ export default function LeadsPage() {
                 {editLead && <span className={`tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>Activity</span>}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                {editLead && isAdmin && <button className="btn btn-sm btn-danger" onClick={() => setDeleteId(editLead.id)}>Delete</button>}
+                {editLead && isAdmin && leadsCanFull && <button className="btn btn-sm btn-danger" onClick={() => setDeleteId(editLead.id)}>Delete</button>}
                 <button className="btn btn-sm" onClick={closeForm}>✕</button>
               </div>
             </div>

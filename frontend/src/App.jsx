@@ -1,11 +1,12 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { PrivateRoute, AdminRoute, ForecastRoute } from './components/PrivateRoute';
+import { PrivateRoute, AdminRoute, ModuleRoute } from './components/PrivateRoute';
 import LoginPage from './pages/LoginPage';
 import LeadsPage from './pages/LeadsPage';
 import DashboardPage from './pages/DashboardPage';
 import ForecastPage from './pages/ForecastPage';
+import ActivityPage from './pages/ActivityPage';
 import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
 import VocPage from './pages/VocPage';
@@ -56,14 +57,20 @@ export default function App() {
             <Route path="/" element={<LoginPage />} />
             <Route path="/login" element={<LoginPage />} />
             {/* Forecast is now login-gated (PMO default, or a PMO grant). */}
-            <Route path="/forecast" element={<ForecastRoute><ForecastPage /></ForecastRoute>} />
+            {/* Gated purely on the Forecast module level now — ForecastRoute's legacy
+                forecast_access check would be a second, conflicting switch for the same thing. */}
+            <Route path="/forecast" element={<ModuleRoute module="forecast"><ForecastPage /></ModuleRoute>} />
             {/* === JIOAUTIFY INTEGRATION: SSO account chooser (prod handoff for emails with two BU
                 accounts). Redeems the ticket stashed by captureSsoFromUrl, then bypasses login. === */}
             <Route path="/sso-select" element={<SsoSelectPage />} />
 
             {/* Authenticated — any role */}
-            <Route path="/leads"            element={<PrivateRoute><LeadsPage /></PrivateRoute>} />
-            <Route path="/dashboard"        element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
+            <Route path="/leads"            element={<PrivateRoute><ModuleRoute module="leads"><LeadsPage /></ModuleRoute></PrivateRoute>} />
+            <Route path="/dashboard"        element={<PrivateRoute><ModuleRoute module="dashboard"><DashboardPage /></ModuleRoute></PrivateRoute>} />
+            {/* Global activity feed (J1). Not a per-module page — its own grant governs it
+                (Business Admin / Global Admin by role, Manager if granted, Team Member never), so the
+                page itself enforces that rather than the module guard. */}
+            <Route path="/activity"         element={<PrivateRoute><ActivityPage /></PrivateRoute>} />
             {/* VOC (Voice of Customer) — Surveillance only (gated inside the page + API). */}
             <Route path="/voc"              element={<PrivateRoute><VocPage /></PrivateRoute>} />
             {/* Self-service password change is DEV-ONLY; production is SSO-only. */}
@@ -72,7 +79,7 @@ export default function App() {
             )}
 
             {/* Admin/PMO only */}
-            <Route path="/reports"          element={<AdminRoute><ReportsPage /></AdminRoute>} />
+            <Route path="/reports"          element={<AdminRoute><ModuleRoute module="reports"><ReportsPage /></ModuleRoute></AdminRoute>} />
             <Route path="/settings"         element={<AdminRoute><SettingsPage /></AdminRoute>} />
 
             {/* Catch-all */}

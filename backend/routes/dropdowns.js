@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { DropdownOption } = require('../models');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, requireModule } = require('../middleware/auth');
 
 router.use(authenticate);
 
@@ -44,7 +44,7 @@ router.get('/manage', canManageDropdowns, async (req, res) => {
 });
 
 // POST /api/dropdowns — Super/Business Admin. Body: { field_name, value, business_unit? }.
-router.post('/', canManageDropdowns, async (req, res) => {
+router.post('/', canManageDropdowns, requireModule('leads', 'full'), async (req, res) => {
   try {
     const { field_name, value } = req.body;
     if (!field_name || !value || !String(value).trim()) return res.status(400).json({ message: 'field_name and value are required' });
@@ -64,7 +64,7 @@ router.post('/', canManageDropdowns, async (req, res) => {
 
 // DELETE /api/dropdowns/:id — Super/Business Admin (soft delete). A Business Admin can only remove
 // options within their own business; super_admin may remove any.
-router.delete('/:id', canManageDropdowns, async (req, res) => {
+router.delete('/:id', canManageDropdowns, requireModule('leads', 'full'), async (req, res) => {
   try {
     const row = await DropdownOption.findByPk(req.params.id);
     if (!row) return res.status(404).json({ message: 'Option not found' });

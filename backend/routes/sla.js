@@ -6,6 +6,7 @@ const { SlaConfig } = require('../models');
 const { authenticate, authorize, adminOnly } = require('../middleware/auth');
 const { STAGES_WITH_SLA, DEFAULT_SLA, BASE } = require('../services/scoring');
 const { recomputeAll, BUSINESSES } = require('../services/scoringEngine');
+const audit = require('../services/audit');
 
 router.use(authenticate);
 
@@ -63,7 +64,13 @@ router.put('/', tatEditors, async (req, res) => {
         defaults: { business_unit: bu, stage, sla_days: days },
       });
       if (!created && Number(row.sla_days) !== days) {
+        const wasDays = Number(row.sla_days);
         await SlaConfig.update({ sla_days: days }, { where: { id: row.id } });
+        await audit.record({
+          actor: req.user, entityType: 'sla', entityId: row.id, subject: `${stage} TAT`,
+          businessUnit: bu, action: 'field_update',
+          field: `${stage} TAT (days)`, from: wasDays, to: days,
+        });
       }
     }
 

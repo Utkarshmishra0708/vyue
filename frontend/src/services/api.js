@@ -47,6 +47,8 @@ api.interceptors.response.use(
 export const login          = (email, password, businessUnit) => api.post('/auth/login', { email, password, business_unit: businessUnit }).then(r => r.data);
 export const bdLogin        = (userId, password)              => api.post('/auth/bd-login', { userId, password }).then(r => r.data);
 export const getMe          = ()                              => api.get('/auth/me').then(r => r.data);
+// N1: switch the signed-in Global Admin to their account on another platform, no re-login.
+export const switchPlatform = (businessUnit)                  => api.post('/auth/switch-platform', { business_unit: businessUnit }).then(r => r.data);
 export const changePassword = (currentPassword, newPassword)  => api.post('/auth/change-password', { currentPassword, newPassword }).then(r => r.data);
 // === JIOAUTIFY INTEGRATION: redeem an SSO chooser ticket. Called with just the ticket to list the
 // email's accounts, then with a chosen business_unit to get a token. See routes/auth.js /sso/select. ===
@@ -63,6 +65,8 @@ export const addUser        = (businessUnit, data)            => api.post('/user
 export const updateUser     = (id, data)                      => api.put(`/users/${id}`, data).then(r => r.data);
 export const setUserActive  = (id, active)                    => api.put(`/users/${id}/active`, { active }).then(r => r.data);
 export const setForecastAccess = (id, forecastAccess)         => api.put(`/users/${id}/forecast-access`, { forecast_access: forecastAccess }).then(r => r.data);
+// J1: grant/revoke a Manager's platform-wide Activity feed (Global Admin / Business Admin only).
+export const setActivityFeedAccess = (id, on)                 => api.put(`/users/${id}/activity-feed-access`, { activity_feed_access: on }).then(r => r.data);
 // reassignTo: undefined (fails with 409 if the user owns leads), 'unassigned', or a target user id.
 export const deleteUser     = (id, reassignTo)                => api.delete(`/users/${id}`, reassignTo ? { data: { reassign_to: reassignTo } } : undefined).then(r => r.data);
 
@@ -93,10 +97,27 @@ export const deleteVoc      = (id)                            => api.delete(`/vo
 
 // Activity log / stage history
 export const getActivityLog = (leadId)                        => api.get('/activity-log', { params: { lead_id: leadId } }).then(r => r.data);
+// Global cross-user feed — params: { limit, before, user, platform, type, from, to }
+export const getActivityFeed = (params)                       => api.get('/activity-log/feed', { params }).then(r => r.data);
+export const getActivityFilters = ()                          => api.get('/activity-log/feed/filters').then(r => r.data);
 export const getStageHistory= ()                              => api.get('/stage-history').then(r => r.data);
 
-// Forecast (public, no auth)
+// Cross-platform Super Admin grant. Super Admins only — managed in its own Settings section.
+export const getSuperAdmins = ()                             => api.get('/users/super-admins').then(r => r.data);
+export const setSuperAdmin  = (id, scope)                    => api.put(`/users/${id}/super-admin`, { scope }).then(r => r.data);
+// Super Admin grant history now comes from the unified activity feed rather than a separate store,
+// so it is the same record the global Activity pane shows.
+export const getSuperAdminAudit = ()                         => api.get('/activity-log/feed', { params: { type: 'permissions', limit: 50 } })
+  .then(r => (r.data.entries || []).filter(e => e.action === 'super_admin_change'));
+
+// Per-module access levels (RBAC). Admin tier only — see backend/services/permissions.js.
+export const getUserPermissions = (id)                       => api.get(`/users/${id}/permissions`).then(r => r.data);
+export const updateUserPermissions = (id, permissions)       => api.put(`/users/${id}/permissions`, { permissions }).then(r => r.data);
+
+// Forecast (login-gated: admin tier, 'forecast' accounts, or a granted user)
 export const getForecastDevices = ()                          => api.get('/forecast/devices').then(r => r.data);
+// Manual 'Sent to SCM' handoff marker. Writable by anyone who can see the dashboard row.
+export const setSentToScm = (id, sent)                        => api.patch(`/forecast/devices/${id}/sent-to-scm`, { sent_to_scm: sent }).then(r => r.data);
 
 // Settings
 export const getSettings    = ()                              => api.get('/settings').then(r => r.data);

@@ -19,7 +19,11 @@ export default function ActivityLogView({ leadId }) {
       {rows.map(r => (
         <div key={r.id} className="card-sm">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{r.user_name}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }} title={r.user_email || undefined}>
+              {r.user_name || 'Unknown user'}
+              {/* Display names repeat across accounts, so show the email that identifies them. */}
+              {r.user_email && <span style={{ fontWeight: 400, color: '#94a3b8' }}> · {r.user_email}</span>}
+            </span>
             <span style={{ fontSize: 11, color: '#94a3b8' }}>{fmtDate(r.createdAt)}</span>
           </div>
           {r.action_type === 'lead_created' ? (

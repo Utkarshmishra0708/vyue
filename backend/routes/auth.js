@@ -3,6 +3,41 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 const { authenticate } = require('../middleware/auth');
+const {
+  effectivePermissions, PERMISSION_MANAGER_ROLES, isSuperAdmin, superAdminScope, canSeeActivityFeed,
+} = require('../services/permissions');
+
+// The user object every authenticated response returns. Must match GET /auth/me exactly: the
+// client gates its entire navigation on `permissions`, so a login response that omits them makes
+// the app think the user has no modules until the next background refresh.
+async function authUserPayload(user) {
+  const safe = user.toJSON();
+  delete safe.password_hash;
+  delete safe.module_permissions;          // the resolved map below is the contract
+  safe.permissions = effectivePermissions(user);
+  safe.can_manage_permissions = PERMISSION_MANAGER_ROLES.includes(user.role) || isSuperAdmin(user);
+  // Cross-platform Super Admin grant (migration 021) — additive to `role`, so it is reported
+  // separately rather than folded into it.
+  safe.super_admin_scope = superAdminScope(user);
+  safe.is_super_admin = isSuperAdmin(user);
+  safe.super_admin_read_only = user.super_admin_scope === 'read';
+  // Platform-wide Activity feed visibility (J1) — resolved so the client just reads a boolean.
+  safe.can_see_activity_feed = canSeeActivityFeed(user);
+  // Platforms this person can switch between in-tool (N1): every active account under the same
+  // email. One email holds at most one account per business unit (migration 002), so this is the
+  // set of platforms they may hop to without re-entering credentials. A BD (no email) has just one.
+  if (user.email) {
+    const siblings = await User.findAll({
+      where: { email: user.email, active: true },
+      attributes: ['business_unit'],
+    });
+    safe.platforms = [...new Set(siblings.map(s => s.business_unit))].sort();
+  } else {
+    safe.platforms = [user.business_unit];
+  }
+  return safe;
+}
+
 
 const signToken = (user) => jwt.sign(
   { id: user.id, role: user.role },
@@ -44,9 +79,7 @@ router.post('/login', passwordAuthDevOnly, async (req, res) => {
     if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
 
     const token = signToken(user);
-    const safeUser = user.toJSON();
-    delete safeUser.password_hash;
-    return res.json({ token, user: safeUser });
+    return res.json({ token, user: await authUserPayload(user) });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -70,9 +103,7 @@ router.post('/bd-login', passwordAuthDevOnly, async (req, res) => {
     if (!ok) return res.status(401).json({ message: 'Incorrect password' });
 
     const token = signToken(user);
-    const safeUser = user.toJSON();
-    delete safeUser.password_hash;
-    return res.json({ token, user: safeUser });
+    return res.json({ token, user: await authUserPayload(user) });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -123,9 +154,7 @@ router.post('/sso', async (req, res) => {
     // Single account -> straight to a token (unchanged behaviour).
     const user = users[0];
     const token = signToken(user);
-    const safeUser = user.toJSON();
-    delete safeUser.password_hash;
-    return res.json({ token, user: safeUser });
+    return res.json({ token, user: await authUserPayload(user) });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -170,9 +199,7 @@ router.post('/sso/select', async (req, res) => {
     if (!user) return res.status(404).json({ message: 'No Sales CRM account for that business unit.' });
 
     const token = signToken(user);
-    const safeUser = user.toJSON();
-    delete safeUser.password_hash;
-    return res.json({ token, user: safeUser });
+    return res.json({ token, user: await authUserPayload(user) });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -186,10 +213,39 @@ router.post('/logout', (req, res) => {
   res.json({ message: 'Logged out' });
 });
 
-// GET /api/auth/me — return the current authenticated user
+// GET /api/auth/me — the current authenticated user, plus their effective per-module access.
+// The frontend re-polls this (on focus and on an interval) so a permission change an admin makes
+// applies to the affected user without them re-logging in. `permissions` is always the resolved
+// map, never the raw column, so the client never has to know about defaults.
 router.get('/me', authenticate, async (req, res) => {
   try {
-    return res.json(req.user);
+    return res.json(await authUserPayload(req.user));
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/auth/switch-platform — body { business_unit }  (N1: in-tool platform switching)
+//
+// Hops the signed-in user to their account on another platform WITHOUT re-entering credentials.
+// Safe because the caller is already authenticated, and it only ever issues a token for another
+// account with the SAME email — one email holds at most one account per business unit (migration
+// 002), so the email is the person's identity across platforms. A BD (no email) cannot switch.
+router.post('/switch-platform', authenticate, async (req, res) => {
+  try {
+    const { business_unit } = req.body;
+    if (!business_unit) return res.status(400).json({ message: 'business_unit is required' });
+    if (!req.user.email) return res.status(400).json({ message: 'This account is not able to switch platforms.' });
+    if (business_unit === req.user.business_unit) {
+      // Already there — hand back a fresh token for the same account rather than erroring.
+      return res.json({ token: signToken(req.user), user: await authUserPayload(req.user) });
+    }
+
+    const target = await User.findOne({ where: { email: req.user.email, business_unit } });
+    if (!target)         return res.status(404).json({ message: 'You do not have an account on that platform.' });
+    if (!target.active)  return res.status(403).json({ message: 'Your account on that platform is disabled.' });
+
+    return res.json({ token: signToken(target), user: await authUserPayload(target) });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
