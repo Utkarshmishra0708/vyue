@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ssoSelect } from '../services/api';
+import { ssoSelect, getBusinessUnits } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // === JIOAUTIFY INTEGRATION: SSO account chooser. Reached only in production, when the STB portal
-// hands off an email that has BOTH a signage and a jhes Sales CRM account: the portal opens
+// hands off an email that has more than one Sales CRM account: the portal opens
 // /sales_crm?ssoTicket=<jwt>, App.captureSsoFromUrl stashes the ticket in sessionStorage and routes
 // here. We redeem the ticket to list the accounts, let the user pick a business unit, then exchange
 // the ticket for a token for that account and land on /leads — bypassing the login page entirely. ===
-const BU_LABEL = { signage: 'Signage', jhes: 'JHES', surveillance: 'Surveillance' };
-const BU_COLOR = { signage: '#4f46e5', jhes: '#ea580c', surveillance: '#0891b2' };
-const BU_DESC  = { signage: 'Digital Signage Solutions', jhes: 'Jio Hospitality & Entertainment Services', surveillance: 'Surveillance & Security Solutions' };
+// Fallback presentation, used only if the live list (GET /api/business-units) fails to load.
+const BU_FALLBACK = {
+  signage:      { name: 'Signage',      color: '#4f46e5', description: 'Digital Signage Solutions' },
+  jhes:         { name: 'JHES',         color: '#ea580c', description: 'Jio Hospitality & Entertainment Services' },
+  surveillance: { name: 'Surveillance', color: '#0891b2', description: 'Surveillance & Security Solutions' },
+};
 
 export default function SsoSelectPage() {
   const navigate = useNavigate();
@@ -19,6 +22,7 @@ export default function SsoSelectPage() {
   const [accounts, setAccounts] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [buBySlug, setBuBySlug] = useState({});  // slug -> { name, color, description } from the API
 
   const ticket = sessionStorage.getItem('salescrm_sso_ticket');
 
@@ -34,6 +38,16 @@ export default function SsoSelectPage() {
       })
       .catch((err) => setError(err.response?.data?.message || 'SSO session expired. Open Sales CRM from the portal again.'));
   }, []); // run once on mount; ticket/login/navigate are stable for this flow
+
+  // Load business-unit presentation so the account cards show the right name/colour/description.
+  useEffect(() => {
+    getBusinessUnits()
+      .then(list => setBuBySlug(Object.fromEntries((list || []).map(b => [b.slug, b]))))
+      .catch(() => setBuBySlug({}));  // fall back to BU_FALLBACK below
+  }, []);
+
+  // Presentation for a slug: live list first, then the hardcoded fallback, then the raw slug.
+  const buMeta = (slug) => buBySlug[slug] || BU_FALLBACK[slug] || { name: slug, color: '#6366f1', description: '' };
 
   const handlePick = async (businessUnit) => {
     setBusy(true);
@@ -59,22 +73,25 @@ export default function SsoSelectPage() {
 
         {!accounts && !error && <p style={{ fontSize: 13, color: '#64748b' }}>Loading your accounts…</p>}
 
-        {accounts && accounts.map((a) => (
-          <button
-            key={a.business_unit}
-            onClick={() => handlePick(a.business_unit)}
-            disabled={busy}
-            style={{ ...s.buButton, borderColor: BU_COLOR[a.business_unit] || '#e2e8f0', cursor: busy ? 'wait' : 'pointer' }}
-          >
-            <div style={{ ...s.buIcon, background: BU_COLOR[a.business_unit] || '#6366f1' }}>
-              {(BU_LABEL[a.business_unit] || a.business_unit || '?')[0]}
-            </div>
-            <div style={{ textAlign: 'left' }}>
-              <div style={s.buName}>{BU_LABEL[a.business_unit] || a.business_unit}</div>
-              <div style={s.buDesc}>{BU_DESC[a.business_unit] || ''}{a.role ? ` · ${a.role.toUpperCase()}` : ''}</div>
-            </div>
-          </button>
-        ))}
+        {accounts && accounts.map((a) => {
+          const m = buMeta(a.business_unit);
+          return (
+            <button
+              key={a.business_unit}
+              onClick={() => handlePick(a.business_unit)}
+              disabled={busy}
+              style={{ ...s.buButton, borderColor: m.color || '#e2e8f0', cursor: busy ? 'wait' : 'pointer' }}
+            >
+              <div style={{ ...s.buIcon, background: m.color || '#6366f1' }}>
+                {(m.name || a.business_unit || '?')[0]}
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <div style={s.buName}>{m.name || a.business_unit}</div>
+                <div style={s.buDesc}>{m.description || ''}{a.role ? ` · ${a.role.toUpperCase()}` : ''}</div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

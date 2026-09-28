@@ -11,6 +11,18 @@ const {
 // client gates its entire navigation on `permissions`, so a login response that omits them makes
 // the app think the user has no modules until the next background refresh.
 async function authUserPayload(user) {
+  // GA scope is email-level: if ANY row sharing this email holds a super_admin_scope grant,
+  // this session inherits it. This covers auto-provisioned accounts that may not have the
+  // column set yet (race with sync, legacy rows, etc.).
+  if (user.email && !user.super_admin_scope) {
+    const { Op } = require('sequelize');
+    const sibling = await User.findOne({
+      where: { email: user.email, super_admin_scope: { [Op.ne]: null } },
+      attributes: ['super_admin_scope'],
+    });
+    if (sibling) user.super_admin_scope = sibling.super_admin_scope;
+  }
+
   const safe = user.toJSON();
   delete safe.password_hash;
   delete safe.module_permissions;          // the resolved map below is the contract

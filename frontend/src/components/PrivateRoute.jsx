@@ -61,6 +61,19 @@ export function PrivateRoute({ children }) {
   return children;
 }
 
+// SuperAdminRoute — only a Global Admin (super_admin scope, read or write) may enter. Used for
+// cross-platform administration such as Business Unit management. A Read-only Global Admin passes
+// here (they can view); write actions are blocked server-side and hidden client-side via canAct.
+export function SuperAdminRoute({ children }) {
+  const { isAuthenticated, isSuperAdmin, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
+  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (!isSuperAdmin) return <Navigate to="/leads" replace />;
+  return children;
+}
+
 export function AdminRoute({ children }) {
   const { isAuthenticated, isAdmin, isConsoleOnly, loading } = useAuth();
   const location = useLocation();

@@ -60,7 +60,7 @@ export const FORECAST_COLUMNS = [
   { key: 'business_unit', label: 'BU', default: true,
     cell: (l) => (l.business_unit || '').toUpperCase() || '—', excel: (l) => (l.business_unit || '').toUpperCase(),
     filter: 'multi', filterValue: (l) => (l.business_unit || '').toUpperCase() },
-  { key: 'owner', label: 'Team Member', default: true,
+  { key: 'owner', label: 'BD', default: true,
     cell: (l) => l.owner?.name?.split(' ')[0] || '—', excel: (l) => l.owner?.name || '',
     filter: 'multi', filterValue: (l) => l.owner?.name || '' },
 

@@ -1,8 +1,9 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { PrivateRoute, AdminRoute, ModuleRoute } from './components/PrivateRoute';
+import { PrivateRoute, AdminRoute, ModuleRoute, SuperAdminRoute } from './components/PrivateRoute';
 import LoginPage from './pages/LoginPage';
+import BusinessUnitsPage from './pages/BusinessUnitsPage';
 import LeadsPage from './pages/LeadsPage';
 import DashboardPage from './pages/DashboardPage';
 import ForecastPage from './pages/ForecastPage';
@@ -79,6 +80,8 @@ export default function App() {
             {/* Admin/PMO only */}
             <Route path="/reports"          element={<AdminRoute><ModuleRoute module="reports"><ReportsPage /></ModuleRoute></AdminRoute>} />
             <Route path="/settings"         element={<AdminRoute><SettingsPage /></AdminRoute>} />
+            {/* Global Admin only — dynamic Business Unit management. */}
+            <Route path="/business-units"   element={<SuperAdminRoute><BusinessUnitsPage /></SuperAdminRoute>} />
 
             {/* Catch-all */}
             <Route path="*" element={<Navigate to="/leads" replace />} />

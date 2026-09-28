@@ -26,6 +26,7 @@ app.use('/uploads', express.static(path.join(__dirname, process.env.UPLOAD_DIR |
 // /sales_crm by the STB backend, these are reached at /sales_crm/api/<resource>.
 // --------------------------------------------------------------------------
 app.use('/api/auth',          require('./routes/auth'));
+app.use('/api/business-units', require('./routes/businessUnits'));
 app.use('/api/users',         require('./routes/users'));
 app.use('/api/leads',         require('./routes/leads'));
 app.use('/api/global-pos',    require('./routes/globalPos'));

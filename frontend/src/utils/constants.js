@@ -18,7 +18,7 @@ export const PHASE_DATE_MAP = {
   Proposal: 'proposal_date', Negotiation: 'negotiation_date', 'PO Received': 'po_received_date',
 };
 
-export const STAGE_ORDER = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received'];
+export const STAGE_ORDER = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
 
 export const STAGE_WIN_PCT = {
   New: 5, Qualified: 15, Demo: 30, Proposal: 45, Negotiation: 60,
@@ -66,7 +66,7 @@ export const TAT_DAYS = 14;
 
 // Human-readable role labels (roles are stored lowercase/snake_case).
 export const ROLE_LABEL = {
-  super_admin: 'Global Admin', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Team Member', forecast: 'Forecast',
+  super_admin: 'Global Admin', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Business Development', forecast: 'Forecast',
 };
 
 // Indian States and Union Territories. Most CRMs present these in one "State / UT" dropdown, grouped

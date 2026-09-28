@@ -19,6 +19,7 @@ export default function ReportsPage() {
   const [bds, setBds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [ran, setRan] = useState(false);
+  const [view, setView] = useState('pipeline');   // 'pipeline' | 'customers'
 
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -72,31 +73,43 @@ export default function ReportsPage() {
   const activeFilterCount = [selBDs, selPhases, selSources, selRenewals, selStates, selServices, selPOMonths].reduce((s,a) => s + a.length, 0) + (dateFrom?1:0) + (dateTo?1:0);
   const clearAll = () => { setDateFrom(''); setDateTo(''); setSelBDs([]); setSelPhases([]); setSelSources([]); setSelRenewals([]); setSelStates([]); setSelServices([]); setSelPOMonths([]); };
 
+  // Primary (first) contact on a lead — used by the Customer Details view.
+  const pc = (l) => (Array.isArray(l.contacts) && l.contacts[0]) || {};
+
   const exportExcel = async () => {
     if (!filtered.length) return;
     const XLSX = await import('xlsx');
-    const rows = filtered.map(l => ({
-      'Sr No': l.sr_no, 'Business Unit': (l.business_unit || '').toUpperCase(), Customer: l.customer_name,
-      State: l.state || '', BD: l.owner?.name || '', 'Lead Source': l.lead_source, 'KAM Name': l.kam_name || '',
-      'New/Renewal': l.new_or_renewal, 'TCV (₹L)': l.potential_tcv_lakhs, 'PO Expected': l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '',
-      Phase: l.phase, 'Created At': fmtDate(l.createdAt),
-    }));
-    writeFormattedSheet(XLSX, rows, 'Report', `CRM_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+    const rows = view === 'customers'
+      ? filtered.map(l => ({
+          Customer: l.customer_name, 'Business Unit': (l.business_unit || '').toUpperCase(),
+          City: l.city || '', State: l.state || '', Owner: l.owner?.name || '',
+          'Contact Name': pc(l).name || '', Phone: pc(l).phone || '', Email: pc(l).email || '', Designation: pc(l).designation || '',
+        }))
+      : filtered.map(l => ({
+          'Sr No': l.sr_no, 'Business Unit': (l.business_unit || '').toUpperCase(), Customer: l.customer_name,
+          State: l.state || '', BD: l.owner?.name || '', 'Lead Source': l.lead_source, 'KAM Name': l.kam_name || '',
+          'New/Renewal': l.new_or_renewal, 'TCV (₹L)': l.potential_tcv_lakhs, 'PO Expected': l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '',
+          Phase: l.phase, 'Created At': fmtDate(l.createdAt),
+        }));
+    writeFormattedSheet(XLSX, rows, view === 'customers' ? 'Customers' : 'Report', `CRM_${view === 'customers' ? 'Customers' : 'Report'}_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   const exportPdf = () => {
     if (!filtered.length) return;
+    const table = view === 'customers'
+      ? {
+          columns: ['Customer', 'Business', 'City', 'State', 'Owner', 'Contact', 'Phone', 'Email', 'Designation'],
+          rows: filtered.map(l => [l.customer_name, (l.business_unit || '').toUpperCase(), l.city || '—', l.state || '—', l.owner?.name || '', pc(l).name || '—', pc(l).phone || '—', pc(l).email || '—', pc(l).designation || '—']),
+        }
+      : {
+          columns: ['Sr', 'Customer', 'State', 'BD', 'Phase', 'New/Renewal', 'TCV (₹L)', 'PO Expected', 'Source', 'Created'],
+          rows: filtered.map(l => [l.sr_no, l.customer_name, l.state || '—', l.owner?.name?.split(' ')[0] || '', l.phase, l.new_or_renewal, l.potential_tcv_lakhs, l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '—', l.lead_source, fmtDate(l.createdAt)]),
+        };
     exportRowsToPdf({
-      title: 'Sales CRM — Custom Report',
-      subtitle: `${filtered.length} lead${filtered.length > 1 ? 's' : ''} · generated ${fmtDate(new Date())}`,
-      tables: [{
-        columns: ['Sr', 'Customer', 'State', 'Team Member', 'Phase', 'New/Renewal', 'TCV (₹L)', 'PO Expected', 'Source', 'Created'],
-        rows: filtered.map(l => [
-          l.sr_no, l.customer_name, l.state || '—', l.owner?.name?.split(' ')[0] || '', l.phase, l.new_or_renewal,
-          l.potential_tcv_lakhs, l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '—', l.lead_source, fmtDate(l.createdAt),
-        ]),
-      }],
-      filename: `CRM_Report_${new Date().toISOString().slice(0,10)}.pdf`,
+      title: view === 'customers' ? 'Sales CRM — Customer Details' : 'Sales CRM — Custom Report',
+      subtitle: `${filtered.length} record${filtered.length > 1 ? 's' : ''} · generated ${fmtDate(new Date())}`,
+      tables: [table],
+      filename: `CRM_${view === 'customers' ? 'Customers' : 'Report'}_${new Date().toISOString().slice(0,10)}.pdf`,
     });
   };
 
@@ -117,11 +130,24 @@ export default function ReportsPage() {
       <div style={{ display: 'flex' }}>
         <div style={{ width: 240, flexShrink: 0, background: '#fff', borderRight: '1px solid #e2e8f0', padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
+            <label className="field-label" style={{ marginBottom: 6 }}>Report View</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {[{ key: 'pipeline', label: 'Pipeline' }, { key: 'customers', label: 'Customer Details' }].map(v => (
+                <button key={v.key} type="button" onClick={() => setView(v.key)}
+                  style={{ border: view === v.key ? '1.5px solid #4f46e5' : '1.5px solid #e2e8f0', borderRadius: 8,
+                    padding: '8px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                    background: view === v.key ? '#eef2ff' : '#fff', color: view === v.key ? '#4f46e5' : '#64748b' }}>
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
             <label className="field-label">Date Range (Created)</label>
             <input type="date" className="input" style={{ marginBottom: 6 }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
             <input type="date" className="input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
-          <MultiSelect label="Team Member" options={bds.map(b => b.name)} selected={selBDs} onChange={setSelBDs} width={200} />
+          <MultiSelect label="BD" options={bds.map(b => b.name)} selected={selBDs} onChange={setSelBDs} width={200} />
           <MultiSelect label="Phase" options={PHASES} selected={selPhases} onChange={setSelPhases} width={200} />
           <MultiSelect label="Lead Source" options={sourceOpts} selected={selSources} onChange={setSelSources} width={200} />
           <MultiSelect label="New/Renewal" options={renewalOpts} selected={selRenewals} onChange={setSelRenewals} width={200} />
@@ -143,18 +169,32 @@ export default function ReportsPage() {
                 <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won TCV</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>₹{wonTCV.toFixed(1)}L</p></div>
               </div>
               <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-                <table className="data-table">
-                  <thead><tr><th>Sr</th><th>Customer</th><th>State</th><th>BD</th><th>Phase</th><th>New/Renewal</th><th style={{textAlign:'right'}}>TCV (₹L)</th><th>PO Expected</th><th>Source</th><th>Created</th></tr></thead>
-                  <tbody>
-                    {filtered.map(l => (
-                      <tr key={l.id}>
-                        <td>{l.sr_no}</td><td>{l.customer_name}</td><td>{l.state || '—'}</td><td>{l.owner?.name?.split(' ')[0]}</td>
-                        <td>{l.phase}</td><td>{l.new_or_renewal}</td><td style={{textAlign:'right', fontWeight:700}}>₹{l.potential_tcv_lakhs}</td>
-                        <td>{l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '—'}</td><td>{l.lead_source}</td><td>{fmtDate(l.createdAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {view === 'pipeline' ? (
+                  <table className="data-table">
+                    <thead><tr><th>Sr</th><th>Customer</th><th>State</th><th>BD</th><th>Phase</th><th>New/Renewal</th><th style={{textAlign:'right'}}>TCV (₹L)</th><th>PO Expected</th><th>Source</th><th>Created</th></tr></thead>
+                    <tbody>
+                      {filtered.map(l => (
+                        <tr key={l.id}>
+                          <td>{l.sr_no}</td><td>{l.customer_name}</td><td>{l.state || '—'}</td><td>{l.owner?.name?.split(' ')[0]}</td>
+                          <td>{l.phase}</td><td>{l.new_or_renewal}</td><td style={{textAlign:'right', fontWeight:700}}>₹{l.potential_tcv_lakhs}</td>
+                          <td>{l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '—'}</td><td>{l.lead_source}</td><td>{fmtDate(l.createdAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="data-table">
+                    <thead><tr><th>Customer</th><th>Business</th><th>City</th><th>State</th><th>Owner</th><th>Contact</th><th>Phone</th><th>Email</th><th>Designation</th></tr></thead>
+                    <tbody>
+                      {filtered.map(l => (
+                        <tr key={l.id}>
+                          <td>{l.customer_name}</td><td>{(l.business_unit || '').toUpperCase()}</td><td>{l.city || '—'}</td><td>{l.state || '—'}</td>
+                          <td>{l.owner?.name || '—'}</td><td>{pc(l).name || '—'}</td><td>{pc(l).phone || '—'}</td><td>{pc(l).email || '—'}</td><td>{pc(l).designation || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </>
           )}

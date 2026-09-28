@@ -17,7 +17,9 @@ const User = sequelize.define('User', {
   mobile:        { type: DataTypes.STRING(32), allowNull: true },
   password_hash: { type: DataTypes.STRING(255), allowNull: true },
   role:          { type: DataTypes.ENUM('super_admin', 'business_admin', 'pmo', 'bd', 'forecast'), allowNull: false, defaultValue: 'bd' },
-  business_unit: { type: DataTypes.ENUM('signage', 'jhes', 'surveillance'), unique: 'email_business_unit', allowNull: false, defaultValue: 'signage' },
+  // business_unit is a slug FK into business_units (migration 029). Was an ENUM; now a plain
+  // VARCHAR so a new business unit needs no DDL. Still part of the email_business_unit composite key.
+  business_unit: { type: DataTypes.STRING(32), unique: 'email_business_unit', allowNull: false, defaultValue: 'signage' },
   initials:      { type: DataTypes.STRING(8) },
   color:         { type: DataTypes.STRING(32), defaultValue: 'bg-indigo-500' },
   active:        { type: DataTypes.BOOLEAN, defaultValue: true },
@@ -49,7 +51,8 @@ const Lead = sequelize.define('Lead', {
   sr_no:                   { type: DataTypes.INTEGER, unique: true },
   customer_name:           { type: DataTypes.STRING(255), allowNull: false },
   owner_id:                { type: DataTypes.INTEGER, allowNull: false },
-  business_unit:           { type: DataTypes.ENUM('signage', 'jhes', 'surveillance'), allowNull: false, defaultValue: 'signage' },
+  // business_unit is a slug FK into business_units (migration 029) — was an ENUM, now VARCHAR.
+  business_unit:           { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'signage' },
   // Account Mix — captured at the top of the lead form (all businesses).
   property_type:           { type: DataTypes.STRING(32) },   // Chain | Standalone | Other
   property_category:       { type: DataTypes.STRING(64) },   // Hotel | Hospital | BFSI | Retail | …
@@ -138,6 +141,9 @@ const Lead = sequelize.define('Lead', {
   jhes_qty:                { type: DataTypes.INTEGER },
   jhes_product:            { type: DataTypes.STRING(255) },
   additional_notes:        { type: DataTypes.TEXT },
+  // Values of admin-defined CUSTOM fields (migration 031), keyed by field slug. Predefined/core
+  // fields use their own columns; this holds only fields with no dedicated column, per business unit.
+  custom_fields:           { type: DataTypes.JSON },
   // Surveillance-only: ticked services as JSON [{ label, nature, rate, qty }]. Null for signage/jhes,
   // which use their own per-service columns.
   services_json:           { type: DataTypes.TEXT },
@@ -218,7 +224,8 @@ const Setting = sequelize.define('Setting', {
 // --------------------------------------------------------------------------
 const GlobalPo = sequelize.define('GlobalPo', {
   id:                  { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  business_unit:       { type: DataTypes.ENUM('signage', 'jhes', 'surveillance'), allowNull: false, defaultValue: 'signage' },
+  // business_unit is a slug FK into business_units (migration 029) — was an ENUM, now VARCHAR.
+  business_unit:       { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'signage' },
   chain_name:          { type: DataTypes.STRING(255), allowNull: false },
   device_total:        { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   price_lakhs:         { type: DataTypes.DECIMAL(14, 2) },
@@ -296,6 +303,40 @@ const DropdownOption = sequelize.define('DropdownOption', {
 }, { tableName: 'dropdown_options', underscored: true, timestamps: false });
 
 // --------------------------------------------------------------------------
+// BusinessUnit — first-class business unit (migration 028), replacing the former
+// ENUM('signage','jhes','surveillance'). users/leads/global_pos.business_unit are
+// slug FKs into this table, so a new BU needs no schema change. status gates
+// login/new-records (active | disabled | archived).
+// --------------------------------------------------------------------------
+const BusinessUnit = sequelize.define('BusinessUnit', {
+  id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  slug:          { type: DataTypes.STRING(32), allowNull: false, unique: true },
+  name:          { type: DataTypes.STRING(128), allowNull: false },
+  description:   { type: DataTypes.STRING(512) },
+  color:         { type: DataTypes.STRING(32), allowNull: false, defaultValue: '#6366f1' },
+  status:        { type: DataTypes.ENUM('active', 'disabled', 'archived'), allowNull: false, defaultValue: 'active' },
+  owner_id:      { type: DataTypes.INTEGER },
+  business_type: { type: DataTypes.STRING(64) },
+  config:        { type: DataTypes.JSON },
+  sort_order:    { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+}, { tableName: 'business_units', underscored: true });
+
+// --------------------------------------------------------------------------
+// ServiceDefinition — a business unit's "services offered" catalogue (migration 030). Replaces the
+// hardcoded per-BU service lists (SIGNAGE_SERVICES / JHES_SERVICES / SURVEILLANCE_ITEMS) so the BU
+// wizard can offer the union of what every unit sells, derived from data.
+// --------------------------------------------------------------------------
+const ServiceDefinition = sequelize.define('ServiceDefinition', {
+  id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  business_unit: { type: DataTypes.STRING(32), allowNull: false },
+  slug:          { type: DataTypes.STRING(64), allowNull: false },
+  label:         { type: DataTypes.STRING(128), allowNull: false },
+  nature:        { type: DataTypes.ENUM('opex', 'capex'), allowNull: false, defaultValue: 'opex' },
+  sort_order:    { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  active:        { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+}, { tableName: 'service_definitions', underscored: true });
+
+// --------------------------------------------------------------------------
 // Associations
 // --------------------------------------------------------------------------
 Lead.belongsTo(User,          { foreignKey: 'owner_id',   as: 'owner' });
@@ -321,6 +362,8 @@ VocActivity.belongsTo(Voc,     { foreignKey: 'voc_id' });
 
 module.exports = {
   sequelize,
+  BusinessUnit,
+  ServiceDefinition,
   User,
   Lead,
   LeadContact,

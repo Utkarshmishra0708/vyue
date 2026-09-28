@@ -156,7 +156,12 @@ function normalizePayload(body, { isCreate, existing }) {
   const months = parseInt(body.contract_period_months, 10) || null;
   const years = months ? months / 12 : null;
   const isSurveillance = body.business_unit === 'surveillance';
-  const survServices = isSurveillance ? cleanSurveillanceServices(body.surveillance_services) : null;
+  // Custom (wizard-created) business units are anything other than the three originals. They store
+  // their services the flexible JSON way (like Surveillance) rather than in per-service columns, and
+  // keep admin-defined custom field values in custom_fields. The three originals are untouched.
+  const isOriginalBu = ['signage', 'jhes', 'surveillance'].includes(body.business_unit);
+  const useJsonServices = isSurveillance || !isOriginalBu;
+  const survServices = useJsonServices ? cleanSurveillanceServices(body.surveillance_services) : null;
   let tcv, acv;
   if (tcvManual) {
     // Hand-typed TCV has no service breakdown, so annualise the whole value evenly.
@@ -164,9 +169,9 @@ function normalizePayload(body, { isCreate, existing }) {
     acv = tcv && years ? +(tcv / years).toFixed(2) : 0;
   } else {
     // Auto-calc from services. OPEX is annualised across the contract term, CAPEX (one-time) is
-    // realised in full in year 1 → first-year ACV = OPEX/years + full CAPEX. Surveillance uses its
-    // JSON services list; signage/jhes use their per-service columns.
-    const { opexLakhs, capexLakhs } = isSurveillance
+    // realised in full in year 1 → first-year ACV = OPEX/years + full CAPEX. Surveillance and custom
+    // units use their JSON services list; signage/jhes use their per-service columns.
+    const { opexLakhs, capexLakhs } = useJsonServices
       ? computeSurveillanceBreakdown(survServices, months)
       : computeTcvBreakdown(body);
     tcv = +(opexLakhs + capexLakhs).toFixed(2);
@@ -259,7 +264,12 @@ function normalizePayload(body, { isCreate, existing }) {
     device_cost_type: body.includes_device ? (body.device_cost_type === 'opex' ? 'opex' : 'capex') : null,
     device_requested_date: body.includes_device ? (body.device_requested_date || null) : null,
     jhes_product: body.business_unit === 'jhes' ? (body.jhes_product || null) : null,
-    services_json: isSurveillance ? JSON.stringify(survServices || []) : null,
+    services_json: useJsonServices ? JSON.stringify(survServices || []) : null,
+    // Custom field values (admin-defined fields with no dedicated column), keyed by slug. Only custom
+    // business units use this; the three originals leave it null.
+    custom_fields: (!isOriginalBu && body.custom_fields && typeof body.custom_fields === 'object')
+      ? body.custom_fields
+      : (existing ? existing.custom_fields : null),
     additional_notes: body.additional_notes || null,
     po_document_url: body.po_document_url !== undefined ? body.po_document_url : (existing ? existing.po_document_url : null),
     // PO number (identifier) — captured only for a won deal, alongside the PO document.
@@ -288,35 +298,27 @@ function defaultFollowup() {
   return addDaysLocal(localDateString(), 14);
 }
 
-// Signage channel partners are a managed dropdown (field_name 'channel_partner'). When a signage lead
-// is saved with a channel partner name that isn't in the list yet (i.e. entered via the form's
-// "Other" option), add it so it's offered in the dropdown for future leads.
-async function ensureChannelPartnerOption(payload, transaction) {
-  if (payload.lead_source !== 'Channel Partner') return;
-  const value = (payload.channel_partner_name || '').trim();
-  if (!value) return;
+// When a lead is saved with a source name (Channel Partner / KAM / Lead Affiliate) entered via the
+// form's "Other" option, add it as a managed dropdown option for that business so it's offered for
+// future leads. Runs for every business unit — the field names are channel_partner / kam / lead_affiliate.
+async function ensureSourceNameOptions(payload, transaction) {
   const bu = payload.business_unit;
-  const maxOrder = (await DropdownOption.max('sort_order', { where: { field_name: 'channel_partner', business_unit: bu }, transaction })) || 0;
-  await DropdownOption.findOrCreate({
-    where: { field_name: 'channel_partner', business_unit: bu, value },
-    defaults: { field_name: 'channel_partner', business_unit: bu, value, sort_order: maxOrder + 1, active: true },
-    transaction,
-  });
-}
-
-// JHES only: the Lead Affiliate is a managed dropdown (field_name 'lead_affiliate'). When a JHES lead is
-// saved with an affiliate name entered via the form's "Other" option, add it for future selections.
-async function ensureLeadAffiliateOption(payload, transaction) {
-  if (payload.business_unit !== 'jhes') return;
-  if (payload.lead_source !== 'Lead Affiliate') return;
-  const value = (payload.affiliate_name || '').trim();
-  if (!value) return;
-  const maxOrder = (await DropdownOption.max('sort_order', { where: { field_name: 'lead_affiliate', business_unit: 'jhes' }, transaction })) || 0;
-  await DropdownOption.findOrCreate({
-    where: { field_name: 'lead_affiliate', business_unit: 'jhes', value },
-    defaults: { field_name: 'lead_affiliate', business_unit: 'jhes', value, sort_order: maxOrder + 1, active: true },
-    transaction,
-  });
+  const kinds = [
+    ['Channel Partner', 'channel_partner', payload.channel_partner_name],
+    ['KAM', 'kam', payload.kam_name],
+    ['Lead Affiliate', 'lead_affiliate', payload.affiliate_name],
+  ];
+  for (const [src, field, raw] of kinds) {
+    if (payload.lead_source !== src) continue;
+    const value = (raw || '').trim();
+    if (!value) continue;
+    const maxOrder = (await DropdownOption.max('sort_order', { where: { field_name: field, business_unit: bu }, transaction })) || 0;
+    await DropdownOption.findOrCreate({
+      where: { field_name: field, business_unit: bu, value },
+      defaults: { field_name: field, business_unit: bu, value, sort_order: maxOrder + 1, active: true },
+      transaction,
+    });
+  }
 }
 
 // Diff two field sets and return one activity_log-shaped row per change.
@@ -443,8 +445,7 @@ router.post('/', requireModule('leads', 'full'), async (req, res) => {
 
     const maxSrNo = await Lead.max('sr_no') || 0;
     const lead = await Lead.create({ ...payload, sr_no: maxSrNo + 1, created_by: req.user.id, updated_by: req.user.id }, { transaction: t });
-    await ensureChannelPartnerOption(payload, t);
-    await ensureLeadAffiliateOption(payload, t);
+    await ensureSourceNameOptions(payload, t);
 
     // Contacts
     if (Array.isArray(body.contacts) && body.contacts.length) {
@@ -520,8 +521,7 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
     // real edits (phase, service fields, etc.) were silently dropped — while the transaction still
     // committed, so it looked like a no-op. A static update always writes the given columns.
     await Lead.update({ ...payload, updated_by: req.user.id }, { where: { id: existing.id }, transaction: t });
-    await ensureChannelPartnerOption(payload, t);
-    await ensureLeadAffiliateOption(payload, t);
+    await ensureSourceNameOptions(payload, t);
 
     // Contacts — replace-all, matching original app behavior
     if (Array.isArray(body.contacts)) {
@@ -605,6 +605,255 @@ router.delete('/:id', adminOnly, requireModule('leads', 'full'), async (req, res
   } catch (err) {
     await t.rollback();
     return res.status(500).json({ message: err.message });
+  }
+});
+
+// --------------------------------------------------------------------------
+// POST /api/leads/bulk — bulk import from Excel upload
+// --------------------------------------------------------------------------
+const VALID_PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
+const VALID_TEMPS = ['Hot', 'Warm', 'Cold'];
+const VALID_RENEWAL = ['New', 'Renewal', 'Expansion'];
+const VALID_LOST_REASONS = ['Pricing', 'Competition', 'No Budget', 'No Decision', 'Timing', 'Product Fit', 'Other'];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+router.post('/bulk', adminOnly, async (req, res) => {
+  const { rows, dryRun = true, business_unit } = req.body;
+  const bu = business_unit || req.user.business_unit;
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return res.status(400).json({ message: 'No rows provided.' });
+  }
+  if (rows.length > 500) {
+    return res.status(400).json({ message: 'Maximum 500 rows per upload.' });
+  }
+
+  const users = await User.findAll({ where: { business_unit: bu, active: true }, attributes: ['id', 'email', 'name'] });
+  const userByEmail = {};
+  users.forEach(u => { if (u.email) userByEmail[u.email.toLowerCase().trim()] = u; });
+
+  const valid = [];
+  const errors = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const rowNum = i + 2;
+    const errs = [];
+
+    const customerName = (r.customer_name || '').trim();
+    const ownerEmail = (r.owner_email || '').trim();
+    const phase = (r.phase || '').trim();
+
+    if (!customerName) errs.push({ field: 'Customer Name', message: 'Required' });
+    if (!ownerEmail) errs.push({ field: 'Lead Owner Email', message: 'Required' });
+    if (!phase) errs.push({ field: 'Phase', message: 'Required' });
+
+    let ownerId = null;
+    if (ownerEmail) {
+      const owner = userByEmail[ownerEmail.toLowerCase()];
+      if (owner) ownerId = owner.id;
+      else errs.push({ field: 'Lead Owner Email', message: `No active user "${ownerEmail}" in this business` });
+    }
+
+    if (phase && !VALID_PHASES.includes(phase)) {
+      errs.push({ field: 'Phase', message: `Invalid. Valid: ${VALID_PHASES.join(', ')}` });
+    }
+    if (phase === 'Lost' && !(r.lost_reason || '').trim()) {
+      errs.push({ field: 'Lost Reason', message: 'Required when Phase is Lost' });
+    }
+    if (r.lost_reason && !VALID_LOST_REASONS.includes(r.lost_reason.trim())) {
+      errs.push({ field: 'Lost Reason', message: `Invalid. Valid: ${VALID_LOST_REASONS.join(', ')}` });
+    }
+    if (r.lead_temperature && !VALID_TEMPS.includes(r.lead_temperature.trim())) {
+      errs.push({ field: 'Lead Temperature', message: 'Must be Hot, Warm, or Cold' });
+    }
+    if (r.new_or_renewal && !VALID_RENEWAL.includes(r.new_or_renewal.trim())) {
+      errs.push({ field: 'New or Renewal', message: 'Must be New, Renewal, or Expansion' });
+    }
+
+    const numericFields = [
+      'tcv_lakhs', 'contract_period_months', 'quantity',
+      'platform_rate', 'platform_qty', 'cms_rate', 'cms_qty',
+      'connectivity_rate', 'connectivity_qty', 'amc_rate', 'amc_qty',
+      'display_rate', 'display_qty', 'installation_rate', 'installation_qty',
+      'jhes_rate', 'jhes_qty', 'iptv_rate', 'iptv_qty',
+      'device_rate', 'device_qty', 'po_actual_value_lakhs',
+    ];
+    for (const nf of numericFields) {
+      if (r[nf] !== undefined && r[nf] !== '' && isNaN(Number(r[nf]))) {
+        errs.push({ field: nf, message: 'Must be a number' });
+      }
+    }
+
+    const dateFields = ['next_followup_date', 'po_expected_date', 'hold_end_date', 'service_start_date', 'service_end_date', 'device_requested_date'];
+    for (const df of dateFields) {
+      if (r[df] && !DATE_RE.test(r[df])) errs.push({ field: df, message: 'Date must be YYYY-MM-DD' });
+    }
+
+    if (r.device_cost_type && !['capex', 'opex'].includes(r.device_cost_type.toLowerCase())) {
+      errs.push({ field: 'Device Cost Type', message: 'Must be capex or opex' });
+    }
+
+    const contacts = [];
+    for (let c = 1; c <= 3; c++) {
+      const cn = (r[`contact_${c}_name`] || '').trim();
+      const ce = (r[`contact_${c}_email`] || '').trim();
+      if (cn || ce) {
+        if (!cn) errs.push({ field: `Contact ${c} Name`, message: 'Name required when email is provided' });
+        if (!ce) errs.push({ field: `Contact ${c} Email`, message: 'Email required when name is provided' });
+        contacts.push({ name: cn, email: ce, phone: (r[`contact_${c}_phone`] || '').trim() || null, designation: (r[`contact_${c}_designation`] || '').trim() || null });
+      }
+    }
+    if (contacts.length === 0) errs.push({ field: 'Contact 1 Name', message: 'At least one contact with Name and Email required' });
+
+    if (errs.length > 0) {
+      errors.push({ row: rowNum, errors: errs });
+    } else {
+      const leadSource = (r.lead_source || '').trim() || null;
+      const sourceName = (r.source_name || '').trim() || null;
+      const parseBool = (v) => {
+        if (!v) return false;
+        const s = String(v).trim().toLowerCase();
+        return s === 'yes' || s === 'true' || s === '1';
+      };
+      const optNum = (v) => (v !== undefined && v !== '' ? Number(v) : null);
+      const optStr = (v) => (v ? String(v).trim() : null);
+
+      const leadData = {
+        customer_name: customerName,
+        owner_id: ownerId,
+        business_unit: bu,
+        city: optStr(r.city),
+        state: optStr(r.state),
+        lead_source: leadSource,
+        channel_partner_name: leadSource === 'Channel Partner' ? sourceName : null,
+        kam_name: leadSource === 'KAM' ? sourceName : null,
+        affiliate_name: leadSource === 'Lead Affiliate' ? sourceName : null,
+        new_or_renewal: optStr(r.new_or_renewal),
+        lead_temperature: optStr(r.lead_temperature),
+        competitor: optStr(r.competitor),
+        property_type: optStr(r.property_type),
+        property_category: optStr(r.property_category),
+        phase,
+        next_followup_date: r.next_followup_date || null,
+        po_expected_date: r.po_expected_date || null,
+        lost_reason: phase === 'Lost' ? optStr(r.lost_reason) : null,
+        hold_end_date: phase === 'On Hold' ? (r.hold_end_date || null) : null,
+        contract_period_months: optNum(r.contract_period_months),
+        quantity: r.quantity ? Number(r.quantity) : 0,
+        po_number: optStr(r.po_number),
+        po_actual_value_lakhs: optNum(r.po_actual_value_lakhs),
+        service_start_date: r.service_start_date || null,
+        service_end_date: r.service_end_date || null,
+        additional_notes: optStr(r.additional_notes),
+        jhes_product: optStr(r.jhes_product),
+        // Services
+        includes_platform: parseBool(r.includes_platform), platform_rate: optNum(r.platform_rate), platform_qty: optNum(r.platform_qty),
+        includes_cms: parseBool(r.includes_cms), cms_rate: optNum(r.cms_rate), cms_qty: optNum(r.cms_qty),
+        includes_connectivity: parseBool(r.includes_connectivity), connectivity_rate: optNum(r.connectivity_rate), connectivity_qty: optNum(r.connectivity_qty),
+        includes_amc: parseBool(r.includes_amc), amc_rate: optNum(r.amc_rate), amc_qty: optNum(r.amc_qty),
+        includes_display: parseBool(r.includes_display), display_rate: optNum(r.display_rate), display_qty: optNum(r.display_qty),
+        includes_installation: parseBool(r.includes_installation), installation_rate: optNum(r.installation_rate), installation_qty: optNum(r.installation_qty),
+        includes_jhes: parseBool(r.includes_jhes), jhes_rate: optNum(r.jhes_rate), jhes_qty: optNum(r.jhes_qty),
+        includes_iptv: parseBool(r.includes_iptv), iptv_rate: optNum(r.iptv_rate), iptv_qty: optNum(r.iptv_qty),
+        // Device
+        includes_device: parseBool(r.includes_device), device_sku: optStr(r.device_sku),
+        device_cost_type: r.device_cost_type ? r.device_cost_type.toLowerCase().trim() : null,
+        device_rate: optNum(r.device_rate), device_qty: optNum(r.device_qty),
+        device_requested_date: r.device_requested_date || null,
+        _contacts: contacts,
+        _rowNum: i + 2,
+      };
+
+      // Extract custom_xxx fields into a JSON object for storage in custom_fields column
+      const customFields = {};
+      for (const [key, val] of Object.entries(r)) {
+        if (key.startsWith('custom_') && val !== undefined && val !== '') {
+          customFields[key.replace('custom_', '')] = String(val).trim();
+        }
+      }
+      if (Object.keys(customFields).length > 0) leadData.custom_fields = customFields;
+
+      if (r.tcv_lakhs !== undefined && r.tcv_lakhs !== '') {
+        leadData.potential_tcv_lakhs = Number(r.tcv_lakhs);
+        leadData.tcv_manual = true;
+      } else {
+        const autoTcv = computeTcvLakhs(leadData);
+        if (autoTcv > 0) {
+          leadData.potential_tcv_lakhs = autoTcv;
+          leadData.tcv_manual = false;
+        } else {
+          leadData.potential_tcv_lakhs = null;
+          leadData.tcv_manual = true;
+        }
+      }
+
+      valid.push(leadData);
+    }
+  }
+
+  if (dryRun) {
+    return res.json({ validCount: valid.length, errorCount: errors.length, errors, totalRows: rows.length });
+  }
+
+  const t = await sequelize.transaction();
+  try {
+    let maxSr = (await Lead.max('sr_no', { transaction: t })) || 0;
+    const createdIds = [];
+
+    for (const row of valid) {
+      maxSr += 1;
+      const contacts = row._contacts;
+      delete row._contacts;
+      delete row._rowNum;
+
+      const payload = {
+        ...row,
+        sr_no: maxSr,
+        po_type: 'individual',
+        phase_changed_at: new Date(),
+        last_activity_at: new Date(),
+        created_by: req.user.id,
+        updated_by: req.user.id,
+      };
+
+      applyHoldTransition(payload, null, true, row);
+      Object.assign(payload, await scoringFieldsForSave(payload, null));
+
+      const lead = await Lead.create(payload, { transaction: t });
+      await ensureSourceNameOptions(payload, t);
+
+      if (contacts.length > 0) {
+        await LeadContact.bulkCreate(
+          contacts.map(c => ({ lead_id: lead.id, name: c.name, phone: c.phone, email: c.email, designation: c.designation })),
+          { transaction: t },
+        );
+      }
+
+      await StageHistory.create({
+        lead_id: lead.id, from_stage: null, to_stage: payload.phase,
+        changed_by: req.user.name, changed_at: new Date(),
+      }, { transaction: t });
+
+      await ActivityLog.create({
+        lead_id: lead.id, lead_sr_no: lead.sr_no, customer_name: lead.customer_name,
+        user_name: req.user.name, user_id: req.user.id, user_email: req.user.email,
+        action_type: 'lead_created', note: 'Bulk import',
+        business_unit: bu,
+      }, { transaction: t });
+
+      createdIds.push(lead.id);
+    }
+
+    await t.commit();
+    return res.json({
+      validCount: valid.length, errorCount: errors.length, errors,
+      created: createdIds.length,
+      message: `Successfully imported ${createdIds.length} lead${createdIds.length !== 1 ? 's' : ''}.`,
+    });
+  } catch (err) {
+    await t.rollback();
+    return res.status(500).json({ message: `Import failed: ${err.message}` });
   }
 });
 

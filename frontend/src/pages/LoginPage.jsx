@@ -1,12 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login as apiLogin } from '../services/api';
+import { login as apiLogin, getBusinessUnits } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { IS_PROD } from '../env';
 
-const BU_LABEL = { signage: 'Signage', jhes: 'JHES', surveillance: 'Surveillance' };
-const BU_COLOR = { signage: '#4f46e5', jhes: '#ea580c', surveillance: '#0891b2' };
-const BU_DESC  = { signage: 'Digital Signage Solutions', jhes: 'Jio Hospitality & Entertainment Services', surveillance: 'Surveillance & Security Solutions' };
+// Fallback presentation for the three original business units — used only if the live list from
+// GET /api/business-units fails to load (e.g. the API is briefly unreachable). The API is the
+// source of truth, so a business unit added later appears here with no code change.
+const BU_FALLBACK = {
+  signage:      { slug: 'signage',      name: 'Signage',      color: '#4f46e5', description: 'Digital Signage Solutions' },
+  jhes:         { slug: 'jhes',         name: 'JHES',         color: '#ea580c', description: 'Jio Hospitality & Entertainment Services' },
+  surveillance: { slug: 'surveillance', name: 'Surveillance', color: '#0891b2', description: 'Surveillance & Security Solutions' },
+};
+const FALLBACK_LIST = Object.values(BU_FALLBACK);
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -19,6 +25,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [busy, setBusy]         = useState(false);
   const [error, setError]       = useState('');
+  const [businessUnits, setBusinessUnits] = useState(null);  // live list from the API (null until loaded)
 
   // Already signed in? Go to the app.
   useEffect(() => {
@@ -26,6 +33,17 @@ export default function LoginPage() {
       navigate(localStorage.getItem('salescrm_console') === '1' ? '/settings' : '/leads', { replace: true });
     }
   }, [loading, isAuthenticated, user, navigate]);
+
+  // Load the selectable business units. On failure, fall back to the three originals so login still works.
+  useEffect(() => {
+    getBusinessUnits('active')
+      .then(list => setBusinessUnits(Array.isArray(list) && list.length ? list : FALLBACK_LIST))
+      .catch(() => setBusinessUnits(FALLBACK_LIST));
+  }, []);
+
+  // The cards to render, and the presentation for the currently-selected slug.
+  const buList = businessUnits || FALLBACK_LIST;
+  const buMeta = (slug) => (businessUnits || []).find(b => b.slug === slug) || BU_FALLBACK[slug] || { slug, name: slug, color: '#6366f1', description: '' };
 
   const goBack = (target) => {
     setError(''); setPassword(''); setIdent('');
@@ -89,13 +107,13 @@ export default function LoginPage() {
         <h1 style={s.title}>Sales CRM</h1>
         <p style={s.sub}>Select your business to continue</p>
 
-        {['signage', 'jhes', 'surveillance'].map(b => (
-          <button key={b} onClick={() => { setBu(b); setStep('credentials'); setError(''); }}
-            style={{ ...s.buButton, borderColor: BU_COLOR[b] }}>
-            <div style={{ ...s.buIcon, background: BU_COLOR[b] }}>{BU_LABEL[b][0]}</div>
+        {buList.map(b => (
+          <button key={b.slug} onClick={() => { setBu(b.slug); setStep('credentials'); setError(''); }}
+            style={{ ...s.buButton, borderColor: b.color }}>
+            <div style={{ ...s.buIcon, background: b.color }}>{(b.name || b.slug || '?')[0]}</div>
             <div style={{ textAlign: 'left' }}>
-              <div style={s.buName}>{BU_LABEL[b]}</div>
-              <div style={s.buDesc}>{BU_DESC[b]}</div>
+              <div style={s.buName}>{b.name}</div>
+              <div style={s.buDesc}>{b.description}</div>
             </div>
           </button>
         ))}
@@ -143,10 +161,10 @@ export default function LoginPage() {
       <div style={s.card}>
         <button onClick={() => goBack('platform')} style={s.back}>← Back</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <div style={{ ...s.buIcon, background: BU_COLOR[bu], width: 36, height: 36, fontSize: 14 }}>{BU_LABEL[bu][0]}</div>
+          <div style={{ ...s.buIcon, background: buMeta(bu).color, width: 36, height: 36, fontSize: 14 }}>{(buMeta(bu).name || bu || '?')[0]}</div>
           <div>
-            <h2 style={{ ...s.h2, margin: 0 }}>{BU_LABEL[bu]}</h2>
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>{BU_DESC[bu]}</div>
+            <h2 style={{ ...s.h2, margin: 0 }}>{buMeta(bu).name}</h2>
+            <div style={{ fontSize: 12, color: '#94a3b8' }}>{buMeta(bu).description}</div>
           </div>
         </div>
 

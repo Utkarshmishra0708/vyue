@@ -18,7 +18,7 @@ const SCOPE_STYLE = {
   read:  { bg: '#eff6ff', fg: '#1d4ed8', br: '#bfdbfe', label: 'Read-only' },
 };
 
-export default function SuperAdminsPanel() {
+export default function SuperAdminsPanel({ reloadSignal }) {
   const { user, canAct } = useAuth();
   const [data, setData] = useState(null);
   const [audit, setAudit] = useState([]);
@@ -31,7 +31,9 @@ export default function SuperAdminsPanel() {
   const load = useCallback(() => {
     getSuperAdmins().then(setData).catch(() => setData({ superAdmins: [], candidates: [] }));
   }, []);
-  useEffect(() => { load(); }, [load]);
+  // Reload on mount and whenever the parent signals a change (e.g. a new user was just added in
+  // Settings) so a freshly-created Business Admin appears as a grant candidate without a page refresh.
+  useEffect(() => { load(); }, [load, reloadSignal]);
 
   const change = async (id, scope, label) => {
     setBusy(true); setMsg('');

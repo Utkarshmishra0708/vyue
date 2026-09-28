@@ -6,11 +6,23 @@
 //   * recomputes a single lead on save (event-triggered), and
 //   * recomputes every lead on a schedule (time-based decay).
 // ---------------------------------------------------------------------------
-const { Lead, SlaConfig } = require('../models');
+const { Lead, SlaConfig, BusinessUnit } = require('../models');
 const { computeConfidence, recomputeFields, BASE, DEFAULT_SLA, FLOOR } = require('./scoring');
 
-const BUSINESSES = ['signage', 'jhes', 'surveillance'];
 const DAY_MS = 86400000;
+
+// Business units are now data-driven (migration 028) rather than a hardcoded list, so a new BU is
+// picked up here with no code change. Ordered by the admin-set sort order.
+async function listBusinessUnitSlugs() {
+  const rows = await BusinessUnit.findAll({ attributes: ['slug'], order: [['sort_order', 'ASC'], ['name', 'ASC']] });
+  return rows.map(r => r.slug);
+}
+
+// Does this slug name a real business unit? Used by routes (e.g. SLA config) to validate a target BU.
+async function isValidBusinessUnit(slug) {
+  if (!slug) return false;
+  return !!(await BusinessUnit.findOne({ where: { slug }, attributes: ['id'] }));
+}
 
 function localDateString(d = new Date()) {
   const y = d.getFullYear();
@@ -35,9 +47,10 @@ async function slaMapFor(businessUnit) {
 
 // { business_unit: { stage: sla_days } } for every platform.
 async function slaMapsAll() {
+  const slugs = await listBusinessUnitSlugs();
   const rows = await SlaConfig.findAll();
   const maps = {};
-  for (const bu of BUSINESSES) maps[bu] = { ...DEFAULT_SLA };
+  for (const bu of slugs) maps[bu] = { ...DEFAULT_SLA };
   for (const r of rows) {
     (maps[r.business_unit] ||= { ...DEFAULT_SLA })[r.stage] = Number(r.sla_days);
   }
@@ -112,4 +125,4 @@ async function recomputeAll() {
 
 function numOrNull(v) { return (v === null || v === undefined) ? null : Number(v); }
 
-module.exports = { slaMapFor, slaMapsAll, applyHoldTransition, scoringFieldsForSave, recomputeAll, BUSINESSES };
+module.exports = { slaMapFor, slaMapsAll, applyHoldTransition, scoringFieldsForSave, recomputeAll, listBusinessUnitSlugs, isValidBusinessUnit };

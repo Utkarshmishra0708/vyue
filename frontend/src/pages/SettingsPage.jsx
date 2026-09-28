@@ -5,11 +5,11 @@ import { useAuth } from '../context/AuthContext';
 import PermissionsModal from '../components/PermissionsModal';
 import SuperAdminsPanel from '../components/SuperAdminsPanel';
 import PermissionMatrix, { PermissionLegend } from '../components/PermissionMatrix';
-import { getManagedUsers, addUser, updateUser, setUserActive, deleteUser, resetBdPassword, getTat, updateTat, setActivityFeedAccess } from '../services/api';
+import { getManagedUsers, addUser, updateUser, setUserActive, deleteUser, resetBdPassword, getTat, updateTat, setActivityFeedAccess, getBusinessUnits } from '../services/api';
 import { BU_CONFIG } from '../utils/constants';
 import { IS_PROD } from '../env';
 
-const ROLE_LABEL = { super_admin: 'Global Admin', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Team Member' };
+const ROLE_LABEL = { super_admin: 'Global Admin', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Business Development' };
 const ROLE_COLOR = { super_admin: '#7c3aed', business_admin: '#4f46e5', pmo: '#0ea5e9', bd: '#0891b2' };
 const EMPTY_FORM = { name: '', email: '', mobile: '', role: 'bd' };
 
@@ -29,7 +29,7 @@ const ASSIGNABLE = {
 //   extra:   kept so existing capability isn't lost, tucked behind a disclosure
 const ACCOUNT_TYPES = {
   bd: {
-    label: 'Team Member',
+    label: 'Business Development',
     blurb: 'Sees only their own leads · own activity only',
     primary: true,
     perms: { leads: 'full', dashboard: 'read', forecast: 'none', reports: 'none' },
@@ -181,7 +181,7 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
 }
 
 export default function SettingsPage() {
-  const { user, isCrossPlatform, canAct } = useAuth();
+  const { user, isSuperAdmin, isCrossPlatform, canAct } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [msg, setMsg] = useState('');
@@ -193,7 +193,16 @@ export default function SettingsPage() {
   const [transferTo, setTransferTo] = useState('unassigned');
   // The global Admin (super_admin) is not tied to any business, so the console opens business-neutral —
   // they pick a business tab before its users load. Everyone else is fixed to their own business.
-  const [manageBusiness, setManageBusiness] = useState(user.role === 'super_admin' ? null : user.business_unit);
+  const [manageBusiness, setManageBusiness] = useState(isSuperAdmin ? null : user.business_unit);
+  // Business tabs come from the live business_units table (not hardcoded), so a unit created in the
+  // Business Units page shows up here immediately and the Global Admin can add users to it.
+  const [buOptions, setBuOptions] = useState([]);
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    getBusinessUnits('active').then(setBuOptions).catch(() => setBuOptions([]));
+  }, [isSuperAdmin]);
+  // Bumped whenever the user list changes, so the Global Admins panel refreshes its grant candidates.
+  const [saReload, setSaReload] = useState(0);
 
   // Stage TAT (days-per-stage) editor for the Lead Confidence Scoring engine — per platform. Only a
   // business's PMO / Business Admin may edit; the per-stage weightage is a fixed constant (read-only).
@@ -205,9 +214,10 @@ export default function SettingsPage() {
   const [permTarget, setPermTarget] = useState(null); // { id, name } | null
   // A Read-only Super Admin gets the view-only variant of this too — the backend refuses the write
   // either way, but the spec is that they see no edit affordance anywhere.
-  const canEditTat = canAct && (user.role === 'pmo' || user.role === 'business_admin');
+  const canEditTat = canAct && (isSuperAdmin || user.role === 'pmo' || user.role === 'business_admin');
 
   const refresh = () => {
+    setSaReload(x => x + 1);   // keep the Global Admins grant candidates in sync with the user list
     if (!manageBusiness) { setUsers([]); return; }
     getManagedUsers(manageBusiness).then(setUsers).catch(() => setUsers([]));
   };
@@ -237,8 +247,8 @@ export default function SettingsPage() {
   // Can the current actor manage this user row? (mirrors the backend rules — gates the row actions)
   // A Read-only Super Admin sees zero action buttons anywhere, so this gate folds in canAct.
   const canActOn = (u) => canAct
-    && (ASSIGNABLE[user.role] || []).includes(u.role)
-    && (user.role === 'super_admin' || isCrossPlatform || u.business_unit === user.business_unit);
+    && (ASSIGNABLE[effectiveRole] || []).includes(u.role)
+    && (isSuperAdmin || isCrossPlatform || u.business_unit === user.business_unit);
 
   const handleSubmit = async (data) => {
     setBusy(true); setMsg('');
@@ -277,7 +287,7 @@ export default function SettingsPage() {
   // J1: grant/revoke a Manager's platform-wide Activity feed. Only a Global Admin (Read+Write) or a
   // Business Admin may set it, and only for a Manager (pmo). A Manager can never grant it — to self or
   // to another Manager — so the button is shown only when the actor is super_admin/business_admin.
-  const canGrantFeed = canAct && (user.role === 'super_admin' || user.role === 'business_admin');
+  const canGrantFeed = canAct && (isSuperAdmin || user.role === 'business_admin');
   const handleToggleFeed = async (u) => {
     const next = !u.activity_feed_access;
     const verb = next ? 'Grant' : 'Revoke';
@@ -339,8 +349,11 @@ export default function SettingsPage() {
     } finally { setBusy(false); }
   };
 
-  const isSuper = user.role === 'super_admin';
-  const buLabel = manageBusiness ? ((BU_CONFIG[manageBusiness] || {}).label || manageBusiness) : '';
+  const isSuper = isSuperAdmin;
+  const effectiveRole = isSuperAdmin ? 'super_admin' : user.role;
+  const buLabel = manageBusiness
+    ? (buOptions.find(b => b.slug === manageBusiness)?.name || (BU_CONFIG[manageBusiness] || {}).label || manageBusiness)
+    : '';
 
   return (
     <Layout>
@@ -363,14 +376,15 @@ export default function SettingsPage() {
               <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 6px' }}>
                 Admin — choose a business to manage its users. Create a <b>Business Admin</b> to hand off day-to-day management of that business.
               </p>
-              <div style={{ display: 'inline-flex', gap: 4, background: '#f1f5f9', borderRadius: 8, padding: 3 }}>
-                {Object.keys(BU_CONFIG).map(bu => {
-                  const on = manageBusiness === bu;
+              <div style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4, background: '#f1f5f9', borderRadius: 8, padding: 3 }}>
+                {buOptions.length === 0 && <span style={{ fontSize: 12, color: '#94a3b8', padding: '6px 10px' }}>Loading businesses…</span>}
+                {buOptions.map(b => {
+                  const on = manageBusiness === b.slug;
                   return (
-                    <button key={bu} type="button" onClick={() => setManageBusiness(bu)}
+                    <button key={b.slug} type="button" onClick={() => setManageBusiness(b.slug)}
                       style={{ border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
                         background: on ? '#fff' : 'transparent', color: on ? '#0f172a' : '#64748b', boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}>
-                      {BU_CONFIG[bu].label}
+                      {b.name}
                     </button>
                   );
                 })}
@@ -449,7 +463,7 @@ export default function SettingsPage() {
 
         {/* Cross-platform Super Admins — its own section, outside any single platform's user list,
             because the grant spans every platform at once. Visible only to Super Admins. */}
-        {isCrossPlatform && <SuperAdminsPanel />}
+        {isCrossPlatform && <SuperAdminsPanel reloadSignal={saReload} />}
 
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
@@ -480,7 +494,7 @@ export default function SettingsPage() {
           initial={modal.mode === 'edit' ? modal.user : null}
           busy={busy}
           lockRole={modal.mode === 'edit' && modal.user.id === user.id}
-          assignableRoles={ASSIGNABLE[user.role] || []}
+          assignableRoles={ASSIGNABLE[effectiveRole] || []}
           onSubmit={handleSubmit}
           onClose={() => { if (!busy) setModal(null); }}
         />

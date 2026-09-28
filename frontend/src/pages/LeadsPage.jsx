@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import LeadForm from '../components/LeadForm';
+import CustomLeadForm from '../components/CustomLeadForm';
 import ActivityLogView from '../components/ActivityLogView';
 import MultiSelect from '../components/MultiSelect';
 import KanbanView from '../components/KanbanView';
 import GlobalPosView from '../components/GlobalPosView';
+import BulkUploadModal from '../components/BulkUploadModal';
 import { useAuth } from '../context/AuthContext';
-import { getLeads, getLead, deleteLead, updateLead, getBds, bulkUpdateLeads, getStageHistory, getDropdowns } from '../services/api';
+import { getLeads, getLead, deleteLead, updateLead, getBds, bulkUpdateLeads, getStageHistory, getDropdowns, getBusinessUnitConfig } from '../services/api';
 import { PHASE_BADGE } from '../utils/constants';
 import { fmtDate, isTATBreached, isOverdue, getPOExpiryDays, hasConfidence, confidenceTrend, buildRotMetrics, getRotState, stripHtml, primaryContact, formatOtherContacts } from '../utils/leadHelpers';
 import { sortWithWonLast } from '../utils/leadPriority';
@@ -35,6 +37,9 @@ function TrendArrow({ trend }) {
 
 export default function LeadsPage() {
   const { user, isAdmin, canEdit, canFull, canAct } = useAuth();
+  // Custom (wizard-built) businesses render a schema-driven lead form from their template; the three
+  // originals keep their hand-built LeadForm unchanged.
+  const isCustomBusiness = !['signage', 'jhes', 'surveillance'].includes(user.business_unit);
   // Create and delete are Full-Access capabilities. Chains is module-level configuration, which
   // Edit deliberately excludes. Bulk update mutates records, so it needs Edit.
   // canAct is false for a Read-only Super Admin, who sees no action affordance on any platform.
@@ -65,6 +70,8 @@ export default function LeadsPage() {
   const [bulkValue, setBulkValue] = useState('');
   const [cameFromDashboard, setCameFromDashboard] = useState(false);
   const [showChains, setShowChains] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [buConfig, setBuConfig] = useState(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -75,6 +82,7 @@ export default function LeadsPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { getBds(user.business_unit).then(setBds); }, [user.business_unit]);
+  useEffect(() => { getBusinessUnitConfig(user.business_unit).then(setBuConfig).catch(() => {}); }, [user.business_unit]);
   useEffect(() => { getDropdowns().then(setDropdowns).catch(() => {}); }, []);
 
   // Pre-filter from dashboard KPI/phase-chip clicks
@@ -273,7 +281,7 @@ export default function LeadsPage() {
       title: 'Sales CRM — Leads',
       subtitle: `${toExport.length} lead${toExport.length > 1 ? 's' : ''} · generated ${fmtDate(new Date())}`,
       tables: [{
-        columns: ['Sr', 'Customer', 'Team Member', 'Phase', 'Rating', 'TCV (₹L)', 'Conf %', 'Source', 'Next Follow-Up'],
+        columns: ['Sr', 'Customer', 'BD', 'Phase', 'Rating', 'TCV (₹L)', 'Conf %', 'Source', 'Next Follow-Up'],
         rows: toExport.map(l => [
           l.sr_no, l.customer_name, l.owner?.name?.split(' ')[0] || '', l.phase, l.lead_temperature,
           l.potential_tcv_lakhs, hasConfidence(l) ? `${Math.round(Number(l.confidence_score))}%` : '—', l.lead_source,
@@ -309,6 +317,7 @@ export default function LeadsPage() {
             <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, background: view === 'table' ? '#eef2ff' : '#fff' }} onClick={() => setView('table')}>Table</button>
             <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, background: view === 'kanban' ? '#eef2ff' : '#fff' }} onClick={() => setView('kanban')}>Kanban</button>
           </div>
+          {isAdmin && <button className="btn" onClick={() => setShowBulkUpload(true)}>⬆ Bulk Import</button>}
           {leadsCanFull && <button className="btn btn-primary" onClick={openNew}>+ New Lead</button>}
         </div>
       </div>
@@ -326,7 +335,7 @@ export default function LeadsPage() {
           <MultiSelect label="Phase" options={PHASES} selected={filterPhases} onChange={setFilterPhases} />
           <MultiSelect label="Rating" options={ratingOpts} selected={filterTemps} onChange={setFilterTemps} />
           <MultiSelect label="Source" options={sourceOpts} selected={filterSources} onChange={setFilterSources} />
-          {isAdmin && <MultiSelect label="Team Member" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
+          {isAdmin && <MultiSelect label="BD" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#334155' }}>
             <input type="checkbox" checked={filterOverdue} onChange={e => setFilterOverdue(e.target.checked)} /> Overdue only
           </label>
@@ -365,7 +374,7 @@ export default function LeadsPage() {
               <thead>
                 <tr>
                   {isAdmin && <th></th>}
-                  <th>Sr</th><th>Customer</th>{isAdmin && <th>Team Member</th>}<th>Phase</th><th>Location</th>
+                  <th>Sr</th><th>Customer</th>{isAdmin && <th>BD</th>}<th>Phase</th><th>Location</th>
                   <th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>TCV (₹L)</th><th>Scoring</th><th>Next Follow-Up</th>
                 </tr>
               </thead>
@@ -431,7 +440,9 @@ export default function LeadsPage() {
       </div>
 
       {showForm && (
-        <div className="modal-overlay" onClick={closeForm}>
+        // Deliberately NO close-on-backdrop-click here: a stray click outside must not discard a
+        // half-filled lead. Only the ✕ or Cancel button closes the form.
+        <div className="modal-overlay">
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div style={{ display: 'flex', gap: 4 }}>
@@ -444,13 +455,26 @@ export default function LeadsPage() {
               </div>
             </div>
             <div className="modal-body">
-              {tab === 'form' ? <LeadForm lead={editLead} onSave={onSaved} onCancel={closeForm} /> : <ActivityLogView leadId={editLead.id} />}
+              {tab === 'form'
+                ? (isCustomBusiness
+                    ? <CustomLeadForm lead={editLead} onSave={onSaved} onCancel={closeForm} />
+                    : <LeadForm lead={editLead} onSave={onSaved} onCancel={closeForm} />)
+                : <ActivityLogView leadId={editLead.id} />}
             </div>
           </div>
         </div>
       )}
 
       {showChains && <GlobalPosView onClose={() => setShowChains(false)} />}
+
+      {showBulkUpload && (
+        <BulkUploadModal
+          businessUnit={user.business_unit}
+          config={buConfig}
+          onClose={() => setShowBulkUpload(false)}
+          onImported={fetchAll}
+        />
+      )}
 
       {deleteId && (
         <div className="modal-overlay" onClick={() => setDeleteId(null)}>

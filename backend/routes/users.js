@@ -172,7 +172,10 @@ const ASSIGNABLE_ROLES = {
   business_admin: ['pmo', 'bd'],
   pmo:            ['pmo', 'bd'],
 };
-const canManageRole = (actorRole, targetRole) => (ASSIGNABLE_ROLES[actorRole] || []).includes(targetRole);
+const canManageRole = (actor, targetRole) => {
+  const effectiveRole = isSuperAdmin(actor) ? 'super_admin' : actor.role;
+  return (ASSIGNABLE_ROLES[effectiveRole] || []).includes(targetRole);
+};
 
 // The business a created user lands in: super_admin may target any business; everyone else is confined
 // to their own.
@@ -181,7 +184,7 @@ const resolveBusinessUnit = (actor, requestedBu) => (isSuperAdmin(actor) ? (requ
 // Can `actor` manage the existing `target` user? Must be allowed by the role hierarchy AND (unless the
 // actor is super_admin) within the actor's own business.
 function canActOn(actor, target) {
-  if (!canManageRole(actor.role, target.role)) return false;
+  if (!canManageRole(actor, target.role)) return false;
   if (!isSuperAdmin(actor) && target.business_unit !== actor.business_unit) return false;
   return true;
 }
@@ -195,7 +198,7 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
     if (!business_unit) return res.status(400).json({ message: 'business_unit is required' });
     const invalid = validateUserPayload({ name, email, mobile, role });
     if (invalid) return res.status(400).json({ message: invalid });
-    if (!canManageRole(req.user.role, role)) return res.status(403).json({ message: `You are not allowed to create a ${role} account.` });
+    if (!canManageRole(req.user, role)) return res.status(403).json({ message: `You are not allowed to create a ${role} account.` });
 
     // Email is unique per business unit (see migration 002).
     const clash = await User.findOne({ where: { email: email.trim(), business_unit } });
@@ -257,7 +260,7 @@ router.put('/:id', authenticate, adminOnly, async (req, res) => {
     // Anyone can edit their own profile (but not their own role, below); managing others follows the
     // role hierarchy.
     if (!isSelf && !canActOn(req.user, user)) return res.status(403).json({ message: 'You are not allowed to manage this user.' });
-    if (!isSelf && role !== user.role && !canManageRole(req.user.role, role)) return res.status(403).json({ message: `You are not allowed to assign the ${role} role.` });
+    if (!isSelf && role !== user.role && !canManageRole(req.user, role)) return res.status(403).json({ message: `You are not allowed to assign the ${role} role.` });
 
     // A user cannot change their own role.
     if (isSelf && role !== user.role) {
@@ -479,18 +482,34 @@ router.put('/:id/permissions', authenticate, adminOnly, async (req, res) => {
 router.get('/super-admins', authenticate, superAdminOnly, async (req, res) => {
   try {
     const rows = await User.findAll({
-      where: { super_admin_scope: ['read', 'write'] },
+      where: { super_admin_scope: ['read', 'write'], email: { [Op.ne]: null } },
       attributes: { exclude: ['password_hash'] },
       order: [['name', 'ASC']],
     });
-    // Candidates to promote: any active account with an email (Super Admins sign in by email).
+    // Deduplicate by email (case-insensitive) — scope is synced across all rows, so show one
+    // entry per person. Prefer the row with the longest name (most complete) for display.
+    const byEmail = {};
+    for (const u of rows) {
+      const key = u.email.toLowerCase();
+      if (!byEmail[key] || (u.name || '').length > (byEmail[key].name || '').length) {
+        byEmail[key] = u;
+      }
+    }
+    const uniqueRows = Object.values(byEmail);
+    const seen = new Set(Object.keys(byEmail));
+    // Candidates to promote: only BUSINESS ADMINS may be granted Global Admin. Exclude any email that
+    // already belongs to a Global Admin (their own primary row and the auto-provisioned per-business
+    // accounts), so the list shows only real business admins who aren't Global Admins yet.
+    const gaEmails = [...seen];
+    const candWhere = { active: true, role: 'business_admin', super_admin_scope: null, email: { [Op.ne]: null } };
+    if (gaEmails.length) candWhere.email = { [Op.ne]: null, [Op.notIn]: gaEmails };
     const candidates = await User.findAll({
-      where: { active: true, email: { [Op.ne]: null }, super_admin_scope: null },
+      where: candWhere,
       attributes: ['id', 'name', 'email', 'role', 'business_unit'],
       order: [['name', 'ASC']],
     });
     return res.json({
-      superAdmins: rows.map(u => ({
+      superAdmins: uniqueRows.map(u => ({
         id: u.id, name: u.name, email: u.email, role: u.role,
         business_unit: u.business_unit, active: u.active, scope: u.super_admin_scope,
       })),
@@ -530,13 +549,21 @@ router.put('/:id/super-admin', authenticate, superAdminOnly, async (req, res) =>
     // Guard against removing the last write-capable Super Admin and locking everyone out.
     const before = superAdminScope(user);
     if (before === 'write' && scope !== 'write') {
-      const others = await User.count({ where: { super_admin_scope: 'write', active: true, id: { [Op.ne]: user.id } } });
+      const others = await User.count({
+        where: { super_admin_scope: 'write', active: true, email: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: user.email }] } },
+        col: 'email', distinct: true,
+      });
       if (others === 0) {
         return res.status(400).json({ message: 'This is the last Read+Write Super Admin — promote another one before changing this.' });
       }
     }
 
-    await User.update({ super_admin_scope: scope }, { where: { id: user.id } });
+    // Sync scope to ALL rows sharing this email so GA status is consistent across businesses.
+    if (user.email) {
+      await User.update({ super_admin_scope: scope }, { where: { email: user.email } });
+    } else {
+      await User.update({ super_admin_scope: scope }, { where: { id: user.id } });
+    }
 
     // Audit: cross-platform, so business_unit stays null — those entries are admin-only in the feed.
     const LABEL = { write: 'Read+Write', read: 'Read-only', null: 'None' };

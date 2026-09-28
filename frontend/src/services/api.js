@@ -55,6 +55,25 @@ export const changePassword = (currentPassword, newPassword)  => api.post('/auth
 // email's accounts, then with a chosen business_unit to get a token. See routes/auth.js /sso/select. ===
 export const ssoSelect      = (ticket, businessUnit)          => api.post('/auth/sso/select', { ticket, business_unit: businessUnit }).then(r => r.data);
 
+// Business Units — the list powering the login and SSO account-chooser screens (and in-app BU
+// config). Public (no auth): the login screen needs it before anyone is signed in. Pass a status
+// (e.g. 'active') to filter; omit for all.
+export const getBusinessUnits = (status)                     => api.get('/business-units', { params: status ? { status } : undefined }).then(r => r.data);
+// Management (Global Admin only). getBusinessUnitsManage returns full rows + a usage summary.
+export const getBusinessUnitsManage = ()                     => api.get('/business-units/manage').then(r => r.data);
+export const getBusinessUnitUsage   = (slug)                 => api.get(`/business-units/${slug}/usage`).then(r => r.data);
+export const createBusinessUnit     = (data)                 => api.post('/business-units', data).then(r => r.data);
+export const updateBusinessUnit     = (slug, data)           => api.put(`/business-units/${slug}`, data).then(r => r.data);
+// deleteBusinessUnit: pass confirm=<slug> to proceed once the safe-deletion check has passed.
+export const deleteBusinessUnit     = (slug, confirm)        => api.delete(`/business-units/${slug}`, confirm ? { params: { confirm } } : undefined).then(r => r.data);
+export const cloneBusinessUnit      = (slug, data)           => api.post(`/business-units/${slug}/clone`, data).then(r => r.data);
+// Wizard catalog — the union of fields/services/modules (+ dashboard/report options) derived from
+// the existing business units, used to seed the guided creation wizard.
+export const getBuCatalog           = ()                     => api.get('/business-units/catalog').then(r => r.data);
+// A single business unit's resolved config (form schema + services + modules). Any authenticated user
+// may read their own business's config — the lead form renders from it.
+export const getBusinessUnitConfig  = (slug)                 => api.get(`/business-units/${slug}/config`).then(r => r.data);
+
 // Users / BDs
 export const getBds         = (businessUnit)                  => api.get('/users', { params: { role: 'bd', business_unit: businessUnit } }).then(r => r.data);
 export const resetBdPassword= (id, newPassword)               => api.put(`/users/${id}/reset-password`, { newPassword }).then(r => r.data);
@@ -78,6 +97,7 @@ export const createLead     = (data)                          => api.post('/lead
 export const updateLead     = (id, data)                      => api.put(`/leads/${id}`, data).then(r => r.data);
 export const deleteLead     = (id)                            => api.delete(`/leads/${id}`).then(r => r.data);
 export const bulkUpdateLeads= (ids, patch)                    => api.put('/leads/bulk/update', { ids, ...patch }).then(r => r.data);
+export const bulkImportLeads= (rows, businessUnit, dryRun=true)=> api.post('/leads/bulk', { rows, business_unit: businessUnit, dryRun }).then(r => r.data);
 
 // Global POs (chains) — reference-only chain records with derived device-pool status. getGlobalPos
 // lists chains (each with { status: {consumed, remaining, exceeded} }); getGlobalPo adds contributors.

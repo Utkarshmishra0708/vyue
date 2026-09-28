@@ -5,7 +5,7 @@ const router = require('express').Router();
 const { SlaConfig } = require('../models');
 const { authenticate, authorize, adminOnly } = require('../middleware/auth');
 const { STAGES_WITH_SLA, DEFAULT_SLA, BASE } = require('../services/scoring');
-const { recomputeAll, BUSINESSES } = require('../services/scoringEngine');
+const { recomputeAll, isValidBusinessUnit } = require('../services/scoringEngine');
 const audit = require('../services/audit');
 
 router.use(authenticate);
@@ -36,7 +36,7 @@ async function stagesFor(bu) {
 router.get('/', adminOnly, async (req, res) => {
   try {
     const bu = resolveBu(req.user, req.query.business_unit);
-    if (!BUSINESSES.includes(bu)) return res.status(400).json({ message: 'Invalid business_unit' });
+    if (!(await isValidBusinessUnit(bu))) return res.status(400).json({ message: 'Invalid business_unit' });
     return res.json({ business_unit: bu, stages: await stagesFor(bu) });
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -49,7 +49,7 @@ router.get('/', adminOnly, async (req, res) => {
 router.put('/', tatEditors, async (req, res) => {
   try {
     const bu = resolveBu(req.user, req.body.business_unit);
-    if (!BUSINESSES.includes(bu)) return res.status(400).json({ message: 'Invalid business_unit' });
+    if (!(await isValidBusinessUnit(bu))) return res.status(400).json({ message: 'Invalid business_unit' });
     const tats = req.body.tats || req.body.slas || {};
 
     for (const stage of STAGES_WITH_SLA) {

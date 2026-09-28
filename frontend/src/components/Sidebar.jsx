@@ -6,7 +6,7 @@ import { BU_CONFIG, ROLE_LABEL } from '../utils/constants';
 import { IS_PROD } from '../env';
 
 const NAV_ICONS = {
-  leads: '📋', dashboard: '📊', forecast: '📦', reports: '📁', activity: '🕒', settings: '⚙️', 'change-password': '🔒', voc: '🗣️',
+  leads: '📋', dashboard: '📊', forecast: '📦', reports: '📁', activity: '🕒', settings: '⚙️', 'change-password': '🔒', voc: '🗣️', 'business-units': '🏢',
 };
 
 export default function Sidebar() {
@@ -49,6 +49,7 @@ export default function Sidebar() {
   const navItems = isConsoleOnly
     ? [
         { path: '/settings', label: 'Admin Console' },
+        { path: '/business-units', label: 'Business Units' },
         ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
       ]
     : [
@@ -59,6 +60,8 @@ export default function Sidebar() {
         { path: '/reports',   label: 'Reports',   disabled: !canView('reports') },
         ...(canSeeActivityFeed ? [{ path: '/activity', label: 'Activity' }] : []),
         ...(isAdmin ? [{ path: '/settings', label: isSuperAdmin ? 'Admin Console' : 'Settings' }] : []),
+        // Global Admin (cross-platform) can manage business units from within any platform too.
+        ...(isSuperAdmin ? [{ path: '/business-units', label: 'Business Units' }] : []),
         ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
       ];
 
@@ -149,7 +152,7 @@ export default function Sidebar() {
         {!collapsed && (
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{user.name}</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>{ROLE_LABEL[user.role] || user.role}{isConsoleOnly ? ' · All businesses' : ` · ${bu.label}`}</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>{isSuperAdmin ? 'Global Admin' : (ROLE_LABEL[user.role] || user.role)}{isConsoleOnly ? ' · All businesses' : ` · ${bu.label}`}</div>
           </div>
         )}
         {/* Returns to the main page (business selection). Reaching the pre-login landing ends the
