@@ -27,8 +27,8 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
         // Services: the union catalog with this unit's currently-enabled ones ticked, plus any of the
         // unit's custom services that aren't in the union.
         const current = new Map((cfg.services || []).map(s => [s.slug, s]));
-        const union = (cat.services || []).map(s => ({ slug: s.slug, label: s.label, nature: current.get(s.slug)?.nature || s.nature, enabled: current.has(s.slug) }));
-        for (const s of (cfg.services || [])) if (!union.some(u => u.slug === s.slug)) union.push({ slug: s.slug, label: s.label, nature: s.nature, enabled: true, custom: true });
+        const union = (cat.services || []).map(s => ({ slug: s.slug, label: s.label, nature: current.get(s.slug)?.nature || s.nature, hardware: !!current.get(s.slug)?.hardware, enabled: current.has(s.slug) }));
+        for (const s of (cfg.services || [])) if (!union.some(u => u.slug === s.slug)) union.push({ slug: s.slug, label: s.label, nature: s.nature, hardware: !!s.hardware, enabled: true, custom: true });
         setServices(union);
       })
       .catch(e => setErr(e.response?.data?.message || 'Could not load the template.'));
@@ -36,6 +36,7 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
 
   const toggleService = (slug) => setServices(ss => ss.map(s => s.slug === slug ? { ...s, enabled: !s.enabled } : s));
   const setServiceNature = (slug, nature) => setServices(ss => ss.map(s => s.slug === slug ? { ...s, nature } : s));
+  const toggleHardware = (slug) => setServices(ss => ss.map(s => s.slug === slug ? { ...s, hardware: !s.hardware } : s));
   const addCustomService = () => {
     const label = svcDraft.label.trim();
     if (!label) return;
@@ -78,7 +79,7 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
         key: sec.key, label: sec.label, enabled: sec.enabled, custom: !!sec.custom,
         fields: sec.fields.map(f => ({ slug: f.slug, label: f.label, type: f.type, options: f.options || null, core: !!f.core, custom: !!f.custom, enabled: f.enabled, mandatory: f.mandatory })),
       })) };
-      const svc = services.map(s => ({ slug: s.slug, label: s.label, nature: s.nature, enabled: s.enabled }));
+      const svc = services.map(s => ({ slug: s.slug, label: s.label, nature: s.nature, hardware: !!s.hardware, enabled: s.enabled }));
       await updateBusinessUnit(bu.slug, { config: { formSchema, services: svc } });
       onSaved();
     } catch (e) {
@@ -126,15 +127,28 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
               </div>
               <div style={{ padding: '8px 12px' }}>
                 <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 8px' }}>Tick the services this business sells (with OPEX/CAPEX), or add your own. These appear on its New Lead form with rate/qty.</p>
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>!</span>
+                  <span style={{ fontSize: 12, color: '#92400e', fontWeight: 600 }}>Hardware / Inventory: Check the "HW" box only for services that are hardware or require inventory planning. Only those will flow into the Inventory Pipeline.</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 50px', gap: '4px 10px', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Service</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textAlign: 'center' }}>Type</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textAlign: 'center' }}>HW</span>
+                </div>
                 {services.map(s => (
-                  <div key={s.slug} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '5px 0' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer' }}>
+                  <div key={s.slug} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 50px', gap: '4px 10px', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                       <input type="checkbox" checked={s.enabled} onChange={() => toggleService(s.slug)} />
                       <span style={{ fontSize: 13, color: s.enabled ? '#0f172a' : '#94a3b8' }}>{s.label}{s.custom && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, background: '#ecfdf5', color: '#047857', padding: '1px 6px', borderRadius: 999 }}>CUSTOM</span>}</span>
                     </label>
                     <select value={s.nature} disabled={!s.enabled} onChange={e => setServiceNature(s.slug, e.target.value)} style={{ ...ov.input, margin: 0, width: 100, padding: '5px 8px' }}>
                       <option value="opex">OPEX</option><option value="capex">CAPEX</option>
                     </select>
+                    <div style={{ textAlign: 'center' }}>
+                      <input type="checkbox" checked={!!s.hardware} disabled={!s.enabled} onChange={() => toggleHardware(s.slug)}
+                        title="Mark as hardware / inventory item" style={{ accentColor: '#f59e0b', width: 16, height: 16 }} />
+                    </div>
                   </div>
                 ))}
                 <div style={ov.addRow}>

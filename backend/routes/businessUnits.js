@@ -123,7 +123,7 @@ router.get('/:slug/config', authenticate, async (req, res) => {
       slug: bu.slug, name: bu.name, color: bu.color, status: bu.status,
       isOriginal: isOriginalSlug(bu.slug),
       formSchema: resolveFormSchema(bu),
-      services: svc.map(s => ({ slug: s.slug, label: s.label, nature: s.nature })),
+      services: svc.map(s => ({ slug: s.slug, label: s.label, nature: s.nature, hardware: !!s.hardware })),
       modules: cfg.modules || null,
       workflow: cfg.workflow || null,
       dashboards: cfg.dashboards || null,
@@ -242,6 +242,7 @@ router.post('/', async (req, res) => {
           slug: String(svc.slug).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_').slice(0, 64),
           label: String(svc.label || svc.slug).trim().slice(0, 128),
           nature: svc.nature === 'capex' ? 'capex' : 'opex',
+          hardware: !!svc.hardware,
           sort_order: ++order,
         }, { transaction: t });
       }
@@ -294,6 +295,7 @@ router.put('/:slug', async (req, res) => {
             slug: String(svc.slug).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_').slice(0, 64),
             label: String(svc.label || svc.slug).trim().slice(0, 128),
             nature: svc.nature === 'capex' ? 'capex' : 'opex',
+            hardware: !!svc.hardware,
             sort_order: ++order,
           }, { transaction: t });
         }

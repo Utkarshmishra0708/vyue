@@ -172,7 +172,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
       setPhaseChanged(true);
       setPhaseDate(todayStr());
     }
-  }, [lead, isAdmin, user]);
+  }, [lead, isAdmin, user?.id, user?.business_unit]);
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
@@ -667,7 +667,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
                   </div>
                   <Field label="Device Expected Date">
                     <input type="date" className="input" value={form.device_requested_date} onChange={e => set('device_requested_date', e.target.value)} />
-                    <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>When these devices are expected — used (and sorted by) in the Forecast Dashboard.</p>
+                    <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>When these devices are expected — used (and sorted by) in the Inventory Pipeline.</p>
                   </Field>
                 </div>
               )}
@@ -710,8 +710,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
             </div>
           </Field>
           <Field label="PO Validity (Months)">
-            <input type="number" className="input" value={form.contract_period_months || ''} readOnly disabled style={{ background: '#f8fafc', color: '#334155' }} title="Auto-filled from Contract Period" />
-            <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Auto-filled from Contract Period.</p>
+            <input type="number" min="1" className="input" value={form.po_validity_months} onChange={e => set('po_validity_months', e.target.value)} />
           </Field>
         </div>
         {acv() !== null && (

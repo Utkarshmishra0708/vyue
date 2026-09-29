@@ -332,6 +332,7 @@ const ServiceDefinition = sequelize.define('ServiceDefinition', {
   slug:          { type: DataTypes.STRING(64), allowNull: false },
   label:         { type: DataTypes.STRING(128), allowNull: false },
   nature:        { type: DataTypes.ENUM('opex', 'capex'), allowNull: false, defaultValue: 'opex' },
+  hardware:      { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   sort_order:    { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   active:        { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
 }, { tableName: 'service_definitions', underscored: true });

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PrivateRoute, AdminRoute, ModuleRoute, SuperAdminRoute } from './components/PrivateRoute';
@@ -46,6 +46,12 @@ import { BASE_PATH, IS_PROD } from './env';
 })();
 
 export default function App() {
+  useEffect(() => {
+    const handler = (e) => { if (e.target.type === 'number') e.target.blur(); };
+    document.addEventListener('wheel', handler, { passive: true });
+    return () => document.removeEventListener('wheel', handler);
+  }, []);
+
   return (
     <>
       <style>{GLOBAL_CSS}</style>

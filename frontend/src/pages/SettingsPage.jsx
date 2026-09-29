@@ -428,7 +428,7 @@ export default function SettingsPage() {
                         same thing. Access is the single place it is granted. */}
                     {canActOn(u) && (
                       <button className="btn btn-sm" disabled={busy} onClick={() => setPermTarget({ id: u.id, name: u.name })}
-                        title="Set per-module access levels (Leads, Dashboard, Forecast, Reports)">🔐 Access</button>
+                        title="Set per-module access levels (Leads, Dashboard, Inventory Pipeline, Reports)">🔐 Access</button>
                     )}
                     {/* J1: per-Manager Activity-feed grant. Only for Managers, and only a Global Admin /
                         Business Admin can set it. Business Admin / Global Admin get the feed by role, so

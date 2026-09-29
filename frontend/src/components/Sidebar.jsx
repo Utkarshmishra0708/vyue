@@ -56,7 +56,7 @@ export default function Sidebar() {
         { path: '/leads',     label: 'Leads',     disabled: !canView('leads') },
         { path: '/dashboard', label: 'Dashboard', disabled: !canView('dashboard') },
         ...(user.business_unit === 'surveillance' ? [{ path: '/voc', label: 'VOC' }] : []),
-        { path: '/forecast',  label: 'Forecast',  disabled: !canView('forecast') },
+        { path: '/forecast',  label: 'Inventory Pipeline',  disabled: !canView('forecast') },
         { path: '/reports',   label: 'Reports',   disabled: !canView('reports') },
         ...(canSeeActivityFeed ? [{ path: '/activity', label: 'Activity' }] : []),
         ...(isAdmin ? [{ path: '/settings', label: isSuperAdmin ? 'Admin Console' : 'Settings' }] : []),

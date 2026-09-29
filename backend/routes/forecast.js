@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { Lead, User, ActivityLog, LeadContact } = require('../models');
+const { Lead, User, ActivityLog, LeadContact, ServiceDefinition } = require('../models');
 const { Op } = require('sequelize');
 const { authenticate, requireModule } = require('../middleware/auth');
 const { hasLevel } = require('../services/permissions');
@@ -41,8 +41,20 @@ function priceFields(lead) {
 // raw unit rates, or notes) plus the derived price columns from priceFields().
 router.get('/devices', authenticate, requireModule('forecast', 'read'), async (req, res) => {
   try {
+    const bu = req.user.business_unit;
+    const hwServices = await ServiceDefinition.findAll({ where: { business_unit: bu, active: true, hardware: true } });
+    const hwSlugs = hwServices.map(s => s.slug);
+
+    const hwConditions = hwSlugs
+      .map(slug => ({ [`includes_${slug}`]: true }))
+      .filter(cond => Object.keys(cond).length > 0);
+    if (!hwConditions.some(c => 'includes_device' in c)) {
+      hwConditions.push({ includes_device: true });
+    }
+    if (hwConditions.length === 0) hwConditions.push({ includes_device: true });
+
     const rows = await Lead.findAll({
-      where: { includes_device: true, phase: { [Op.ne]: 'Lost' }, business_unit: req.user.business_unit },
+      where: { [Op.or]: hwConditions, phase: { [Op.ne]: 'Lost' }, business_unit: bu },
       attributes: [
         'id', 'customer_name', 'business_unit', 'city', 'state', 'device_sku', 'quantity', 'device_qty',
         'po_expected_date', 'device_requested_date', 'phase',

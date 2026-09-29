@@ -302,7 +302,7 @@ export default function LeadsPage() {
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {cameFromDashboard && <button className="btn btn-sm" onClick={() => navigate('/dashboard')}>← Dashboard</button>}
-          {cameFromForecast && <button className="btn btn-sm" onClick={() => navigate('/forecast')}>← Forecast</button>}
+          {cameFromForecast && <button className="btn btn-sm" onClick={() => navigate('/forecast')}>← Inventory Pipeline</button>}
           {cameFromActivity && <button className="btn btn-sm" onClick={() => navigate('/activity')}>← Activity</button>}
           <div>
             <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Leads</h1>

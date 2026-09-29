@@ -24,6 +24,8 @@ export const GLOBAL_CSS = `
   .input, select.input, textarea.input { width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 13px; outline: none; background: #fff; color: #0f172a; font-family: inherit; }
   .input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
   .input::placeholder { color: #94a3b8; }
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
   label.field-label { font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 5px; }
 
   .badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }

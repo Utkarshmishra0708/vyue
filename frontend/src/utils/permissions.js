@@ -13,7 +13,7 @@ export const MODULES = ['leads', 'dashboard', 'forecast', 'reports'];
 export const MODULE_LABELS = {
   leads: 'Leads',
   dashboard: 'Dashboard',
-  forecast: 'Forecast',
+  forecast: 'Inventory Pipeline',
   reports: 'Reports',
 };
 

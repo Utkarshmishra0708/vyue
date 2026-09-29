@@ -218,13 +218,13 @@ export default function ForecastPage() {
       return row;
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detailRows), 'Detail');
-    XLSX.writeFile(wb, `Hardware_Forecast_${buName || 'FORECAST'}_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, `Inventory_Pipeline_${buName || 'PIPELINE'}_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   const exportPdf = () => {
     if (!deviceLeads.length) return;
     exportRowsToPdf({
-      title: 'Sales CRM — Hardware Forecast',
+      title: 'Sales CRM — Inventory Pipeline',
       subtitle: `${buName} · ${grandTotal} total units · generated ${fmtDate(new Date())}`,
       tables: [
         {
@@ -242,7 +242,7 @@ export default function ForecastPage() {
           rows: deviceLeads.map(l => viewColumns.map(c => c.cell(l))),
         },
       ],
-      filename: `Hardware_Forecast_${buName || 'FORECAST'}_${new Date().toISOString().slice(0,10)}.pdf`,
+      filename: `Inventory_Pipeline_${buName || 'PIPELINE'}_${new Date().toISOString().slice(0,10)}.pdf`,
     });
   };
 
@@ -252,7 +252,7 @@ export default function ForecastPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button className="btn btn-sm" onClick={() => isForecastOnly ? logout() : navigate('/leads')}>{isForecastOnly ? 'Sign out' : '← Back'}</button>
           <div>
-            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Forecast Dashboard</h1>
+            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Inventory Pipeline</h1>
             <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Hardware units expected — by month &amp; SKU · prioritized by stage, confidence, chain, then TCV</p>
           </div>
         </div>
@@ -282,7 +282,7 @@ export default function ForecastPage() {
         ) : (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-              <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Units Forecast</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{grandTotal.toLocaleString()}</p></div>
+              <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Units in Pipeline</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{grandTotal.toLocaleString()}</p></div>
               <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Device Deals</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{deviceLeads.length}</p></div>
               <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Distinct SKUs</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{skus.length}</p></div>
               <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Units</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{deviceLeads.filter(l => l.phase === 'PO Received').reduce((s,l) => s + units(l), 0).toLocaleString()}</p></div>
