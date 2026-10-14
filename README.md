@@ -1,4 +1,4 @@
-# Geo Sales CRM — Enterprise Sales Intelligence Platform
+# Jio Sales CRM — Enterprise Sales Intelligence Platform
 
 > A full-featured, self-hosted CRM built for B2B sales teams that need pipeline visibility, team accountability, and data-driven decision making — without the complexity or cost of Salesforce.
 
