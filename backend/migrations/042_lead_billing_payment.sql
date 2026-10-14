@@ -1,0 +1,2 @@
+ALTER TABLE leads ADD COLUMN billing_cycle VARCHAR(50) NULL;
+ALTER TABLE leads ADD COLUMN payment_terms VARCHAR(50) NULL;

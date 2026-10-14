@@ -38,6 +38,8 @@ app.use('/api/sla',           require('./routes/sla'));
 app.use('/api/dropdowns',     require('./routes/dropdowns'));
 app.use('/api/uploads',       require('./routes/uploads'));
 app.use('/api/forecast',      require('./routes/forecast')); // public, no auth
+app.use('/api/activities',    require('./routes/activities'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // Health
 app.get('/api/health', (req, res) => res.json({ status: 'ok', at: new Date().toISOString() }));
@@ -58,6 +60,10 @@ if (require.main === module) {
     try {
       await runMigrations();
 
+      // Assign customer_code / lead_ref to any leads missing them (one-time, idempotent).
+      const { backfillLeadCodes } = require('./services/leadCodes');
+      await backfillLeadCodes();
+
       // Lead Confidence Scoring runs with no manual intervention: recompute once on boot, then hourly,
       // to apply time-based SLA decay. (Every lead save also recomputes itself — event-triggered.) In
       // production, prefer an external cron running `npm run recompute` instead of this interval.
@@ -67,6 +73,9 @@ if (require.main === module) {
         .catch(e => console.error('[scoring] recompute failed:', e.message));
       await runScoring();
       setInterval(runScoring, 60 * 60 * 1000).unref();
+
+      const { startScheduler } = require('./services/notifications/scheduler');
+      startScheduler();
 
       const port = Number(process.env.PORT) || 4000;
       app.listen(port, () => console.log(`Sales CRM API listening on http://localhost:${port}`));

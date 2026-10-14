@@ -25,6 +25,24 @@ function globalAdminOnly(req, res, next) {
   return res.status(403).json({ message: 'Only a Global Admin can manage business units.' });
 }
 
+// Looser gate for the management surface a Business Admin ALSO has access to — they can view/edit
+// their OWN business unit (name/description/color/business_type/modules + template) but nothing else.
+// Create, Clone, Status change, Delete all remain Global-Admin-only via `globalAdminOnly` below.
+function managerOfBusinessUnit(req, res, next) {
+  if (!req.user) return res.status(401).json({ message: 'Unauthenticated' });
+  if (isSuperAdmin(req.user)) return next();
+  if (req.user.role === 'business_admin') return next();
+  return res.status(403).json({ message: 'Only a Global Admin or Business Admin can manage business units.' });
+}
+
+// Ensures a Business Admin acting on a specific :slug is only touching their OWN BU. A Global Admin
+// passes freely. Returns 403 otherwise.
+function ensureOwnBuForBa(req, res, next) {
+  if (isSuperAdmin(req.user)) return next();
+  if (req.user.role === 'business_admin' && req.user.business_unit === req.params.slug) return next();
+  return res.status(403).json({ message: 'You can only manage your own business unit.' });
+}
+
 // Emails that belong to a Global Admin — their per-business accounts are auto-provisioned convenience
 // rows, not real business users, so they don't count toward the deletion gate and are cascaded away.
 async function globalAdminEmails() {
@@ -123,7 +141,7 @@ router.get('/:slug/config', authenticate, async (req, res) => {
       slug: bu.slug, name: bu.name, color: bu.color, status: bu.status,
       isOriginal: isOriginalSlug(bu.slug),
       formSchema: resolveFormSchema(bu),
-      services: svc.map(s => ({ slug: s.slug, label: s.label, nature: s.nature, hardware: !!s.hardware })),
+      services: svc.map(s => ({ slug: s.slug, label: s.label, nature: s.nature, hardware: !!s.hardware, category: s.category || (s.hardware ? 'hardware' : 'software') })),
       modules: cfg.modules || null,
       workflow: cfg.workflow || null,
       dashboards: cfg.dashboards || null,
@@ -134,13 +152,17 @@ router.get('/:slug/config', authenticate, async (req, res) => {
   }
 });
 
-// Everything below requires a signed-in Global Admin.
-router.use(authenticate, globalAdminOnly);
+// Everything below requires a signed-in user. Global Admin may do everything; Business Admin can
+// only Edit / Edit template on their OWN BU — Create / Clone / Delete / Status change / list all
+// stay Global-Admin-only via per-route guards further down.
+router.use(authenticate, managerOfBusinessUnit);
 
 // GET /api/business-units/catalog — the option set the creation wizard offers, derived from what
 // already exists: the UNION of every unit's services (from service_definitions), the field union,
 // the module list, and the dashboard/report option lists. A service or field added to an existing
 // unit later shows up here automatically.
+// Read-only reference data (field/service/module catalog) — both Global Admin and Business Admin
+// need it: the Business Admin uses it to populate the Edit Template modal for their OWN BU.
 router.get('/catalog', async (req, res) => {
   try {
     const svc = await ServiceDefinition.findAll({ where: { active: true }, order: [['sort_order', 'ASC'], ['label', 'ASC']] });
@@ -173,9 +195,12 @@ router.get('/catalog', async (req, res) => {
 });
 
 // GET /api/business-units/manage — full rows plus a usage summary, for the management page.
+// A Global Admin sees every unit; a Business Admin sees only their own BU (scoped server-side so a
+// crafted request can't fetch other units' configs).
 router.get('/manage', async (req, res) => {
   try {
-    const rows = await BusinessUnit.findAll({ order: [['sort_order', 'ASC'], ['name', 'ASC']] });
+    const where = isSuperAdmin(req.user) ? {} : { slug: req.user.business_unit };
+    const rows = await BusinessUnit.findAll({ where, order: [['sort_order', 'ASC'], ['name', 'ASC']] });
     const out = await Promise.all(rows.map(async (b) => ({
       ...b.toJSON(),
       usage: await usageFor(b.slug),
@@ -186,8 +211,9 @@ router.get('/manage', async (req, res) => {
   }
 });
 
-// GET /api/business-units/:slug/usage — the safe-deletion preview for one unit.
-router.get('/:slug/usage', async (req, res) => {
+// GET /api/business-units/:slug/usage — the safe-deletion preview for one unit. Global-Admin-only
+// since the preview feeds the Delete flow, which is also GA-only.
+router.get('/:slug/usage', globalAdminOnly, async (req, res) => {
   try {
     const bu = await BusinessUnit.findOne({ where: { slug: req.params.slug } });
     if (!bu) return res.status(404).json({ message: 'Business unit not found' });
@@ -202,7 +228,7 @@ router.get('/:slug/usage', async (req, res) => {
 // immediately usable by the confidence engine. Accepts an optional `config` from the creation wizard
 // (fields / services / modules / dashboards / reports / workflow); when present it is stored on the
 // unit and its enabled services are written to service_definitions so they flow through the app.
-router.post('/', async (req, res) => {
+router.post('/', globalAdminOnly, async (req, res) => {
   try {
     const { slug, name, description, color, business_type, owner_id, sort_order, config } = req.body;
     const s = String(slug || '').trim().toLowerCase();
@@ -237,12 +263,14 @@ router.post('/', async (req, res) => {
       const services = Array.isArray(config?.services) ? config.services.filter(x => x && x.enabled && x.slug) : [];
       let order = 0;
       for (const svc of services) {
+        const category = ['hardware', 'software', 'hardware_software'].includes(svc.category) ? svc.category : (svc.hardware ? 'hardware' : 'software');
         await ServiceDefinition.create({
           business_unit: s,
           slug: String(svc.slug).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_').slice(0, 64),
           label: String(svc.label || svc.slug).trim().slice(0, 128),
           nature: svc.nature === 'capex' ? 'capex' : 'opex',
-          hardware: !!svc.hardware,
+          category,
+          hardware: category === 'hardware' || category === 'hardware_software',
           sort_order: ++order,
         }, { transaction: t });
       }
@@ -259,7 +287,9 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/business-units/:slug — edit presentation/status. Slug is immutable (it is the FK target).
-router.put('/:slug', async (req, res) => {
+// A Business Admin may only edit their OWN slug (ensureOwnBuForBa) and may NOT change status (that is
+// a Global-Admin-only lever — disable/archive/activate are server-blocked below for a BA).
+router.put('/:slug', ensureOwnBuForBa, async (req, res) => {
   try {
     const bu = await BusinessUnit.findOne({ where: { slug: req.params.slug } });
     if (!bu) return res.status(404).json({ message: 'Business unit not found' });
@@ -267,6 +297,10 @@ router.put('/:slug', async (req, res) => {
     const { name, description, color, status, business_type, owner_id, sort_order, config } = req.body;
     if (status !== undefined && !STATUSES.includes(status)) {
       return res.status(400).json({ message: `Status must be one of: ${STATUSES.join(', ')}` });
+    }
+    // Only a Global Admin can transition status (disable / archive / reactivate).
+    if (status !== undefined && !isSuperAdmin(req.user)) {
+      return res.status(403).json({ message: 'Only a Global Admin can change the status of a business unit.' });
     }
     if (name !== undefined && !String(name).trim()) return res.status(400).json({ message: 'Name cannot be empty' });
 
@@ -290,12 +324,14 @@ router.put('/:slug', async (req, res) => {
         await ServiceDefinition.destroy({ where: { business_unit: bu.slug }, transaction: t });
         let order = 0;
         for (const svc of config.services.filter(x => x && x.enabled && x.slug)) {
+          const category = ['hardware', 'software', 'hardware_software'].includes(svc.category) ? svc.category : (svc.hardware ? 'hardware' : 'software');
           await ServiceDefinition.create({
             business_unit: bu.slug,
             slug: String(svc.slug).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_').slice(0, 64),
             label: String(svc.label || svc.slug).trim().slice(0, 128),
             nature: svc.nature === 'capex' ? 'capex' : 'opex',
-            hardware: !!svc.hardware,
+            category,
+            hardware: category === 'hardware' || category === 'hardware_software',
             sort_order: ++order,
           }, { transaction: t });
         }
@@ -312,7 +348,7 @@ router.put('/:slug', async (req, res) => {
 //     the admin should Archive instead. We never silently orphan real records.
 //   * If only config rows (dropdowns, SLA) exist, the caller must pass ?confirm=<slug> to proceed;
 //     those config rows are then cascade-removed inside the same transaction.
-router.delete('/:slug', async (req, res) => {
+router.delete('/:slug', globalAdminOnly, async (req, res) => {
   try {
     if (!isSuperAdminWrite(req.user)) {
       return res.status(403).json({ message: 'Your Global Admin access is Read-only — you cannot delete a business unit.' });
@@ -354,7 +390,7 @@ router.delete('/:slug', async (req, res) => {
 
 // POST /api/business-units/:slug/clone — create a new unit from an existing one's CONFIG only.
 // Copies dropdown options and SLA config; never copies users or transactional data (leads/chains/VOCs).
-router.post('/:slug/clone', async (req, res) => {
+router.post('/:slug/clone', globalAdminOnly, async (req, res) => {
   try {
     const source = await BusinessUnit.findOne({ where: { slug: req.params.slug } });
     if (!source) return res.status(404).json({ message: 'Source business unit not found' });

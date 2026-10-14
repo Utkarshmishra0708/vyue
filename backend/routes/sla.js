@@ -3,20 +3,31 @@
 // is independent for each platform (signage / jhes / surveillance).
 const router = require('express').Router();
 const { SlaConfig } = require('../models');
-const { authenticate, authorize, adminOnly } = require('../middleware/auth');
+const { authenticate, adminOnly } = require('../middleware/auth');
 const { STAGES_WITH_SLA, DEFAULT_SLA, BASE } = require('../services/scoring');
 const { recomputeAll, isValidBusinessUnit } = require('../services/scoringEngine');
+const { isSuperAdmin } = require('../services/permissions');
 const audit = require('../services/audit');
 
 router.use(authenticate);
 
-// Editing the TAT is restricted to a business's PMO and Business Admin. (super_admin may VIEW any
-// platform's TAT via GET, but the operational TAT is owned by the business's PMO / Business Admin.)
-const tatEditors = authorize('business_admin', 'pmo');
+// Editing the TAT is restricted to a business's PMO / Business Admin, plus any Global Admin
+// (cross-platform super_admin_scope grant — a Global Admin usually has role='business_admin' with
+// the scope layered on, so a bare role-only check would refuse them).
+function tatEditors(req, res, next) {
+  if (!req.user) return res.status(401).json({ message: 'Unauthenticated' });
+  if (isSuperAdmin(req.user)) return next();
+  if (['business_admin', 'pmo'].includes(req.user.role)) return next();
+  return res.status(403).json({ message: 'Forbidden' });
+}
 
-// super_admin may target any platform via ?business_unit=; everyone else is scoped to their own.
+// A Global Admin (super_admin_scope grant) may target any platform via ?business_unit= or the PUT
+// body; everyone else is confined to their own. Keyed on the scope grant rather than user.role,
+// because a Global Admin's stored role is normally 'business_admin' or 'pmo' — the scope is the
+// additive cross-platform capability. Without this, JHES/Signage edits made from a Global Admin's
+// UI would silently write to whichever BU their account is attached to.
 function resolveBu(user, requested) {
-  return user.role === 'super_admin' ? (requested || user.business_unit) : user.business_unit;
+  return isSuperAdmin(user) ? (requested || user.business_unit) : user.business_unit;
 }
 
 // Full stage list for a platform: the editable TAT (days) plus the FIXED confidence weightage per
@@ -33,7 +44,10 @@ async function stagesFor(bu) {
 }
 
 // GET /api/sla?business_unit=signage → { business_unit, stages: [{stage, tat_days, weight}] }
-router.get('/', adminOnly, async (req, res) => {
+// Readable by ANY authenticated user (scoped to their own business via resolveBu) — the Leads/Kanban
+// aging indicator colours each lead against its stage TAT target, so BDs need to read it too. Editing
+// (PUT) stays restricted to tatEditors.
+router.get('/', async (req, res) => {
   try {
     const bu = resolveBu(req.user, req.query.business_unit);
     if (!(await isValidBusinessUnit(bu))) return res.status(400).json({ message: 'Invalid business_unit' });

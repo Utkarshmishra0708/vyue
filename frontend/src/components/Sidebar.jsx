@@ -6,11 +6,11 @@ import { BU_CONFIG, ROLE_LABEL } from '../utils/constants';
 import { IS_PROD } from '../env';
 
 const NAV_ICONS = {
-  leads: '📋', dashboard: '📊', forecast: '📦', reports: '📁', activity: '🕒', settings: '⚙️', 'change-password': '🔒', voc: '🗣️', 'business-units': '🏢',
+  leads: '📋', dashboard: '📊', forecast: '🚚', reports: '📁', activity: '🕒', settings: '⚙️', 'change-password': '🔒', voc: '🗣️', 'business-units': '🏢', activities: '📌',
 };
 
 export default function Sidebar() {
-  const { user, login, logout, isAdmin, isSuperAdmin, isCrossPlatform, isConsoleOnly, canView, canSeeActivityFeed } = useAuth();
+  const { user, login, logout, isAdmin, isSuperAdmin, isCrossPlatform, isConsoleOnly, canView, canSeeActivityFeed, buHasModule } = useAuth();
   const [switching, setSwitching] = useState(false);
 
   // N1: hop to another platform's account in the same session. We swap the token via login(), then
@@ -55,21 +55,29 @@ export default function Sidebar() {
     : [
         { path: '/leads',     label: 'Leads',     disabled: !canView('leads') },
         { path: '/dashboard', label: 'Dashboard', disabled: !canView('dashboard') },
-        ...(user.business_unit === 'surveillance' ? [{ path: '/voc', label: 'VOC' }] : []),
+        ...(buHasModule('voc') ? [{ path: '/voc', label: 'VOC' }] : []),
         { path: '/forecast',  label: 'Inventory Pipeline',  disabled: !canView('forecast') },
         { path: '/reports',   label: 'Reports',   disabled: !canView('reports') },
+        // Activities kanban — only shown when the BU has enabled it (Surveillance by default,
+        // Signage/JHES only if a Global Admin turns it on via Edit Template). Suppressing the entry
+        // when the BU disables it keeps other businesses' nav uncluttered.
+        ...(buHasModule('activities') ? [{ path: '/activities', label: 'Task Board', disabled: !canView('activities') }] : []),
         ...(canSeeActivityFeed ? [{ path: '/activity', label: 'Activity' }] : []),
         ...(isAdmin ? [{ path: '/settings', label: isSuperAdmin ? 'Admin Console' : 'Settings' }] : []),
-        // Global Admin (cross-platform) can manage business units from within any platform too.
-        ...(isSuperAdmin ? [{ path: '/business-units', label: 'Business Units' }] : []),
+        // Global Admin (cross-platform) can manage every business unit. A Business Admin reaches the
+        // same page but it's scoped server-side to only their OWN BU, so the nav label is singular.
+        ...(isSuperAdmin
+          ? [{ path: '/business-units', label: 'Business Units' }]
+          : (user.role === 'business_admin'
+              ? [{ path: '/business-units', label: 'Business Unit' }]
+              : [])),
         ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
       ];
 
   return (
     <aside style={{
       width: collapsed ? 64 : 220, flexShrink: 0, background: '#0f172a', color: '#cbd5e1',
-      display: 'flex', flexDirection: 'column', height: '100vh', position: 'sticky', top: 0,
-      alignSelf: 'flex-start', transition: 'width .15s',
+      display: 'flex', flexDirection: 'column', height: '100vh', transition: 'width .15s',
     }}>
       {/* Logo → the app's main entry page ("Select your business to continue"). That screen is the
           pre-login landing, so reaching it ends the current session (same as Sign out): in standalone

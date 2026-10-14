@@ -57,16 +57,24 @@ async function slaMapsAll() {
   return maps;
 }
 
-// Apply the On-Hold freeze/resume rules and stamp last_activity_at when a lead is created or saved.
-// Mutates `payload` in place. `existing` is the pre-save row (null on create); `body` is the raw
-// request (for an explicit hold_end_date).
-function applyHoldTransition(payload, existing, isCreate, body, now = new Date()) {
+// Apply the On-Hold freeze/resume rules and stamp last_activity_at when the lead's PHASE actually
+// changes (create, transition between stages, entering or leaving On Hold). Mutates `payload` in
+// place. `existing` is the pre-save row (null on create); `body` is the raw request (for an explicit
+// hold_end_date); `phaseChanged` is true when the caller detected a real stage transition.
+function applyHoldTransition(payload, existing, isCreate, body, now = new Date(), phaseChanged = false) {
   const newPhase = payload.phase;
   const wasHold = !isCreate && existing && existing.phase === 'On Hold';
 
-  // A save is a touchpoint → the decay clock restarts (Section 4.4). While On Hold the clock is
-  // irrelevant (frozen), and on resume we want it reset — so stamping now is correct in all cases.
-  payload.last_activity_at = now;
+  // Only a genuine touchpoint restarts the SLA decay clock: creating the lead, moving it between
+  // stages, or entering / leaving On Hold. Routine field edits (notes, contacts, custom fields,
+  // address tweaks) must not reset the clock — otherwise every save springs a decayed lead back to
+  // its base weight, so a "Just typed in the notes box" edit looks like it raised the score.
+  const isTouchpoint = isCreate || phaseChanged;
+  if (isTouchpoint) {
+    payload.last_activity_at = now;
+  } else if (existing) {
+    payload.last_activity_at = existing.last_activity_at;
+  }
 
   if (newPhase === 'On Hold') {
     if (wasHold) {

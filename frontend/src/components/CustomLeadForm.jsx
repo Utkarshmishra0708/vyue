@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { getBds, getDropdowns, getBusinessUnitConfig, createLead, updateLead, getGlobalPos, createGlobalPo } from '../services/api';
 import { STAGE_ORDER, INDIAN_STATES, UNION_TERRITORIES } from '../utils/constants';
 import { todayStr, addDaysStr } from '../utils/leadHelpers';
+import MentionTextarea from './MentionTextarea';
+import ServicesOffered, { parseServiceLines } from './ServicesOffered';
 
 // Schema-driven lead form for CUSTOM (wizard-built) business units. It renders exactly the sections
 // and fields configured for that business (business_units.config.formSchema): predefined ("core")
@@ -19,23 +21,29 @@ const SOURCE_META = {
 };
 // Fields rendered by dedicated controls (not the generic section loop): stage, PO type (shown as
 // cards), PO document, and the three lead-source name fields (shown inline under Lead Source).
-const SKIP = new Set(['phase', 'next_followup_date', 'po_expected_date', 'lost_reason', 'po_type', 'po_document_url', 'channel_partner_name', 'kam_name', 'affiliate_name']);
+const SKIP = new Set(['phase', 'next_followup_date', 'po_expected_date', 'lost_reason', 'po_type', 'po_document_url', 'channel_partner_name', 'kam_name', 'affiliate_name',
+  // new_or_renewal is no longer a manual field — plain new leads auto-tag "New"; the "+ Additional PO"
+  // header flow tags leads "Expansion" (Additional) or "Renewal".
+  'new_or_renewal',
+  // Contacts fields are rendered by the dedicated Contacts (POC) sub-form, not the generic loop.
+  'contact_name', 'contact_email', 'contact_phone', 'contact_designation',
+  'billing_cycle', 'payment_terms']);
 const LOST_REASONS = ['Pricing', 'Competition', 'No Budget', 'No Decision', 'Timing', 'Product Fit', 'Other'];
 // Sections that come AFTER Phase & Timeline in the original form layout.
 const AFTER_PHASE = new Set(['po', 'dates', 'other']);
 
-export default function CustomLeadForm({ lead, onSave, onCancel }) {
+export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expansionFrom = null, expansionMode = 'additional' }) {
   const { user } = useAuth();
   const [cfg, setCfg] = useState(null);
   const [bds, setBds] = useState([]);
   const [dropdowns, setDropdowns] = useState({});
   const [form, setForm] = useState({});       // core field slug -> value (also owner_id, phase, contract_period_months)
   const [custom, setCustom] = useState({});   // custom field slug -> value
-  const [services, setServices] = useState([]); // [{ slug, label, nature, rate, qty, enabled }]
+  const [lines, setLines] = useState([]);     // Services Offered line list (services_json shape)
   const [poType, setPoType] = useState('individual');   // individual (a lead) | global (a chain record)
   const [linkToChain, setLinkToChain] = useState(false);
   const [chains, setChains] = useState([]);
-  const [globalForm, setGlobalForm] = useState({ chain_name: '', device_total: '', price_lakhs: '', expected_start_date: '', expected_end_date: '' });
+  const [globalForm, setGlobalForm] = useState({ chain_name: '', device_total: '', device_type: '', price_lakhs: '', expected_start_date: '', expected_end_date: '' });
   const [contacts, setContacts] = useState([]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -47,33 +55,90 @@ export default function CustomLeadForm({ lead, onSave, onCancel }) {
         setBds(bdList || []);
         setDropdowns(dd || {});
         setChains(chainList || []);
-        // Seed services from the business catalogue, merging any values already on the lead.
-        const existingSvc = lead && lead.services_json ? safeParse(lead.services_json) : [];
-        const byLabel = new Map(existingSvc.map(s => [s.label, s]));
-        setServices((config.services || []).map(s => {
-          const e = byLabel.get(s.label);
-          return { slug: s.slug, label: s.label, nature: (e && e.nature) || s.nature, rate: e ? e.rate : '', qty: e ? e.qty : '', enabled: !!e };
-        }));
+        // Seed the Services Offered lines from the lead's stored services_json (new v2 shape).
+        // On a Renewal, carry over the source PO's services; a plain/additional new lead starts blank.
+        const isRenewal = !lead && expansionFrom && expansionMode === 'renewal';
+        setLines(lead ? parseServiceLines(lead.services_json) : (isRenewal ? parseServiceLines(expansionFrom.services_json) : []));
         // Seed form + custom values from an existing lead (edit) or blanks (create).
         if (lead) {
-          setForm({ owner_id: lead.owner_id || '', phase: lead.phase || 'New', contract_period_months: lead.contract_period_months || '', global_po_id: lead.global_po_id || '', next_followup_date: lead.next_followup_date || '', po_expected_date: lead.po_expected_date || '', lost_reason: lead.lost_reason || '', ...pickCore(lead, config) });
+          setForm({ owner_id: lead.owner_id || '', phase: lead.phase || 'New', contract_period_months: lead.contract_period_months || '', global_po_id: lead.global_po_id || '', next_followup_date: lead.next_followup_date || '', po_expected_date: lead.po_expected_date || '', device_requested_date: lead.device_requested_date || '', lost_reason: lead.lost_reason || '', ...pickCore(lead, config) });
           setCustom(lead.custom_fields || {});
           setContacts((lead.contacts || []).map(c => ({ name: c.name, phone: c.phone || '', email: c.email || '', designation: c.designation || '' })));
           if (lead.global_po_id) setLinkToChain(true);
         } else {
-          setForm({ owner_id: '', phase: 'New', contract_period_months: '', next_followup_date: '', po_expected_date: '', lost_reason: '' });
+          // NEW lead flow. Three cases:
+          //   plain new  → blank, auto-tagged "New".
+          //   additional → copy STATIC fields from the source lead; tagged "Expansion".
+          //   renewal    → copy statics PLUS deal size; tagged "Renewal", linked to the source PO.
+          const ef = expansionFrom || null;
+          const renewal = ef && expansionMode === 'renewal';
+          const base = { owner_id: ef?.owner_id || '', phase: 'New', contract_period_months: '', next_followup_date: '', po_expected_date: '', device_requested_date: '', lost_reason: '', new_or_renewal: 'New' };
+          if (ef) {
+            // Copy any core-field slug that the saved template tracks AND the source lead has a value for.
+            Object.assign(base, pickCore(ef, config));
+            // Overwrite the key statics explicitly (pickCore respects the schema but we also want these
+            // regardless of whether the custom template toggled them off at some point).
+            if (ef.customer_name) base.customer_name = ef.customer_name;
+            if (ef.property_type) base.property_type = ef.property_type;
+            if (ef.property_category) base.property_category = ef.property_category;
+            if (ef.state) base.state = ef.state;
+            if (ef.city) base.city = ef.city;
+            if (ef.lead_source) base.lead_source = ef.lead_source;
+            if (ef.channel_partner_name) base.channel_partner_name = ef.channel_partner_name;
+            if (ef.kam_name) base.kam_name = ef.kam_name;
+            if (ef.affiliate_name) base.affiliate_name = ef.affiliate_name;
+            if (ef.lead_temperature) base.lead_temperature = ef.lead_temperature;
+            base.new_or_renewal = renewal ? 'Renewal' : 'Expansion';
+            // Renewal repeats the same contract — copy its deal size so only dates/price change.
+            if (renewal) {
+              base.contract_period_months = ef.contract_period_months || '';
+              base.potential_tcv_lakhs = ef.potential_tcv_lakhs || '';
+              base.po_validity_months = ef.po_validity_months || '';
+            }
+          }
+          if (ef && ef.global_po_id) {
+            base.global_po_id = ef.global_po_id;
+            setLinkToChain(true);
+          } else {
+            setLinkToChain(false);
+          }
+          setForm(base);
           setCustom({});
-          setContacts([{ name: '', phone: '', email: '', designation: '' }]);
+          const copiedContacts = ef && Array.isArray(ef.contacts) && ef.contacts.length
+            ? ef.contacts.map(c => ({ name: c.name || '', phone: c.phone || '', email: c.email || '', designation: c.designation || '' }))
+            : [{ name: '', phone: '', email: '', designation: '' }];
+          setContacts(copiedContacts);
         }
       })
       .catch(e => setErr(e.response?.data?.message || 'Could not load this business template.'));
-  }, [user.business_unit, lead]);
+  }, [user.business_unit, lead, expansionFrom, expansionMode]);
 
   const sections = useMemo(() => (cfg ? cfg.formSchema.sections.filter(s => s.enabled) : []), [cfg]);
 
+  // Contacts (POC) config from the template: Name & Email are always shown/required; Phone and
+  // Designation can be hidden or made mandatory per business. Defaults to shown/optional when the
+  // template has no contacts section yet (older businesses).
+  const contactCfg = useMemo(() => {
+    const sec = (cfg?.formSchema?.sections || []).find(s => s.key === 'contacts');
+    const f = (slug) => sec && sec.fields ? sec.fields.find(x => x.slug === slug) : null;
+    const p = f('contact_phone'), d = f('contact_designation'), n = f('contact_name'), e = f('contact_email');
+    return {
+      showPhone: p ? p.enabled !== false : true, phoneReq: p ? !!p.mandatory : false,
+      showDesig: d ? d.enabled !== false : true, desigReq: d ? !!d.mandatory : false,
+      nameReq: n ? !!n.mandatory : false, emailReq: e ? !!e.mandatory : false,
+    };
+  }, [cfg]);
+  // Mandatory resolver for CustomLeadForm's hardcoded (non-generic) fields. Only Customer Name, Phase
+  // and the structural Lead Owner are always required; everything else follows the template.
+  const mandatoryOf = useMemo(() => {
+    const m = {};
+    for (const sec of (cfg?.formSchema?.sections || [])) for (const f of (sec.fields || [])) m[f.slug] = !!f.mandatory;
+    return m;
+  }, [cfg]);
+  const reqField = (slug) => slug === 'customer_name' || slug === 'phase' || slug === 'owner_id' || !!mandatoryOf[slug];
+
   const setF = (slug, v) => setForm(f => ({ ...f, [slug]: v }));
   const setC = (slug, v) => setCustom(c => ({ ...c, [slug]: v }));
-  const setSvc = (slug, patch) => setServices(ss => ss.map(s => s.slug === slug ? { ...s, ...patch } : s));
   const addContact = () => setContacts(c => [...c, { name: '', phone: '', email: '', designation: '' }]);
   const updateContact = (i, key, val) => setContacts(c => c.map((row, idx) => idx === i ? { ...row, [key]: val } : row));
   const removeContact = (i) => setContacts(c => c.filter((_, idx) => idx !== i));
@@ -85,6 +150,12 @@ export default function CustomLeadForm({ lead, onSave, onCancel }) {
       return [...new Set([...(dropdowns.lead_source || []), ...SOURCE_KINDS])];
     }
     if (f.slug === 'state') return STATE_OPTIONS;
+    // Hide "Expansion" from the New/Renewal picker in the regular New Lead flow — Expansion leads
+    // can ONLY be created from the + Expansion flow, which locks the field to "Expansion" itself.
+    if (f.slug === 'new_or_renewal') {
+      const base = Array.isArray(f.options) ? f.options : [];
+      return expansionFrom ? base : base.filter(o => o !== 'Expansion');
+    }
     return Array.isArray(f.options) ? f.options : [];
   };
   const setGlobal = (k, v) => setGlobalForm(g => ({ ...g, [k]: v }));
@@ -101,6 +172,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel }) {
         await createGlobalPo({
           chain_name: globalForm.chain_name.trim(),
           device_total: parseInt(globalForm.device_total, 10) || 0,
+          device_type: globalForm.device_type,
           price_lakhs: globalForm.price_lakhs ? parseFloat(globalForm.price_lakhs) : null,
           expected_start_date: globalForm.expected_start_date || null,
           expected_end_date: globalForm.expected_end_date || null,
@@ -125,26 +197,30 @@ export default function CustomLeadForm({ lead, onSave, onCancel }) {
     if (form.lead_source === 'Channel Partner' && !String(form.channel_partner_name || '').trim()) { setErr('Channel Partner Name is required.'); return; }
     if (form.lead_source === 'KAM' && !String(form.kam_name || '').trim()) { setErr('KAM Name is required.'); return; }
     if (form.lead_source === 'Lead Affiliate' && !String(form.affiliate_name || '').trim()) { setErr('Affiliate Name is required.'); return; }
-    if (contacts.length === 0 || contacts.some(c => !c.name.trim() || !c.email.trim())) {
-      setErr('At least one contact (POC) with Name and Email is required.'); return;
+    // Contacts (POC) — enforce only what the template marks mandatory; drop empty rows.
+    const nonEmptyContacts = contacts.filter(c => [c.name, c.email, c.phone, c.designation].some(v => String(v || '').trim()));
+    const anyContactReq = contactCfg.nameReq || contactCfg.emailReq || contactCfg.phoneReq || contactCfg.desigReq;
+    if (anyContactReq && nonEmptyContacts.length === 0) { setErr('At least one contact (POC) is required.'); return; }
+    for (const c of nonEmptyContacts) {
+      if (contactCfg.nameReq && !String(c.name || '').trim()) { setErr('Name is required for each contact.'); return; }
+      if (contactCfg.emailReq && !String(c.email || '').trim()) { setErr('Email is required for each contact.'); return; }
+      if (contactCfg.phoneReq && !String(c.phone || '').trim()) { setErr('Phone is required for each contact.'); return; }
+      if (contactCfg.desigReq && !String(c.designation || '').trim()) { setErr('Designation is required for each contact.'); return; }
     }
 
-    // Services → the JSON line-item shape the backend expects (surveillance_services).
-    const chosen = services.filter(s => s.enabled).map(s => ({
-      label: s.label, nature: s.nature, rate: parseFloat(s.rate) || 0, qty: parseInt(s.qty, 10) || 0,
-    }));
-    const hasServiceValues = chosen.some(s => s.rate > 0 && s.qty > 0);
-    const manualTcv = !hasServiceValues && form.potential_tcv_lakhs;
-
+    // Services Offered — the unified v2 line list. The backend recomputes TCV/ACV from it.
     const body = {
       ...form,
       business_unit: user.business_unit,
       global_po_id: linkToChain ? (form.global_po_id || null) : null,
-      surveillance_services: chosen,        // custom BUs use the JSON services path server-side
+      services: lines,
       custom_fields: custom,
-      contacts,
-      tcv_manual: !!manualTcv,
-      potential_tcv_lakhs: manualTcv ? form.potential_tcv_lakhs : undefined,
+      contacts: nonEmptyContacts,
+      // Renewal copies the source PO's TCV verbatim — keep it manual so the backend doesn't recompute
+      // it to 0 before the user has re-entered services. Plain/additional leads compute from services.
+      tcv_manual: (!lead && expansionFrom && expansionMode === 'renewal'),
+      // Renewal flow: link this new lead back to the specific PO it renews.
+      renewed_from_lead_id: (!lead && expansionFrom && expansionMode === 'renewal') ? expansionFrom.id : undefined,
     };
 
     setBusy(true);
@@ -169,7 +245,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel }) {
 
   // PO Type chooser (only when creating): an Individual PO is a funnel lead; a Global PO is a chain
   // reference record. Shown in both branches so the user can switch back.
-  const poCards = poEnabled && !lead && (
+  const poCards = poEnabled && !lead && !expansionFrom && (
     <div>
       <p className="section-title">PO TYPE</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -185,26 +261,11 @@ export default function CustomLeadForm({ lead, onSave, onCancel }) {
     </div>
   );
 
-  // Services Offered block (reused; injected before Commercials in the main form).
-  const servicesBlock = services.length > 0 ? (
-    <div key="__services__">
-      <p className="section-title">SERVICES OFFERED</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {services.map(s => (
-          <div key={s.slug} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 90px 70px 90px', gap: 8, alignItems: 'center' }}>
-            <input type="checkbox" checked={s.enabled} onChange={e => setSvc(s.slug, { enabled: e.target.checked })} />
-            <span style={{ fontSize: 13 }}>{s.label}</span>
-            <select className="input" value={s.nature} disabled={!s.enabled} onChange={e => setSvc(s.slug, { nature: e.target.value })} style={{ padding: '6px 8px' }}>
-              <option value="opex">OPEX</option><option value="capex">CAPEX</option>
-            </select>
-            <input className="input" type="number" placeholder="Qty" value={s.qty} disabled={!s.enabled} onChange={e => setSvc(s.slug, { qty: e.target.value })} style={{ padding: '6px 8px' }} />
-            <input className="input" type="number" placeholder="Rate" value={s.rate} disabled={!s.enabled} onChange={e => setSvc(s.slug, { rate: e.target.value })} style={{ padding: '6px 8px' }} />
-          </div>
-        ))}
-      </div>
-      <p style={{ fontSize: 11, color: '#94a3b8', margin: '8px 0 0' }}>TCV is auto-calculated from the ticked services × contract period.</p>
-    </div>
-  ) : null;
+  // Services Offered block — the shared catalog-driven, three-category section.
+  const servicesBlock = (
+    <ServicesOffered key="__services__" catalog={cfg.services || []} contractMonths={form.contract_period_months}
+      value={lines} onChange={setLines} />
+  );
 
   // Global PO branch — create a chain reference record instead of a lead.
   if (!lead && poType === 'global') {
@@ -215,9 +276,17 @@ export default function CustomLeadForm({ lead, onSave, onCancel }) {
           <p className="section-title">GLOBAL PO — CHAIN REFERENCE</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div><label className="field-label">Chain Name *</label><input className="input" value={globalForm.chain_name} onChange={e => setGlobal('chain_name', e.target.value)} placeholder="e.g. Sunrise Hotels" /></div>
-            <div><label className="field-label">Number of Devices</label><input className="input" type="number" min="0" value={globalForm.device_total} onChange={e => setGlobal('device_total', e.target.value)} /></div>
+            <div><label className="field-label">Number of Requirement *</label><input className="input" type="number" min="0" value={globalForm.device_total} onChange={e => setGlobal('device_total', e.target.value)} /></div>
+            <div>
+              <label className="field-label">Type *</label>
+              <select className="input" value={globalForm.device_type} onChange={e => setGlobal('device_type', e.target.value)}>
+                <option value="">Select type…</option>
+                {(cfg?.services || []).map(s => (
+                  <option key={s.slug} value={s.label}>{s.label}</option>
+                ))}
+              </select>
+            </div>
             <div><label className="field-label">Price (₹ Lakhs)</label><input className="input" type="number" step="0.01" value={globalForm.price_lakhs} onChange={e => setGlobal('price_lakhs', e.target.value)} /></div>
-            <div />
             <div><label className="field-label">Expected Start Date</label><input className="input" type="date" value={globalForm.expected_start_date} onChange={e => setGlobal('expected_start_date', e.target.value)} /></div>
             <div><label className="field-label">Expected End Date</label><input className="input" type="date" value={globalForm.expected_end_date} onChange={e => setGlobal('expected_end_date', e.target.value)} /></div>
           </div>
@@ -234,10 +303,25 @@ export default function CustomLeadForm({ lead, onSave, onCancel }) {
 
   return (
     <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {expansionFrom && !lead && (
+        <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#3730a3', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>{expansionMode === 'renewal' ? '🔄' : '➕'}</span>
+          <span>
+            <strong>{expansionMode === 'renewal' ? 'Renewal of' : 'Additional PO for'} {expansionFrom.customer_name}</strong>
+            {expansionFrom.lead_ref && <span style={{ color: '#6366f1', fontFamily: 'monospace', marginLeft: 6 }}>· copied from {expansionFrom.lead_ref}</span>}
+            <span style={{ color: '#64748b', marginLeft: 6, fontSize: 12 }}>
+              {expansionMode === 'renewal'
+                ? 'Statics, services and deal size copied from the PO being renewed. Adjust the dates and price.'
+                : 'Static details filled in. Fill the services, deal size and dates fresh.'}
+            </span>
+          </span>
+        </div>
+      )}
       {poCards}
 
-      {/* Chain mapping — only when the PO Type is enabled in this business's template. */}
-      {poEnabled && (
+      {/* Chain mapping — only when the PO Type is enabled in this business's template.
+          For Additional/Renewal flows, chain mapping is inherited from the source lead. */}
+      {poEnabled && !expansionFrom && (
       <div>
         <p className="section-title">CHAIN MAPPING</p>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#334155' }}>
@@ -249,11 +333,20 @@ export default function CustomLeadForm({ lead, onSave, onCancel }) {
             <label className="field-label">Chain (Global PO)</label>
             <select className="input" value={form.global_po_id || ''} onChange={e => setF('global_po_id', e.target.value)}>
               <option value="">Select a chain…</option>
-              {chains.map(c => <option key={c.id} value={c.id}>{c.chain_name}</option>)}
+              {chains.map(c => <option key={c.id} value={c.id}>{c.chain_name} ({c.device_type || 'Hardware'})</option>)}
             </select>
             {chains.length === 0 && <p style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>No chains yet — create one via New Lead → PO Type → Global PO.</p>}
           </div>
         ) : <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Standalone property — no chain mapping.</p>}
+      </div>
+      )}
+      {poEnabled && expansionFrom && linkToChain && (
+      <div>
+        <p className="section-title">CHAIN MAPPING</p>
+        <p style={{ fontSize: 13, color: '#334155' }}>
+          Linked to chain: <strong>{chains.find(c => String(c.id) === String(form.global_po_id))?.chain_name || '—'}</strong>
+          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 6 }}>(inherited from source PO)</span>
+        </p>
       </div>
       )}
 
@@ -320,15 +413,25 @@ export default function CustomLeadForm({ lead, onSave, onCancel }) {
                   <input type="date" className="input" value={form.next_followup_date} onChange={e => setF('next_followup_date', e.target.value)} />
                 </div>
               )}
-              {form.phase === 'Lost' && (
-                <div>
-                  <label className="field-label">Lost Reason *</label>
-                  <select required className="input" value={form.lost_reason} onChange={e => setF('lost_reason', e.target.value)}>
-                    <option value="">Select reason</option>
-                    {LOST_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-              )}
+              {form.phase === 'Lost' && (() => {
+                const isCustomLost = form.lost_reason && !LOST_REASONS.includes(form.lost_reason) && form.lost_reason !== 'Other';
+                return (
+                  <div>
+                    <label className="field-label">Lost Reason *</label>
+                    {form.lost_reason === 'Other' || isCustomLost ? (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <input className="input" style={{ flex: 1 }} placeholder="Please describe the reason…" value={isCustomLost ? form.lost_reason : ''} onChange={e => setF('lost_reason', e.target.value || 'Other')} autoFocus />
+                        <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => setF('lost_reason', '')}>✕</button>
+                      </div>
+                    ) : (
+                      <select required className="input" value={form.lost_reason} onChange={e => setF('lost_reason', e.target.value)}>
+                        <option value="">Select reason</option>
+                        {LOST_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    )}
+                  </div>
+                );
+              })()}
               {form.phase === 'On Hold' && (
                 <div>
                   <label className="field-label">Resume / Hold-until Date</label>
@@ -337,9 +440,56 @@ export default function CustomLeadForm({ lead, onSave, onCancel }) {
                 </div>
               )}
               <div>
-                <label className="field-label">PO Expected Date{form.phase !== 'Lost' ? ' *' : ''}</label>
-                <input type="date" className="input" value={form.po_expected_date} onChange={e => setF('po_expected_date', e.target.value)} required={form.phase !== 'Lost'} />
+                <label className="field-label">Hardware Requested Date</label>
+                <input type="date" className="input" value={form.device_requested_date || ''} onChange={e => setF('device_requested_date', e.target.value)} />
+                <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>When the hardware for this deal is expected — used (and sorted by) in the Inventory Pipeline.</p>
               </div>
+              <div>
+                <label className="field-label">PO Expected Date{reqField('po_expected_date') ? ' *' : ''}</label>
+                <input type="date" className="input" value={form.po_expected_date} onChange={e => setF('po_expected_date', e.target.value)} required={reqField('po_expected_date')} />
+              </div>
+              {form.phase === 'PO Received' && (() => {
+                const BILLING_OPTS = ['Monthly', 'Quarterly', 'Semi-annually', 'Annually', 'Advance'];
+                const isCustom = form.billing_cycle && !BILLING_OPTS.includes(form.billing_cycle);
+                return (
+                  <div>
+                    <label className="field-label">Billing Cycle</label>
+                    {isCustom ? (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <input className="input" style={{ flex: 1 }} placeholder="Enter billing cycle" value={form.billing_cycle} onChange={e => setF('billing_cycle', e.target.value)} autoFocus />
+                        <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => setF('billing_cycle', '')}>✕</button>
+                      </div>
+                    ) : (
+                      <select className="input" value={form.billing_cycle || ''} onChange={e => setF('billing_cycle', e.target.value === 'Others' ? ' ' : e.target.value)}>
+                        <option value="">Select billing cycle</option>
+                        {BILLING_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+                        <option value="Others">Others (type custom)</option>
+                      </select>
+                    )}
+                  </div>
+                );
+              })()}
+              {form.phase === 'PO Received' && (() => {
+                const PAYMENT_OPTS = ['100% Advance', '7 Days Credit', '15 Days Credit', '30 Days Credit', '45 Days Credit'];
+                const isCustom = form.payment_terms && !PAYMENT_OPTS.includes(form.payment_terms);
+                return (
+                  <div>
+                    <label className="field-label">Payment Terms</label>
+                    {isCustom ? (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <input className="input" style={{ flex: 1 }} placeholder="Enter payment terms" value={form.payment_terms} onChange={e => setF('payment_terms', e.target.value)} autoFocus />
+                        <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => setF('payment_terms', '')}>✕</button>
+                      </div>
+                    ) : (
+                      <select className="input" value={form.payment_terms || ''} onChange={e => setF('payment_terms', e.target.value === 'Others' ? ' ' : e.target.value)}>
+                        <option value="">Select payment terms</option>
+                        {PAYMENT_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+                        <option value="Others">Others (type custom)</option>
+                      </select>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         );
@@ -348,20 +498,23 @@ export default function CustomLeadForm({ lead, onSave, onCancel }) {
       {/* Section: Contacts (POC) — between Phase & Timeline and PO/Dates/Other */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <p className="section-title" style={{ margin: 0 }}>Contacts (POC) *</p>
+          <p className="section-title" style={{ margin: 0 }}>Contacts (POC){(contactCfg.nameReq || contactCfg.emailReq || contactCfg.phoneReq || contactCfg.desigReq) ? ' *' : ''}</p>
           <button type="button" className="btn btn-sm" onClick={addContact}>+ Add Contact</button>
         </div>
-        <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 0' }}>At least one contact is required — Name and Email are mandatory.</p>
+        <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 0' }}>Add the point(s) of contact for this deal.{(contactCfg.nameReq || contactCfg.emailReq) ? ' At least one contact is required.' : ''}</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-          {contacts.map((c, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-              <div><label className="field-label">Name *</label><input required className="input" value={c.name} onChange={e => updateContact(i, 'name', e.target.value)} /></div>
-              <div><label className="field-label">Phone</label><input className="input" value={c.phone} onChange={e => updateContact(i, 'phone', e.target.value)} /></div>
-              <div><label className="field-label">Email *</label><input required type="email" className="input" value={c.email} onChange={e => updateContact(i, 'email', e.target.value)} /></div>
-              <div><label className="field-label">Designation</label><input className="input" value={c.designation} onChange={e => updateContact(i, 'designation', e.target.value)} /></div>
+          {contacts.map((c, i) => {
+            const cols = ['1fr', ' 1fr', contactCfg.showPhone ? ' 1fr' : '', contactCfg.showDesig ? ' 1fr' : '', ' auto'].join('');
+            return (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: cols, gap: 8, alignItems: 'end' }}>
+              <div><label className="field-label">Name{contactCfg.nameReq ? ' *' : ''}</label><input required={contactCfg.nameReq} className="input" value={c.name} onChange={e => updateContact(i, 'name', e.target.value)} /></div>
+              <div><label className="field-label">Email{contactCfg.emailReq ? ' *' : ''}</label><input required={contactCfg.emailReq} type="email" className="input" value={c.email} onChange={e => updateContact(i, 'email', e.target.value)} /></div>
+              {contactCfg.showPhone && <div><label className="field-label">Phone{contactCfg.phoneReq ? ' *' : ''}</label><input required={contactCfg.phoneReq} className="input" value={c.phone} onChange={e => updateContact(i, 'phone', e.target.value)} /></div>}
+              {contactCfg.showDesig && <div><label className="field-label">Designation{contactCfg.desigReq ? ' *' : ''}</label><input required={contactCfg.desigReq} className="input" value={c.designation} onChange={e => updateContact(i, 'designation', e.target.value)} /></div>}
               <button type="button" className="btn btn-sm btn-danger" onClick={() => removeContact(i)} style={{ marginBottom: 2 }}>✕</button>
             </div>
-          ))}
+            );
+          })}
           {contacts.length === 0 && <p style={{ fontSize: 12, color: '#dc2626' }}>At least one contact (POC) is required — click "+ Add Contact".</p>}
         </div>
       </div>
@@ -419,24 +572,46 @@ function SourceNameField({ leadSource, form, setF, dropdowns }) {
   );
 }
 
-function FieldInput({ field, value, onChange, options }) {
+export function FieldInput({ field, value, onChange, options, optionLabels = {}, disabled = false }) {
   const label = <label className="field-label">{field.label}{field.mandatory ? ' *' : ''}</label>;
-  const common = { className: 'input', value: value ?? '', onChange: e => onChange(e.target.value) };
+  const common = { className: 'input', value: value ?? '', disabled, onChange: e => onChange(e.target.value) };
+  // optionLabels lets a caller show a different label for a stored value (e.g. value "Expansion"
+  // displayed as "Additional") without changing what's actually saved.
+  const labelOf = (o) => optionLabels[o] || o;
   let control;
   switch (field.type) {
-    case 'textarea': control = <textarea {...common} rows={2} />; break;
+    case 'textarea': control = <MentionTextarea className="input" rows={2} value={value ?? ''} disabled={disabled} onChange={v => onChange(v)} placeholder="Use @Name to mention someone" />; break;
     case 'number':   control = <input {...common} type="number" />; break;
     case 'decimal':  control = <input {...common} type="number" step="0.01" />; break;
     case 'date':     control = <input {...common} type="date" />; break;
     case 'checkbox': control = (
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, height: 38 }}>
-        <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} /> Yes
+        <input type="checkbox" checked={!!value} disabled={disabled} onChange={e => onChange(e.target.checked)} /> Yes
       </label>); break;
-    case 'select': control = (
-      <select {...common}>
-        <option value="">Select…</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>); break;
+    case 'select': {
+      const hasOther = options.includes('Other') || options.includes('Others');
+      const standardOpts = hasOther ? options.filter(o => o !== 'Other' && o !== 'Others') : options;
+      const isCustom = hasOther && value && value.trim() && !options.includes(value);
+      if (hasOther && (isCustom || (value && !standardOpts.includes(value) && !options.includes(value)))) {
+        control = (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input className="input" style={{ flex: 1 }} placeholder={`Enter ${field.label.toLowerCase()}`} value={value.trim() ? value : ''} disabled={disabled} onChange={e => onChange(e.target.value || ' ')} autoFocus />
+            <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} disabled={disabled} onClick={() => onChange('')}>✕</button>
+          </div>);
+      } else {
+        control = (
+          <select {...common} onChange={e => {
+            if (e.target.value === '__field_other__') onChange(' ');
+            else onChange(e.target.value);
+          }}>
+            <option value="">Select…</option>
+            {value && !options.includes(value) && value !== ' ' && <option value={value}>{labelOf(value)}</option>}
+            {standardOpts.map(o => <option key={o} value={o}>{labelOf(o)}</option>)}
+            {hasOther && <option value="__field_other__">Other (type custom)</option>}
+          </select>);
+      }
+      break;
+    }
     case 'multiselect': control = (
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {options.map(o => {
@@ -463,7 +638,6 @@ function pickCore(lead, config) {
   }
   return out;
 }
-function safeParse(s) { try { return JSON.parse(s) || []; } catch { return []; } }
 function poCardStyle(active) {
   return { textAlign: 'left', padding: 14, borderRadius: 12, cursor: 'pointer',
     border: active ? '2px solid #4f46e5' : '2px solid #e2e8f0', background: active ? '#eef2ff' : '#fff' };

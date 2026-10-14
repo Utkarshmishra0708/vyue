@@ -9,6 +9,7 @@ import {
 } from '../utils/constants';
 import { fmtDate } from '../utils/leadHelpers';
 import { writeFormattedSheet } from '../utils/excelExport';
+import MentionTextarea from '../components/MentionTextarea';
 
 const CAN_REVIEW = ['super_admin', 'business_admin', 'pmo'];   // PMO / Business Admin / Super Admin
 const today = () => new Date().toISOString().slice(0, 10);
@@ -44,9 +45,9 @@ function Breakdown({ title, data, color = '#6366f1' }) {
 }
 
 export default function VocPage() {
-  const { user } = useAuth();
+  const { user, buHasModule } = useAuth();
   const canReview = CAN_REVIEW.includes(user.role);
-  const allowed = user.business_unit === 'surveillance' || user.role === 'super_admin';
+  const allowed = buHasModule('voc') || user.role === 'super_admin';
 
   const [vocs, setVocs] = useState([]);
   const [bds, setBds] = useState([]);
@@ -69,7 +70,7 @@ export default function VocPage() {
     getVocs().then(setVocs).catch(() => setVocs([])).finally(() => setLoading(false));
   }, []);
   useEffect(() => { if (allowed) fetchAll(); }, [allowed, fetchAll]);
-  useEffect(() => { getBds('surveillance').then(setBds).catch(() => setBds([])); }, []);
+  useEffect(() => { getBds(user.business_unit).then(setBds).catch(() => setBds([])); }, [user.business_unit]);
 
   const filtered = useMemo(() => vocs.filter(v => {
     const s = search.toLowerCase();
@@ -118,13 +119,13 @@ export default function VocPage() {
       'Competitor': v.competitor || '', 'Priority': v.priority || '', 'Status': v.status,
       'Product Remarks': v.product_remarks || '', 'Target Release': v.target_release || '', 'Closure Date': v.closure_date || '',
     }));
-    writeFormattedSheet(XLSX, rows, 'VOC', `VOC_Surveillance_${today()}.xlsx`);
+    writeFormattedSheet(XLSX, rows, 'VOC', `VOC_${user.business_unit}_${today()}.xlsx`);
   };
 
   const bdNames = bds.map(b => b.name);
 
   if (!allowed) {
-    return <Layout><div style={{ padding: 40 }}><h1 style={{ fontSize: 18 }}>VOC</h1><p style={{ color: '#64748b' }}>The Voice of Customer module is available for the Surveillance business only.</p></div></Layout>;
+    return <Layout><div style={{ padding: 40 }}><h1 style={{ fontSize: 18 }}>VOC</h1><p style={{ color: '#64748b' }}>The Voice of Customer module is not enabled for your business. Please contact your administrator.</p></div></Layout>;
   }
 
   return (
@@ -132,7 +133,7 @@ export default function VocPage() {
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>VOC — Voice of Customer</h1>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Surveillance · {stats.open} open · {stats.total} total</p>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{stats.open} open · {stats.total} total</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => setShowDash(s => !s)}>{showDash ? 'Hide' : 'Show'} dashboard</button>
@@ -289,19 +290,36 @@ function VocModal({ mode, voc, bds, canReview, user, onClose, onSaved, onDelete 
     finally { setBusy(false); }
   };
 
-  const Sel = ({ label, k, opts, required, ro }) => (
-    <div>
-      <label className="field-label">{label}{required && ' *'}</label>
-      <select className="input" value={form[k]} onChange={set(k)} disabled={ro || !canEdit} required={required}>
-        <option value="">Select</option>
-        {opts.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  );
+  const Sel = ({ label, k, opts, required, ro }) => {
+    const hasOther = opts.includes('Other') || opts.includes('Others');
+    const standardOpts = hasOther ? opts.filter(o => o !== 'Other' && o !== 'Others') : opts;
+    const isCustom = hasOther && form[k] && form[k].trim() && !opts.includes(form[k]);
+    return (
+      <div>
+        <label className="field-label">{label}{required && ' *'}</label>
+        {hasOther && isCustom ? (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input className="input" style={{ flex: 1 }} placeholder={`Enter ${label.toLowerCase()}`} value={form[k]} onChange={set(k)} disabled={ro || !canEdit} autoFocus />
+            <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} disabled={ro || !canEdit} onClick={() => setForm(f => ({ ...f, [k]: '' }))}>✕</button>
+          </div>
+        ) : (
+          <select className="input" value={form[k]} onChange={e => {
+            if (e.target.value === '__sel_other__') setForm(f => ({ ...f, [k]: ' ' }));
+            else { const fn = set(k); fn(e); }
+          }} disabled={ro || !canEdit} required={required}>
+            <option value="">Select</option>
+            {standardOpts.map(o => <option key={o} value={o}>{o}</option>)}
+            {hasOther && <option value="__sel_other__">Other (type custom)</option>}
+          </select>
+        )}
+      </div>
+    );
+  };
 
+  // No close-on-backdrop-click: a stray click must not discard half-filled VOC input.
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 720 }} onClick={e => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth: 720 }}>
         <div className="modal-header">
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span className={`tab ${tab === 'form' ? 'active' : ''}`} onClick={() => setTab('form')}>{isEdit ? `VOC #${voc.voc_no}` : 'New VOC'}</span>
@@ -356,22 +374,13 @@ function VocModal({ mode, voc, bds, canReview, user, onClose, onSaved, onDelete 
                 </div>
                 <div style={{ marginTop: 12 }}>
                   <label className="field-label">Detailed Description of Requirement *</label>
-                  <textarea className="input" rows={3} value={form.description} onChange={set('description')} required disabled={!canEdit} style={{ resize: 'vertical' }} />
+                  <MentionTextarea className="input" rows={3} value={form.description || ''} onChange={v => setForm(f => ({ ...f, description: v }))} required disabled={!canEdit} style={{ resize: 'vertical' }} />
                 </div>
               </section>
 
-              <section>
-                <p className="section-title">Product Team {reviewerRO && <span style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>(updated by PMO / Product team)</span>}</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <Sel label="Status" k="status" opts={VOC_STATUSES} ro={reviewerRO} />
-                  <div><label className="field-label">Target Release Version</label><input className="input" value={form.target_release} onChange={set('target_release')} disabled={reviewerRO || !canEdit} /></div>
-                  <div><label className="field-label">Closure Date</label><input type="date" className="input" value={form.closure_date} onChange={set('closure_date')} disabled={reviewerRO || !canEdit} /></div>
-                </div>
-                <div style={{ marginTop: 12 }}>
-                  <label className="field-label">Product Team Remarks</label>
-                  <textarea className="input" rows={2} value={form.product_remarks} onChange={set('product_remarks')} disabled={reviewerRO || !canEdit} style={{ resize: 'vertical' }} />
-                </div>
-              </section>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Sel label="Status" k="status" opts={VOC_STATUSES} ro={reviewerRO} />
+              </div>
 
               {err && <p style={{ fontSize: 12, color: '#dc2626', margin: 0 }}>{err}</p>}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
@@ -382,7 +391,7 @@ function VocModal({ mode, voc, bds, canReview, user, onClose, onSaved, onDelete 
           ) : (
             <div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-                <input className="input" placeholder="Add a comment…" value={comment} onChange={e => setComment(e.target.value)} />
+                <MentionTextarea className="input" rows={1} placeholder="Add a comment… @Name to mention" value={comment} onChange={v => setComment(v)} style={{ minHeight: 36 }} />
                 <button className="btn btn-primary btn-sm" disabled={busy || !comment.trim()} onClick={postComment}>Add</button>
               </div>
               <p className="section-title">Activity & Audit Trail</p>

@@ -116,9 +116,10 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
     );
   };
 
+  // No close-on-backdrop-click: a stray click must not discard in-progress user form input.
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: isAdd ? 620 : 460 }} onClick={e => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth: isAdd ? 620 : 460 }}>
         <div className="modal-header">
           <span style={{ fontWeight: 700, fontSize: 15 }}>{mode === 'edit' ? 'Edit User' : 'Add User'}</span>
           <button className="btn btn-sm" onClick={onClose}>✕</button>
@@ -181,7 +182,7 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
 }
 
 export default function SettingsPage() {
-  const { user, isSuperAdmin, isCrossPlatform, canAct } = useAuth();
+  const { user, isSuperAdmin, isCrossPlatform, isConsoleOnly, canAct } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [msg, setMsg] = useState('');
@@ -191,9 +192,11 @@ export default function SettingsPage() {
   const [resetValue, setResetValue] = useState('');
   const [transferFor, setTransferFor] = useState(null); // { user, leadCount } — BD delete needs lead transfer
   const [transferTo, setTransferTo] = useState('unassigned');
-  // The global Admin (super_admin) is not tied to any business, so the console opens business-neutral —
-  // they pick a business tab before its users load. Everyone else is fixed to their own business.
-  const [manageBusiness, setManageBusiness] = useState(isSuperAdmin ? null : user.business_unit);
+  // The Admin Console follows the sidebar Platform selection: a Global Admin in a business session
+  // opens straight to the business they're currently in (user.business_unit) and the other tabs are
+  // greyed out — to manage another, they switch platform on the left. The console-only Global Admin
+  // (logged in via the Global Admin button, no platform switcher) keeps the manual business picker.
+  const [manageBusiness, setManageBusiness] = useState((isSuperAdmin && isConsoleOnly) ? null : user.business_unit);
   // Business tabs come from the live business_units table (not hardcoded), so a unit created in the
   // Business Units page shows up here immediately and the Global Admin can add users to it.
   const [buOptions, setBuOptions] = useState([]);
@@ -374,16 +377,23 @@ export default function SettingsPage() {
           {isSuper && (
             <div style={{ marginBottom: 12 }}>
               <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 6px' }}>
-                Admin — choose a business to manage its users. Create a <b>Business Admin</b> to hand off day-to-day management of that business.
+                {isConsoleOnly
+                  ? <>Admin — choose a business to manage its users. Create a <b>Business Admin</b> to hand off day-to-day management of that business.</>
+                  : <>You're managing the business selected in the <b>Platform</b> switcher on the left. To manage a different one, switch platform there — the other tabs below are greyed out as a reminder.</>}
               </p>
               <div style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4, background: '#f1f5f9', borderRadius: 8, padding: 3 }}>
                 {buOptions.length === 0 && <span style={{ fontSize: 12, color: '#94a3b8', padding: '6px 10px' }}>Loading businesses…</span>}
                 {buOptions.map(b => {
                   const on = manageBusiness === b.slug;
+                  // Console-only GA picks any business; a business-session GA is locked to the current
+                  // platform (others greyed + disabled — switch platform on the left to change).
+                  const locked = !isConsoleOnly && !on;
                   return (
-                    <button key={b.slug} type="button" onClick={() => setManageBusiness(b.slug)}
-                      style={{ border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                        background: on ? '#fff' : 'transparent', color: on ? '#0f172a' : '#64748b', boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}>
+                    <button key={b.slug} type="button" disabled={locked}
+                      onClick={isConsoleOnly ? () => setManageBusiness(b.slug) : undefined}
+                      title={locked ? 'Switch to this platform on the left to manage it' : undefined}
+                      style={{ border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: locked ? 'not-allowed' : (on ? 'default' : 'pointer'),
+                        background: on ? '#fff' : 'transparent', color: on ? '#0f172a' : (locked ? '#cbd5e1' : '#64748b'), boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none', opacity: locked ? 0.7 : 1 }}>
                       {b.name}
                     </button>
                   );
@@ -501,8 +511,8 @@ export default function SettingsPage() {
       )}
 
       {tatModal && (
-        <div className="modal-overlay" onClick={() => !tatBusy && setTatModal(false)}>
-          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: 520 }}>
             <div className="modal-header">
               <span style={{ fontWeight: 700, fontSize: 15 }}>Stage TAT{buLabel ? ` — ${buLabel}` : ''}</span>
               <button className="btn btn-sm" onClick={() => setTatModal(false)} disabled={tatBusy}>✕</button>
@@ -549,8 +559,8 @@ export default function SettingsPage() {
       )}
 
       {transferFor && (
-        <div className="modal-overlay" onClick={() => !busy && setTransferFor(null)}>
-          <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: 440 }}>
             <div className="modal-header">
               <span style={{ fontWeight: 700, fontSize: 15 }}>Transfer leads before deleting</span>
               <button className="btn btn-sm" onClick={() => setTransferFor(null)} disabled={busy}>✕</button>

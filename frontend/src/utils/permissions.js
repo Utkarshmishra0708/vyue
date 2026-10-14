@@ -8,13 +8,14 @@
 // ---------------------------------------------------------------------------
 
 // Settings is deliberately NOT a module: it stays role-gated to the admin tier.
-export const MODULES = ['leads', 'dashboard', 'forecast', 'reports'];
+export const MODULES = ['leads', 'dashboard', 'forecast', 'reports', 'activities'];
 
 export const MODULE_LABELS = {
   leads: 'Leads',
   dashboard: 'Dashboard',
   forecast: 'Inventory Pipeline',
   reports: 'Reports',
+  activities: 'Task Board',
 };
 
 export const LEVELS = ['none', 'read', 'edit', 'full'];
@@ -42,6 +43,7 @@ export const PATH_MODULE = {
   '/dashboard': 'dashboard',
   '/forecast': 'forecast',
   '/reports': 'reports',
+  '/activities': 'activities',
 };
 
 // Does this permission map meet at least `minLevel` for `module`? A module missing

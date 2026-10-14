@@ -157,6 +157,80 @@ export function isTATBreached(lead) {
   return daysBetween(dateStr, new Date()) > TAT_DAYS;
 }
 
+// Days the lead has sat in its CURRENT phase (since the last phase change, else since creation).
+export function daysInStage(lead) {
+  const dateStr = lead.phase_changed_at || lead.createdAt;
+  if (!dateStr) return null;
+  return Math.max(0, daysBetween(dateStr, new Date()));
+}
+
+// Aging of a lead relative to its stage's TAT target. tatMap = { [stage]: tat_days }.
+// Returns { days, target, level } with level 'ok' | 'warn' | 'over' | null:
+//   ok   = within the stage target (green)
+//   warn = past the target, up to 2x (amber)
+//   over = more than 2x the target (red)
+//   null = no aging (closed/paused phases) or no target configured for the stage (neutral)
+// Closed/terminal phases (PO Received, Lost) and the paused On Hold phase carry no aging.
+export function stageAging(lead, tatMap) {
+  if (['PO Received', 'Lost', 'On Hold'].includes(lead.phase)) return { days: null, target: null, level: null };
+  const days = daysInStage(lead);
+  if (days === null) return { days: null, target: null, level: null };
+  const target = (tatMap && tatMap[lead.phase] != null) ? Number(tatMap[lead.phase]) : null;
+  let level = null;
+  if (target != null) level = days > target * 2 ? 'over' : days > target ? 'warn' : 'ok';
+  return { days, target, level };
+}
+
+// Renewal radar, keyed on PO End Date (service_end_date) for WON POs (phase PO Received).
+// Build a Set of lead IDs that have been renewed (some other lead points to them via renewed_from_lead_id).
+// Pass this set into renewalStatus so renewed POs show "Renewed" instead of expiry warnings.
+export function buildRenewedSet(leads) {
+  const s = new Set();
+  for (const l of leads) if (l.renewed_from_lead_id) s.add(l.renewed_from_lead_id);
+  return s;
+}
+
+// Returns { days, band } or null (not a won PO, or no PO End Date). `days` is signed: positive =
+// days until expiry, negative = days since it lapsed. Bands drive the traffic-light colours:
+//   renewed (PO has been renewed — stop nagging)
+//   expired (<0) · red (≤30 / 1mo) · amber (≤60 / 2mo) · yellow (≤90 / 3mo) · ok (>90, far out)
+export function renewalStatus(lead, renewedIds) {
+  if (lead.phase !== 'PO Received') return null;
+  // If this PO has already been renewed, short-circuit — no expiry warning needed.
+  if (renewedIds && renewedIds.has(lead.id)) return { days: null, band: 'renewed' };
+  const end = lead.service_end_date;
+  if (!end) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const endD = new Date(end); endD.setHours(0, 0, 0, 0);
+  if (isNaN(endD.getTime())) return null;
+  const days = Math.round((endD - today) / 86400000);
+  let band;
+  if (days < 0) band = 'expired';
+  else if (days <= 30) band = 'red';
+  else if (days <= 60) band = 'amber';
+  else if (days <= 90) band = 'yellow';
+  else band = 'ok';
+  return { days, band };
+}
+
+// Colours for each renewal band (yellow → amber → red → dark-red Expired; ok = neutral; renewed = green).
+export const RENEWAL_BAND_STYLE = {
+  yellow:  { bg: '#fef08a', fg: '#854d0e', border: '#fde047' },
+  amber:   { bg: '#fdba74', fg: '#9a3412', border: '#fb923c' },
+  red:     { bg: '#fca5a5', fg: '#991b1b', border: '#f87171' },
+  expired: { bg: '#7f1d1d', fg: '#ffffff', border: '#7f1d1d' },
+  ok:      { bg: '#f1f5f9', fg: '#64748b', border: '#e2e8f0' },
+  renewed: { bg: '#dcfce7', fg: '#166534', border: '#86efac' },
+};
+
+// Human label for a renewal status badge, e.g. "Due in 47d" / "Expired 12d ago" / "Renewed".
+export function renewalLabel(status) {
+  if (!status) return '';
+  if (status.band === 'renewed') return 'Renewed';
+  if (status.band === 'expired') return `Expired ${Math.abs(status.days)}d ago`;
+  return `Due in ${status.days}d`;
+}
+
 export function isOverdue(lead) {
   if (!lead.next_followup_date) return false;
   if (['Lost', 'PO Received', 'On Hold'].includes(lead.phase)) return false;

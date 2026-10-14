@@ -49,6 +49,11 @@ const Lead = sequelize.define('Lead', {
   // sr_no is a human-facing sequence number, set by the app (max+1) on create —
   // MySQL only allows one AUTO_INCREMENT column per table, and `id` already is it.
   sr_no:                   { type: DataTypes.INTEGER, unique: true },
+  // customer_code groups all leads of the same customer (per business unit); lead_ref is the unique
+  // per-lead reference (customer_code + running PO sequence). Assigned in services/leadCodes.js.
+  customer_code:           { type: DataTypes.STRING(20) },
+  location_code:           { type: DataTypes.STRING(10) },   // 3-letter city code (see services/leadCodes.js)
+  lead_ref:                { type: DataTypes.STRING(30) },
   customer_name:           { type: DataTypes.STRING(255), allowNull: false },
   owner_id:                { type: DataTypes.INTEGER, allowNull: false },
   // business_unit is a slug FK into business_units (migration 029) — was an ENUM, now VARCHAR.
@@ -67,6 +72,7 @@ const Lead = sequelize.define('Lead', {
   kam_name:                { type: DataTypes.STRING(255) },
   affiliate_name:          { type: DataTypes.STRING(255) },
   new_or_renewal:          { type: DataTypes.ENUM('New', 'Renewal', 'Expansion') },
+  renewed_from_lead_id:    { type: DataTypes.INTEGER },   // Renewal → the PO it renews (see + Additional PO flow)
   lead_temperature:        { type: DataTypes.ENUM('Hot', 'Warm', 'Cold') },
   competitor:              { type: DataTypes.STRING(255) },
   quantity:                { type: DataTypes.INTEGER, defaultValue: 0 },
@@ -78,6 +84,8 @@ const Lead = sequelize.define('Lead', {
   po_validity_months:      { type: DataTypes.INTEGER },
   acv_lakhs:               { type: DataTypes.DECIMAL(12, 2) },
   contract_value_lakhs:    { type: DataTypes.DECIMAL(12, 2) },
+  billing_cycle:           { type: DataTypes.STRING(50) },
+  payment_terms:           { type: DataTypes.STRING(50) },
   phase:                   { type: DataTypes.STRING(32), defaultValue: 'New' },
   phase_changed_at:        { type: DataTypes.DATE },
   // --- Lead Confidence Scoring (see backend/services/scoring.js + migration 013) ---
@@ -121,6 +129,7 @@ const Lead = sequelize.define('Lead', {
   sent_to_scm:             { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   sent_to_scm_at:          { type: DataTypes.DATE },
   sent_to_scm_by:          { type: DataTypes.STRING(255) },
+  sent_to_scm_lines:       { type: DataTypes.JSON },
   platform_rate:           { type: DataTypes.DECIMAL(12, 2) },
   cms_rate:                { type: DataTypes.DECIMAL(12, 2) },
   connectivity_rate:       { type: DataTypes.DECIMAL(12, 2) },
@@ -228,6 +237,9 @@ const GlobalPo = sequelize.define('GlobalPo', {
   business_unit:       { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'signage' },
   chain_name:          { type: DataTypes.STRING(255), allowNull: false },
   device_total:        { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  device_type:         { type: DataTypes.STRING(100), allowNull: false, defaultValue: 'Hardware' },
+  status:              { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'New' },
+  notes:               { type: DataTypes.TEXT },
   price_lakhs:         { type: DataTypes.DECIMAL(14, 2) },
   expected_start_date: { type: DataTypes.DATEONLY },
   expected_end_date:   { type: DataTypes.DATEONLY },
@@ -277,6 +289,43 @@ const VocActivity = sequelize.define('VocActivity', {
   new_value:     { type: DataTypes.TEXT },
   note:          { type: DataTypes.TEXT },
 }, { tableName: 'voc_activity', underscored: true, updatedAt: false });
+
+// --------------------------------------------------------------------------
+// Activity — a kanban card on the Activities board. One card per row; the "column" is stored as
+// the `status` field. BU-scoped: each business has its own board. Enabled per BU via
+// business_units.config.modules and per user via users.module_permissions.
+// --------------------------------------------------------------------------
+const Activity = sequelize.define('Activity', {
+  id:              { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  business_unit:   { type: DataTypes.STRING(32), allowNull: false },
+  tab_id:          { type: DataTypes.INTEGER },
+  title:           { type: DataTypes.STRING(255), allowNull: false },
+  description:     { type: DataTypes.TEXT },
+  previous_steps:  { type: DataTypes.TEXT },
+  recent_updates:  { type: DataTypes.TEXT },
+  next_steps:      { type: DataTypes.TEXT },
+  status:          { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'to_do' },
+  priority:        { type: DataTypes.STRING(16) },
+  owner_id:        { type: DataTypes.INTEGER },              // legacy, kept for existing rows
+  owner_name:      { type: DataTypes.STRING(255) },          // v2: free-text owner
+  due_date:        { type: DataTypes.DATEONLY },             // legacy, no longer surfaced
+  start_date:      { type: DataTypes.DATEONLY },
+  next_followup_date: { type: DataTypes.DATEONLY },
+  lead_id:         { type: DataTypes.INTEGER },
+  sort_order:      { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  created_by:      { type: DataTypes.INTEGER },
+  created_by_name: { type: DataTypes.STRING(255) },
+}, { tableName: 'activities', underscored: true });
+
+// Activity tab — a user-managed group ("board") within the Activities module. Each tab is its own
+// kanban with the same four columns; cards belong to exactly one tab. Business-scoped.
+const ActivityTab = sequelize.define('ActivityTab', {
+  id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  business_unit: { type: DataTypes.STRING(32), allowNull: false },
+  label:         { type: DataTypes.STRING(64), allowNull: false },
+  sort_order:    { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  created_by:    { type: DataTypes.INTEGER },
+}, { tableName: 'activity_tabs', underscored: true });
 
 // --------------------------------------------------------------------------
 // SlaConfig — per-platform SLA (days) per pipeline stage. Only the SLA is platform-specific;
@@ -333,6 +382,9 @@ const ServiceDefinition = sequelize.define('ServiceDefinition', {
   label:         { type: DataTypes.STRING(128), allowNull: false },
   nature:        { type: DataTypes.ENUM('opex', 'capex'), allowNull: false, defaultValue: 'opex' },
   hardware:      { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  // v2 Services Offered: which of the three catalogs this entry belongs to. `hardware` above is kept
+  // as a derived convenience (true when category includes hardware) for existing callers.
+  category:      { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'software' },
   sort_order:    { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   active:        { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
 }, { tableName: 'service_definitions', underscored: true });
@@ -361,6 +413,61 @@ Voc.belongsTo(User,            { foreignKey: 'bd_owner_id', as: 'bdOwner' });
 Voc.hasMany(VocActivity,       { foreignKey: 'voc_id', as: 'activity', onDelete: 'CASCADE' });
 VocActivity.belongsTo(Voc,     { foreignKey: 'voc_id' });
 
+Activity.belongsTo(User,       { foreignKey: 'owner_id', as: 'owner' });
+Activity.belongsTo(Lead,       { foreignKey: 'lead_id', as: 'lead' });
+Activity.belongsTo(ActivityTab,{ foreignKey: 'tab_id', as: 'tab' });
+ActivityTab.hasMany(Activity,  { foreignKey: 'tab_id', as: 'cards', onDelete: 'CASCADE' });
+
+// --------------------------------------------------------------------------
+// Notification system
+// --------------------------------------------------------------------------
+const Notification = sequelize.define('Notification', {
+  id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  user_id:       { type: DataTypes.INTEGER, allowNull: false },
+  business_unit: { type: DataTypes.STRING(32), allowNull: false },
+  rule_key:      { type: DataTypes.STRING(64), allowNull: false },
+  severity:      { type: DataTypes.STRING(16), allowNull: false, defaultValue: 'info' },
+  title:         { type: DataTypes.STRING(255), allowNull: false },
+  body:          { type: DataTypes.TEXT },
+  lead_id:       { type: DataTypes.INTEGER },
+  entity_type:   { type: DataTypes.STRING(32) },
+  entity_id:     { type: DataTypes.INTEGER },
+  link_path:     { type: DataTypes.STRING(255) },
+  dedupe_key:    { type: DataTypes.STRING(255), allowNull: false },
+  is_read:       { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  read_at:       { type: DataTypes.DATE },
+}, { tableName: 'notifications', underscored: true, updatedAt: false });
+
+const NotificationPreference = sequelize.define('NotificationPreference', {
+  user_id:  { type: DataTypes.INTEGER, primaryKey: true },
+  rule_key: { type: DataTypes.STRING(64), primaryKey: true },
+  enabled:  { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+  channel:  { type: DataTypes.STRING(16) },
+}, { tableName: 'notification_preferences', timestamps: false });
+
+const NotificationDigestRun = sequelize.define('NotificationDigestRun', {
+  id:          { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  user_id:     { type: DataTypes.INTEGER, allowNull: false },
+  rule_key:    { type: DataTypes.STRING(64), allowNull: false },
+  ran_at:      { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  items_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+}, { tableName: 'notification_digest_runs', timestamps: false });
+
+Notification.belongsTo(User, { foreignKey: 'user_id' });
+Notification.belongsTo(Lead, { foreignKey: 'lead_id' });
+User.hasMany(Notification, { foreignKey: 'user_id', onDelete: 'CASCADE' });
+NotificationPreference.belongsTo(User, { foreignKey: 'user_id' });
+User.hasMany(NotificationPreference, { foreignKey: 'user_id', onDelete: 'CASCADE' });
+
+// status_changed_at for activity cards (migration 044)
+Activity.rawAttributes.status_changed_at = {
+  type: DataTypes.DATE,
+  fieldName: 'status_changed_at',
+  field: 'status_changed_at',
+  _modelAttribute: true,
+  Model: Activity,
+};
+
 module.exports = {
   sequelize,
   BusinessUnit,
@@ -376,4 +483,9 @@ module.exports = {
   GlobalPo,
   Voc,
   VocActivity,
+  Activity,
+  ActivityTab,
+  Notification,
+  NotificationPreference,
+  NotificationDigestRun,
 };

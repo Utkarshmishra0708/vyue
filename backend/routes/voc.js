@@ -1,20 +1,18 @@
-// VOC (Voice of Customer) — Surveillance business ONLY. Captures customer feedback / feature gaps /
-// config mismatches from sales & deployment, with a full audit trail. Access:
-//   BD    -> create, edit/view own VOCs
-//   PMO / Business Admin / Super Admin -> create, edit, view all + product-team fields (status,
-//            product remarks, target release, closure)
 const router = require('express').Router();
-const { sequelize, Voc, VocActivity, User } = require('../models');
+const { sequelize, Voc, VocActivity, User, BusinessUnit } = require('../models');
 const { authenticate } = require('../middleware/auth');
+const { moduleEnabledForBu } = require('../services/permissions');
 const { Op } = require('sequelize');
 
 router.use(authenticate);
 
-// Gate the whole module to the Surveillance business unit (super_admin is allowed through as the global
-// admin). Everyone else gets 403 — VOC never appears for other businesses.
-router.use((req, res, next) => {
-  if (req.user.business_unit === 'surveillance' || req.user.role === 'super_admin') return next();
-  return res.status(403).json({ message: 'VOC is available for the Surveillance business only.' });
+router.use(async (req, res, next) => {
+  if (req.user.role === 'super_admin') return next();
+  try {
+    const bu = await BusinessUnit.findOne({ where: { slug: req.user.business_unit } });
+    if (bu && moduleEnabledForBu(bu.config, 'voc')) return next();
+  } catch {}
+  return res.status(403).json({ message: 'The VOC module is not enabled for your business.' });
 });
 
 const FULL_ACCESS = ['super_admin', 'business_admin', 'pmo'];       // see/edit all + product-team fields
@@ -31,8 +29,8 @@ const VOC_FIELD_LABELS = {
 };
 
 function scopeWhere(user) {
-  const where = { business_unit: 'surveillance' };
-  if (user.role === 'bd') where.bd_owner_id = user.id;             // BDs see only their own
+  const where = { business_unit: user.business_unit };
+  if (user.role === 'bd') where.bd_owner_id = user.id;
   return where;
 }
 
@@ -147,7 +145,7 @@ router.get('/:id', async (req, res) => {
       ],
       order: [[{ model: VocActivity, as: 'activity' }, 'created_at', 'DESC']],
     });
-    if (!voc || voc.business_unit !== 'surveillance') return res.status(404).json({ message: 'VOC not found' });
+    if (!voc || voc.business_unit !== req.user.business_unit) return res.status(404).json({ message: 'VOC not found' });
     if (req.user.role === 'bd' && voc.bd_owner_id !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
     return res.json(voc);
   } catch (err) {
@@ -165,9 +163,20 @@ router.post('/', async (req, res) => {
     if (req.user.role === 'bd') payload.bd_owner_id = req.user.id;
     if (!payload.date_of_entry) payload.date_of_entry = new Date().toISOString().slice(0, 10);
     const maxNo = (await Voc.max('voc_no')) || 0;
-    const voc = await Voc.create({ ...payload, business_unit: 'surveillance', voc_no: maxNo + 1, created_by: req.user.id, updated_by: req.user.id }, { transaction: t });
+    const voc = await Voc.create({ ...payload, business_unit: req.user.business_unit, voc_no: maxNo + 1, created_by: req.user.id, updated_by: req.user.id }, { transaction: t });
     await VocActivity.create({ voc_id: voc.id, user_name: req.user.name, action_type: 'created', note: 'VOC created' }, { transaction: t });
     await t.commit();
+
+    if (payload.description) {
+      const { processMentions } = require('../services/mentions');
+      processMentions({
+        text: payload.description, oldText: null,
+        businessUnit: req.user.business_unit, actorId: req.user.id,
+        entityType: 'voc', entityLabel: `VOC #${voc.voc_no} "${payload.customer_name}"`,
+        linkPath: '/voc',
+      }).catch(() => {});
+    }
+
     return res.status(201).json(voc);
   } catch (err) {
     await t.rollback();
@@ -180,7 +189,7 @@ router.put('/:id', async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const existing = await Voc.findByPk(req.params.id, { transaction: t });
-    if (!existing || existing.business_unit !== 'surveillance') { await t.rollback(); return res.status(404).json({ message: 'VOC not found' }); }
+    if (!existing || existing.business_unit !== req.user.business_unit) { await t.rollback(); return res.status(404).json({ message: 'VOC not found' }); }
     if (req.user.role === 'bd' && existing.bd_owner_id !== req.user.id) { await t.rollback(); return res.status(403).json({ message: 'You can only edit your own VOCs.' }); }
     if (!req.body.customer_name || !req.body.customer_name.trim()) { await t.rollback(); return res.status(400).json({ message: 'Customer name is required' }); }
 
@@ -194,6 +203,17 @@ router.put('/:id', async (req, res) => {
 
     await t.commit();
     const full = await Voc.findByPk(existing.id, { include: [{ model: User, as: 'bdOwner', attributes: ['id', 'name'] }] });
+
+    if (payload.description !== undefined) {
+      const { processMentions } = require('../services/mentions');
+      processMentions({
+        text: payload.description, oldText: before.description,
+        businessUnit: req.user.business_unit, actorId: req.user.id,
+        entityType: 'voc', entityLabel: `VOC #${existing.voc_no} "${payload.customer_name || before.customer_name}"`,
+        linkPath: '/voc',
+      }).catch(() => {});
+    }
+
     return res.json(full);
   } catch (err) {
     await t.rollback();
@@ -205,11 +225,20 @@ router.put('/:id', async (req, res) => {
 router.post('/:id/comment', async (req, res) => {
   try {
     const voc = await Voc.findByPk(req.params.id);
-    if (!voc || voc.business_unit !== 'surveillance') return res.status(404).json({ message: 'VOC not found' });
+    if (!voc || voc.business_unit !== req.user.business_unit) return res.status(404).json({ message: 'VOC not found' });
     if (req.user.role === 'bd' && voc.bd_owner_id !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
     const note = (req.body.note || '').trim();
     if (!note) return res.status(400).json({ message: 'Comment is required' });
     await VocActivity.create({ voc_id: voc.id, user_name: req.user.name, action_type: 'comment', note });
+
+    const { processMentions } = require('../services/mentions');
+    processMentions({
+      text: note, oldText: null,
+      businessUnit: req.user.business_unit, actorId: req.user.id,
+      entityType: 'voc', entityLabel: `VOC #${voc.voc_no} comment`,
+      linkPath: '/voc',
+    }).catch(() => {});
+
     return res.status(201).json({ message: 'Comment added' });
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -221,7 +250,7 @@ router.delete('/:id', async (req, res) => {
   try {
     if (!isReviewer(req.user)) return res.status(403).json({ message: 'Only PMO / Admin can delete a VOC.' });
     const voc = await Voc.findByPk(req.params.id);
-    if (!voc || voc.business_unit !== 'surveillance') return res.status(404).json({ message: 'VOC not found' });
+    if (!voc || voc.business_unit !== req.user.business_unit) return res.status(404).json({ message: 'VOC not found' });
     await VocActivity.destroy({ where: { voc_id: voc.id } });
     await voc.destroy();
     return res.json({ message: 'VOC deleted' });

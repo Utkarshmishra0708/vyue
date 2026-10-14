@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getLeads, getStageHistory, getSettings, setSetting, getBds } from '../services/api';
 import { STAGE_ORDER, STAGE_WIN_PCT, PHASE_BADGE } from '../utils/constants';
-import { fmtDate, isOverdue, daysBetween, calcLeadScore, dealSizeThresholds } from '../utils/leadHelpers';
+import { fmtDate, isOverdue, daysBetween, calcLeadScore, dealSizeThresholds, renewalStatus, renewalLabel, RENEWAL_BAND_STYLE, buildRenewedSet } from '../utils/leadHelpers';
+import IndiaMap from '../components/IndiaMap';
 
 function Kpi({ icon, label, value, sub, onClick }) {
   return (
@@ -18,9 +19,46 @@ function Kpi({ icon, label, value, sub, onClick }) {
   );
 }
 
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// Inventory Trend granularities and how many past/future buckets each shows around "now".
+const INV_GRAN = [
+  { key: 'weekly', label: 'Weekly', unit: 'week', past: 4, future: 5 },
+  { key: 'monthly', label: 'Monthly', unit: 'month', past: 3, future: 4 },
+  { key: 'quarterly', label: 'Quarterly', unit: 'quarter', past: 2, future: 3 },
+  { key: 'semi_annual', label: 'Semi-annually', unit: 'half-year', past: 1, future: 2 },
+  { key: 'annual', label: 'Annually', unit: 'year', past: 1, future: 2 },
+];
+// The calendar period `offset` away from `now` (0 = current, -1 = previous, +1 = next), for a granularity.
+function periodBucket(now, gran, offset) {
+  if (gran === 'weekly') {
+    const s = new Date(now); s.setDate(now.getDate() - ((now.getDay() + 6) % 7) + offset * 7); s.setHours(0, 0, 0, 0);
+    const e = new Date(s); e.setDate(s.getDate() + 6); e.setHours(23, 59, 59, 999);
+    return { start: s, end: e, label: `${s.getDate()} ${MON[s.getMonth()]}` };
+  }
+  if (gran === 'monthly') {
+    const s = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const e = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0, 23, 59, 59, 999);
+    return { start: s, end: e, label: `${MON[s.getMonth()]} '${String(s.getFullYear()).slice(2)}` };
+  }
+  if (gran === 'quarterly') {
+    const s = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 + offset * 3, 1);
+    const e = new Date(s.getFullYear(), s.getMonth() + 3, 0, 23, 59, 59, 999);
+    return { start: s, end: e, label: `Q${Math.floor(s.getMonth() / 3) + 1} '${String(s.getFullYear()).slice(2)}` };
+  }
+  if (gran === 'semi_annual') {
+    const s = new Date(now.getFullYear(), (now.getMonth() < 6 ? 0 : 6) + offset * 6, 1);
+    const e = new Date(s.getFullYear(), s.getMonth() + 6, 0, 23, 59, 59, 999);
+    return { start: s, end: e, label: `H${s.getMonth() < 6 ? 1 : 2} '${String(s.getFullYear()).slice(2)}` };
+  }
+  const s = new Date(now.getFullYear() + offset, 0, 1);
+  const e = new Date(now.getFullYear() + offset, 11, 31, 23, 59, 59, 999);
+  return { start: s, end: e, label: String(s.getFullYear()) };
+}
+
 export default function DashboardPage() {
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const [dashSearchParams] = useSearchParams();
 
   const [leads, setLeads] = useState([]);
   const [stageHistory, setStageHistory] = useState([]);
@@ -30,6 +68,13 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [editingTarget, setEditingTarget] = useState(null); // bd name or 'weekly'
   const [targetInput, setTargetInput] = useState('');
+  const [tab, setTab] = useState(() => dashSearchParams.get('tab') || 'overview');
+  const [datePreset, setDatePreset] = useState('all'); // all | week | month | quarter | year | custom
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [attPeriod, setAttPeriod] = useState('monthly');
+  const [poTrendMetric, setPoTrendMetric] = useState('count'); // count | tcv | acv | licenses
+  const [poTrendYears, setPoTrendYears] = useState([]);
 
   useEffect(() => {
     Promise.all([getLeads(), getStageHistory(), getSettings(), getBds(user.business_unit)])
@@ -40,34 +85,88 @@ export default function DashboardPage() {
   const weeklyTarget = parseFloat(settings.weekly_target_lakhs) || 5.3;
   const bdTargets = useMemo(() => { try { return JSON.parse(settings.bd_weekly_targets || '{}'); } catch { return {}; } }, [settings]);
 
-  const filtered = useMemo(() => isAdmin && filterBD ? leads.filter(l => l.owner?.name === filterBD) : leads, [leads, isAdmin, filterBD]);
+  // The weekly target that applies to the CURRENT view: a BD sees their own target; an admin viewing
+  // one BD sees that BD's; an admin viewing everyone sees the team total (sum of each BD's target).
+  // A BD with no individually-set target falls back to the business-wide default.
+  const scopedBdName = !isAdmin ? user.name : (filterBD || null);
+  const scopedWeeklyTarget = useMemo(() => {
+    if (scopedBdName) return Number(bdTargets[scopedBdName]) || weeklyTarget;
+    if (bds.length) return bds.reduce((s, b) => s + (Number(bdTargets[b.name]) || weeklyTarget), 0);
+    return weeklyTarget;
+  }, [scopedBdName, bdTargets, weeklyTarget, bds]);
+
+  // BD-filtered base (used by widgets that have their own time axis, e.g. Inventory Trend).
+  const bdFiltered = useMemo(() => isAdmin && filterBD ? leads.filter(l => l.owner?.name === filterBD) : leads, [leads, isAdmin, filterBD]);
+
+  // Header date-range filter — bounds leads by creation date. "all" = no restriction (default), so
+  // the dashboard behaves exactly as before until the user narrows the window.
+  const dateBounds = useMemo(() => {
+    const now = new Date();
+    const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    const endOfDay = (d) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; };
+    switch (datePreset) {
+      case 'week': { const s = new Date(now); s.setDate(now.getDate() - ((now.getDay() + 6) % 7)); return { from: startOfDay(s), to: endOfDay(now) }; }
+      case 'month': return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: endOfDay(now) };
+      case 'quarter': return { from: new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1), to: endOfDay(now) };
+      case 'year': return { from: new Date(now.getFullYear(), 0, 1), to: endOfDay(now) };
+      case 'custom': return { from: customFrom ? startOfDay(new Date(customFrom)) : null, to: customTo ? endOfDay(new Date(customTo)) : null };
+      default: return { from: null, to: null };
+    }
+  }, [datePreset, customFrom, customTo]);
+
+  // The date a lead "belongs to" for the period filter: a won deal lands on its PO Received date
+  // (its real business event), everything else on when it entered the system. Using the business
+  // date means historical bulk-imported POs fall in their true week/month, not the import date.
+  const effectiveDate = (l) => ((l.phase === 'PO Received' && (l.po_received_date || l.phase_changed_at)) || l.createdAt);
+  const filtered = useMemo(() => {
+    if (!dateBounds.from && !dateBounds.to) return bdFiltered;
+    return bdFiltered.filter(l => {
+      const d = new Date(effectiveDate(l));
+      if (dateBounds.from && d < dateBounds.from) return false;
+      if (dateBounds.to && d > dateBounds.to) return false;
+      return true;
+    });
+  }, [bdFiltered, dateBounds]);
+
+  // POs that have been renewed — suppresses expiry warnings, shows "Renewed" badge instead.
+  const renewedIds = useMemo(() => buildRenewedSet(leads), [leads]);
 
   const navigateWithFilter = (filter) => {
     const params = new URLSearchParams({ filter });
     if (isAdmin && filterBD) params.set('bd', filterBD);
+    params.set('dtab', tab);
     navigate(`/leads?${params}`);
   };
   const navigateWithPhase = (phase) => {
     const params = new URLSearchParams({ phase });
     if (isAdmin && filterBD) params.set('bd', filterBD);
+    params.set('dtab', tab);
     navigate(`/leads?${params}`);
   };
   const navigateWithConf = (conf) => {
     const params = new URLSearchParams({ conf });
     if (isAdmin && filterBD) params.set('bd', filterBD);
+    params.set('dtab', tab);
     navigate(`/leads?${params}`);
   };
-  // Funnel band click → Leads filtered to every phase at or beyond the clicked stage (the leads
-  // counted as having "reached" it), so the resulting list matches the count shown on the band.
   const navigateReached = (stage) => {
     const reached = STAGE_ORDER.slice(STAGE_ORDER.indexOf(stage));
     const params = new URLSearchParams({ phase: reached.join(',') });
     if (isAdmin && filterBD) params.set('bd', filterBD);
+    params.set('dtab', tab);
     navigate(`/leads?${params}`);
   };
   const navigateWithSource = (source) => {
     const params = new URLSearchParams({ source });
     if (isAdmin && filterBD) params.set('bd', filterBD);
+    params.set('dtab', tab);
+    navigate(`/leads?${params}`);
+  };
+  const navigateWithIds = (ids, label) => {
+    if (!ids || !ids.length) return;
+    const params = new URLSearchParams({ ids: ids.join(','), idslabel: label });
+    if (isAdmin && filterBD) params.set('bd', filterBD);
+    params.set('dtab', tab);
     navigate(`/leads?${params}`);
   };
 
@@ -107,18 +206,38 @@ export default function DashboardPage() {
   ].filter(d => d.count > 0);
   const totalDataIssues = dataQualityIssues.reduce((s, d) => s + d.count, 0);
 
-  // Weekly won — Monday-anchored week
+  // Pipeline target — respects the dashboard date-range filter.
+  // When a specific period is selected (week/month/quarter/year/custom), won POs are filtered to
+  // that range and the target scales proportionally (weekly target × weeks in period).
+  // "All time" falls back to the current week so the card stays meaningful.
   const now = new Date();
   const weekStart = new Date(now); weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7)); weekStart.setHours(0,0,0,0);
   const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23,59,59,999);
-  const weeklyWon = filtered.filter(l => l.phase === 'PO Received').filter(l => {
+  const PERIOD_LABELS = { all: 'This Week', week: 'This Week', month: 'This Month', quarter: 'This Quarter', year: 'This Year', custom: 'Selected Period' };
+  const pipelineLabel = PERIOD_LABELS[datePreset] || 'This Week';
+  const pipeStart = dateBounds.from || weekStart;
+  const pipeEnd = dateBounds.to || weekEnd;
+  const pipeWeeks = datePreset === 'all' || datePreset === 'week' ? 1
+    : datePreset === 'month' ? (new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() / 7)
+    : datePreset === 'quarter' ? 13
+    : datePreset === 'year' ? 52
+    : Math.max(1, Math.round((pipeEnd - pipeStart) / 86400000 + 1) / 7);
+  const pipelineTarget = scopedWeeklyTarget * pipeWeeks;
+  const pipelineWonLeads = filtered.filter(l => l.phase === 'PO Received').filter(l => {
     const d = new Date(l.po_received_date || l.phase_changed_at);
-    return d >= weekStart && d <= weekEnd;
-  }).reduce((s, l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
-  const weeklyPct = Math.min(100, Math.round((weeklyWon / weeklyTarget) * 100));
+    return d >= pipeStart && d <= pipeEnd;
+  });
+  const pipelineWon = pipelineWonLeads.reduce((s, l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
+  const pipelinePct = Math.min(100, Math.round((pipelineWon / pipelineTarget) * 100));
+
+  // Signage-only extras: Total Licenses (quantity sum) + Distinct Customers
+  const isSignage = (user.business_unit || '').toLowerCase() === 'signage';
+  const sigWonLeads = isSignage ? pipelineWonLeads : [];
+  const pipelineLicenses = sigWonLeads.reduce((s, l) => s + (parseInt(l.quantity, 10) || 0), 0);
+  const pipelineCustomers = new Set(sigWonLeads.map(l => l.customer_name).filter(Boolean)).size;
 
   const phaseCounts = STAGE_ORDER.concat(['Lost', 'On Hold']).map(p => ({ phase: p, count: filtered.filter(l => l.phase === p).length }));
-  const funnelData = STAGE_ORDER.map(p => ({ name: p, count: filtered.filter(l => l.phase === p).length }));
+  const funnelData = STAGE_ORDER.filter(s => s !== 'Lost' && s !== 'On Hold').map(p => ({ name: p, count: filtered.filter(l => l.phase === p).length }));
 
   const filteredLeadIds = new Set(filtered.map(l => l.id));
   const scopedHistory = stageHistory.filter(sh => filteredLeadIds.has(sh.lead_id));
@@ -131,7 +250,7 @@ export default function DashboardPage() {
   const stageRank = Object.fromEntries(STAGE_ORDER.map((s, i) => [s, i]));
   // Funnel omits the Negotiation step by request. Counts still use each stage's TRUE rank, so a lead
   // sitting in Negotiation is correctly counted as having reached Proposal but not yet PO Expected.
-  const funnelStages = STAGE_ORDER.filter(s => s !== 'Negotiation').map(stage => ({
+  const funnelStages = STAGE_ORDER.filter(s => s !== 'Negotiation' && s !== 'Lost' && s !== 'On Hold').map(stage => ({
     stage,
     count: filtered.filter(l => { const r = stageRank[l.phase]; return r !== undefined && r >= stageRank[stage]; }).length,
     winPct: STAGE_WIN_PCT[stage] || 0,
@@ -196,12 +315,148 @@ export default function DashboardPage() {
     return { name, totalLeads: bdLeads.length, wonDeals: wonThisYear.length, wonTCV: wonTCVYear, convRate, activeLeads: activeNow.length };
   });
 
-  // Renewal alerts
-  const renewalAlerts = filtered.filter(l => l.new_or_renewal === 'Renewal' && l.po_received_date && l.contract_period_months).map(l => {
-    const start = new Date(l.po_received_date);
-    const expiry = new Date(start); expiry.setMonth(expiry.getMonth() + l.contract_period_months);
-    return { ...l, daysToExpiry: daysBetween(new Date(), expiry) };
-  }).filter(l => l.daysToExpiry >= 0 && l.daysToExpiry <= 90).sort((a,b) => a.daysToExpiry - b.daysToExpiry);
+  // PO Received Trend — year-over-year month-by-month comparison.
+  const wonPOs = useMemo(() => bdFiltered.filter(l => l.phase === 'PO Received'), [bdFiltered]);
+  const poTrendAvailableYears = useMemo(() => {
+    const yrs = new Set();
+    for (const l of wonPOs) {
+      const d = l.po_received_date || l.phase_changed_at;
+      if (d) yrs.add(new Date(d).getFullYear());
+    }
+    return [...yrs].sort((a, b) => b - a);
+  }, [wonPOs]);
+  useEffect(() => {
+    if (poTrendYears.length === 0 && poTrendAvailableYears.length > 0) {
+      setPoTrendYears(poTrendAvailableYears.slice(0, 2));
+    }
+  }, [poTrendAvailableYears]);
+  const poTrendData = useMemo(() => {
+    const activeYears = poTrendYears.length ? poTrendYears : poTrendAvailableYears.slice(0, 2);
+    return MON.map((m, mi) => {
+      const row = { month: m };
+      for (const yr of activeYears) {
+        const matches = wonPOs.filter(l => {
+          const d = new Date(l.po_received_date || l.phase_changed_at);
+          return d.getFullYear() === yr && d.getMonth() === mi;
+        });
+        row[`${yr}_count`] = matches.length;
+        row[`${yr}_tcv`] = matches.reduce((s, l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
+        row[`${yr}_acv`] = matches.reduce((s, l) => s + (parseFloat(l.acv_lakhs) || 0), 0);
+        row[`${yr}_licenses`] = matches.reduce((s, l) => s + (parseInt(l.quantity, 10) || 0), 0);
+      }
+      return row;
+    });
+  }, [wonPOs, poTrendYears, poTrendAvailableYears]);
+  const poTrendActiveYears = poTrendYears.length ? poTrendYears : poTrendAvailableYears.slice(0, 2);
+  const PO_TREND_COLORS = ['#4f46e5', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6'];
+  const poTrendTotals = useMemo(() => {
+    const totals = {};
+    for (const yr of poTrendActiveYears) {
+      totals[yr] = { count: 0, tcv: 0, acv: 0, licenses: 0 };
+      for (const row of poTrendData) {
+        totals[yr].count += row[`${yr}_count`] || 0;
+        totals[yr].tcv += row[`${yr}_tcv`] || 0;
+        totals[yr].acv += row[`${yr}_acv`] || 0;
+        totals[yr].licenses += row[`${yr}_licenses`] || 0;
+      }
+    }
+    return totals;
+  }, [poTrendData, poTrendActiveYears]);
+
+  // Renewal alerts — driven by PO End Date (service_end_date) for every WON PO, the single
+  // definition used across the app (see renewalStatus in leadHelpers). Surfaces anything expiring
+  // within 90 days OR already lapsed, soonest/most-overdue first.
+  const renewalAlerts = filtered
+    .map(l => ({ lead: l, status: renewalStatus(l, renewedIds) }))
+    .filter(x => x.status && x.status.band !== 'ok' && x.status.band !== 'renewed')
+    .map(x => ({ ...x.lead, renewal: x.status, daysToExpiry: x.status.days }))
+    .sort((a, b) => a.daysToExpiry - b.daysToExpiry);
+
+  // --- Cohort Aging Grid — financial year (Apr-Mar). Origin month = month of
+  // device_requested_date; closing month = month of po_received_date (PO Received only). ---
+  const [closureFY, setClosureFY] = useState(() => {
+    const now = new Date();
+    return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  });
+  const closureData = useMemo(() => {
+    const fyStart = new Date(closureFY, 3, 1);
+    const fyEnd = new Date(closureFY + 1, 2, 31, 23, 59, 59);
+    const fyMonths = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(closureFY, 3 + i, 1);
+      fyMonths.push({ month: d.getMonth(), year: d.getFullYear(), label: `${MON[d.getMonth()]} '${String(d.getFullYear()).slice(2)}` });
+    }
+    const mKey = (m, y) => `${y}-${String(m).padStart(2, '0')}`;
+    const fyKeys = fyMonths.map(m => mKey(m.month, m.year));
+
+    const grid = {};
+    fyKeys.forEach(k => { grid[k] = { total: 0, totalIds: [], cells: {}, cellIds: {}, open: 0, openIds: [], lost: 0, lostIds: [] }; });
+
+    for (const l of bdFiltered) {
+      if (!l.device_requested_date) continue;
+      const drd = new Date(l.device_requested_date);
+      if (drd < fyStart || drd > fyEnd) continue;
+      const units = parseInt(l.quantity, 10) || 0;
+      if (!units) continue;
+      const originKey = mKey(drd.getMonth(), drd.getFullYear());
+      if (!grid[originKey]) continue;
+      grid[originKey].total += units;
+      grid[originKey].totalIds.push(l.id);
+
+      if (l.phase === 'Lost') {
+        grid[originKey].lost += units;
+        grid[originKey].lostIds.push(l.id);
+      } else if (l.phase === 'PO Received' && l.po_received_date) {
+        const prd = new Date(l.po_received_date);
+        const closeKey = mKey(prd.getMonth(), prd.getFullYear());
+        if (!grid[originKey].cells[closeKey]) grid[originKey].cells[closeKey] = 0;
+        if (!grid[originKey].cellIds[closeKey]) grid[originKey].cellIds[closeKey] = [];
+        grid[originKey].cells[closeKey] += units;
+        grid[originKey].cellIds[closeKey].push(l.id);
+      } else {
+        grid[originKey].open += units;
+        grid[originKey].openIds.push(l.id);
+      }
+    }
+
+    const rows = fyKeys.map((k, i) => ({
+      label: fyMonths[i].label, key: k, total: grid[k].total, totalIds: grid[k].totalIds,
+      cells: fyKeys.map(ck => grid[k].cells[ck] || 0),
+      cellIds: fyKeys.map(ck => grid[k].cellIds[ck] || []),
+      open: grid[k].open, openIds: grid[k].openIds,
+      lost: grid[k].lost, lostIds: grid[k].lostIds,
+    }));
+
+    return { fyMonths, fyKeys, rows };
+  }, [bdFiltered, closureFY]);
+
+  // --- Target vs Expected vs Won — attainment for the selected period. Expected is driven by each
+  // deal's PO Expected date (open deals forecast to land in the period); Won by PO Received date
+  // (deals actually closed). Target scales the stored weekly target by the period length. Uses
+  // bdFiltered (its own period axis), independent of the header date-range filter. ---
+  const attCfg = INV_GRAN.find(g => g.key === attPeriod) || INV_GRAN[1];
+  const attainment = useMemo(() => {
+    const ref = new Date();
+    const cur = periodBucket(ref, attPeriod, 0);
+    const prev = periodBucket(ref, attPeriod, -1);
+    const inRange = (dateStr, b) => { if (!dateStr) return false; const d = new Date(dateStr); return d >= b.start && d <= b.end; };
+    const wonRows = (b) => bdFiltered.filter(l => l.phase === 'PO Received' && inRange(l.po_received_date || l.phase_changed_at, b));
+    const expRows = (b) => bdFiltered.filter(l => !['Lost', 'PO Received'].includes(l.phase) && inRange(l.po_expected_date, b));
+    const sumWon = (rows) => rows.reduce((s, l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
+    const sumTcv = (rows) => rows.reduce((s, l) => s + (parseFloat(l.potential_tcv_lakhs) || 0), 0);
+    const wonCur = wonRows(cur), expCur = expRows(cur);
+    const days = Math.max(1, Math.round((cur.end - cur.start) / 86400000));
+    const target = scopedWeeklyTarget * (days / 7);
+    const won = sumWon(wonCur), expected = sumTcv(expCur);
+    return {
+      cur, won, expected, target, expCount: expCur.length,
+      wonIds: wonCur.map(l => l.id), expectedIds: expCur.map(l => l.id),
+      wonPrev: sumWon(wonRows(prev)), expectedPrev: sumTcv(expRows(prev)),
+      projected: won + expected,
+      pct: target > 0 ? Math.round(((won + expected) / target) * 100) : 0,
+      wonPct: target > 0 ? Math.round((won / target) * 100) : 0,
+    };
+  }, [bdFiltered, attPeriod, scopedWeeklyTarget]);
 
   const saveWeeklyTarget = async () => {
     const v = parseFloat(targetInput);
@@ -223,20 +478,53 @@ export default function DashboardPage() {
 
   return (
     <Layout>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Dashboard</h1>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Pipeline overview & analytics</p>
+      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Dashboard</h1>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Pipeline overview & analytics</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select className="input" style={{ width: 150 }} value={datePreset} onChange={e => setDatePreset(e.target.value)} title="Filter leads by creation date">
+              <option value="all">All time</option>
+              <option value="week">This week</option>
+              <option value="month">This month</option>
+              <option value="quarter">This quarter</option>
+              <option value="year">This year</option>
+              <option value="custom">Custom range…</option>
+            </select>
+            {datePreset === 'custom' && (
+              <>
+                <input className="input" style={{ width: 140 }} type="date" value={customFrom} max={customTo || undefined} onChange={e => setCustomFrom(e.target.value)} />
+                <span style={{ color: '#94a3b8', fontSize: 12 }}>→</span>
+                <input className="input" style={{ width: 140 }} type="date" value={customTo} min={customFrom || undefined} onChange={e => setCustomTo(e.target.value)} />
+              </>
+            )}
+            {isAdmin && (
+              <select className="input" style={{ width: 160 }} value={filterBD} onChange={e => setFilterBD(e.target.value)}>
+                <option value="">All BDs</option>
+                {bds.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+              </select>
+            )}
+          </div>
         </div>
-        {isAdmin && (
-          <select className="input" style={{ width: 180 }} value={filterBD} onChange={e => setFilterBD(e.target.value)}>
-            <option value="">All BDs</option>
-            {bds.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-          </select>
-        )}
+        {/* Tab strip */}
+        <div style={{ display: 'flex', gap: 4, marginTop: 14 }}>
+          {[['overview', '📊 Overview'], ['analytics', '📈 Analytics']].map(([key, label]) => (
+            <button key={key} onClick={() => setTab(key)}
+              style={{
+                border: 'none', background: 'none', cursor: 'pointer', padding: '8px 14px', fontSize: 13,
+                fontWeight: tab === key ? 700 : 500, color: tab === key ? '#4f46e5' : '#64748b',
+                borderBottom: tab === key ? '2px solid #4f46e5' : '2px solid transparent', marginBottom: -1,
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {tab === 'overview' && (<>
         {overdueForTicker.length > 0 && (() => {
           const text = overdueForTicker
             .map(l => `${l.customer_name} · ${l.owner?.name?.split(' ')[0]} · Due ${fmtDate(l.next_followup_date)}`)
@@ -314,17 +602,23 @@ export default function DashboardPage() {
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
             <div>
-              <p className="section-title" style={{ margin: 0 }}>Weekly Pipeline Target</p>
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>POs this week vs ₹{weeklyTarget}L target</p>
+              <p className="section-title" style={{ margin: 0 }}>Pipeline Target</p>
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>POs {pipelineLabel.toLowerCase()} vs ₹{pipelineTarget.toFixed(1)}L target</p>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <p style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>₹{weeklyWon.toFixed(2)}L</p>
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>{weeklyPct}%</p>
+              <p style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>₹{pipelineWon.toFixed(2)}L</p>
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>{pipelinePct}% of ₹{pipelineTarget.toFixed(1)}L</p>
             </div>
           </div>
-          <div style={{ height: 8, background: '#f1f5f9', borderRadius: 99 }}>
-            <div style={{ height: 8, width: `${weeklyPct}%`, background: weeklyPct >= 100 ? '#059669' : '#4f46e5', borderRadius: 99 }} />
+          <div style={{ height: 8, background: '#f1f5f9', borderRadius: 99, marginBottom: 10 }}>
+            <div style={{ height: 8, width: `${pipelinePct}%`, background: pipelinePct >= 100 ? '#059669' : '#4f46e5', borderRadius: 99 }} />
           </div>
+          {isSignage && (
+            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#334155', marginBottom: 4 }}>
+              <span>📦 <strong>{pipelineLicenses}</strong> Licenses</span>
+              <span>👥 <strong>{pipelineCustomers}</strong> Customer{pipelineCustomers !== 1 ? 's' : ''}</span>
+            </div>
+          )}
           {isAdmin && (
             editingTarget === 'weekly' ? (
               <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
@@ -337,14 +631,18 @@ export default function DashboardPage() {
           {isAdmin && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16, borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
               {bdCards.map(b => {
-                const target = bdTargets[b.name] ?? weeklyTarget;
-                const bdWon = leads.filter(l => l.owner?.name === b.name && l.phase === 'PO Received').filter(l => {
-                  const d = new Date(l.po_received_date || l.phase_changed_at); return d >= weekStart && d <= weekEnd;
-                }).reduce((s,l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
-                const pct = Math.min(100, Math.round((bdWon / target) * 100));
+                const bdWeeklyTarget = bdTargets[b.name] ?? weeklyTarget;
+                const bdTarget = bdWeeklyTarget * pipeWeeks;
+                const bdWonLeads = filtered.filter(l => l.owner?.name === b.name && l.phase === 'PO Received').filter(l => {
+                  const d = new Date(l.po_received_date || l.phase_changed_at); return d >= pipeStart && d <= pipeEnd;
+                });
+                const bdWon = bdWonLeads.reduce((s,l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
+                const bdLic = isSignage ? bdWonLeads.reduce((s,l) => s + (parseInt(l.quantity, 10) || 0), 0) : 0;
+                const bdCust = isSignage ? new Set(bdWonLeads.map(l => l.customer_name).filter(Boolean)).size : 0;
+                const pct = Math.min(100, Math.round((bdWon / bdTarget) * 100));
                 return (
                   <div key={b.id}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
                       <span style={{ fontWeight: 700 }}>{b.name.split(' ')[0]}</span>
                       {editingTarget === b.name ? (
                         <span style={{ display: 'flex', gap: 4 }}>
@@ -352,12 +650,18 @@ export default function DashboardPage() {
                           <button className="btn btn-sm btn-primary" onClick={() => saveBdTarget(b.name)}>✓</button>
                         </span>
                       ) : (
-                        <span style={{ color: '#64748b' }}>₹{bdWon.toFixed(1)}L / ₹{target}L <button className="btn btn-sm" style={{ marginLeft: 6, padding: '2px 6px' }} onClick={() => { setEditingTarget(b.name); setTargetInput(String(target)); }}>✏️</button></span>
+                        <span style={{ color: '#64748b' }}>₹{bdWon.toFixed(1)}L / ₹{bdTarget.toFixed(1)}L <button className="btn btn-sm" style={{ marginLeft: 6, padding: '2px 6px' }} onClick={() => { setEditingTarget(b.name); setTargetInput(String(bdWeeklyTarget)); }}>✏️</button></span>
                       )}
                     </div>
                     <div style={{ height: 6, background: '#f1f5f9', borderRadius: 99, marginTop: 4 }}>
                       <div style={{ height: 6, width: `${pct}%`, background: pct >= 100 ? '#059669' : '#818cf8', borderRadius: 99 }} />
                     </div>
+                    {isSignage && (
+                      <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
+                        <span>📦 {bdLic} licenses</span>
+                        <span>👥 {bdCust} customer{bdCust !== 1 ? 's' : ''}</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -365,6 +669,65 @@ export default function DashboardPage() {
           )}
         </div>
 
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+            <div>
+              <p className="section-title" style={{ margin: 0 }}>Target vs Expected vs Won</p>
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>Expected = deals with a PO Expected date this {attCfg.unit}; Won = POs received this {attCfg.unit}</p>
+            </div>
+            <select className="input" style={{ width: 160 }} value={attPeriod} onChange={e => setAttPeriod(e.target.value)}>
+              {INV_GRAN.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
+            </select>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
+            <div className="card-sm" style={{ textAlign: 'center' }} title={`${scopedBdName ? (isAdmin ? scopedBdName + "'s" : 'Your') : 'Team'} weekly target ₹${Number(scopedWeeklyTarget).toFixed(1)}L × this ${attCfg.unit}`}>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>Target</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>₹{attainment.target.toFixed(1)}L</div>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>{scopedBdName ? (isAdmin ? `${scopedBdName.split(' ')[0]}'s` : 'your') : 'team'} · this {attCfg.unit}</div>
+            </div>
+            <div className={`card-sm ${attainment.expectedIds.length ? 'clickable' : ''}`} style={{ textAlign: 'center', cursor: attainment.expectedIds.length ? 'pointer' : 'default' }}
+              onClick={() => navigateWithIds(attainment.expectedIds, `Expected · this ${attCfg.unit}`)}
+              title={attainment.expectedIds.length ? `View the ${attainment.expCount} deal(s) with a PO Expected date this ${attCfg.unit}` : undefined}>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>Expected (PO due)</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#6366f1' }}>₹{attainment.expected.toFixed(1)}L</div>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>{attainment.expCount} deal{attainment.expCount === 1 ? '' : 's'}</div>
+            </div>
+            <div className={`card-sm ${attainment.wonIds.length ? 'clickable' : ''}`} style={{ textAlign: 'center', cursor: attainment.wonIds.length ? 'pointer' : 'default' }}
+              onClick={() => navigateWithIds(attainment.wonIds, `Won · this ${attCfg.unit}`)}
+              title={attainment.wonIds.length ? `View the ${attainment.wonIds.length} deal(s) won this ${attCfg.unit}` : undefined}>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>Won</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#059669' }}>₹{attainment.won.toFixed(1)}L</div>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>{attainment.wonPct}% of target</div>
+            </div>
+          </div>
+
+        </div>
+
+        {renewalAlerts.length > 0 && (
+          <div className="card">
+            <p className="section-title">🔔 Renewal Alerts</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 260, overflowY: 'auto' }}>
+              {renewalAlerts.map(l => {
+                const s = RENEWAL_BAND_STYLE[l.renewal.band] || RENEWAL_BAND_STYLE.ok;
+                return (
+                  <div key={l.id} className="card-sm" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', borderLeft: `3px solid ${s.border}` }}>
+                    <div>
+                      <p style={{ fontSize: 12, fontWeight: 700, margin: 0 }}>{l.customer_name}{l.city ? ` · ${l.city}` : ''}</p>
+                      <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{l.owner?.name?.split(' ')[0]} · {l.lead_ref || `₹${l.potential_tcv_lakhs}L`} · ends {l.service_end_date ? fmtDate(l.service_end_date) : '—'}</p>
+                    </div>
+                    <span style={{ background: s.bg, color: s.fg, border: `1px solid ${s.border}`, borderRadius: 999, padding: '2px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      {renewalLabel(l.renewal)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        </>)}
+
+        {tab === 'analytics' && (<>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div className="card">
             <p className="section-title">Pipeline by Phase</p>
@@ -538,22 +901,57 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {renewalAlerts.length > 0 && (
-            <div className="card">
-              <p className="section-title">🔔 Renewal Alerts</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 200, overflowY: 'auto' }}>
-                {renewalAlerts.map(l => (
-                  <div key={l.id} className="card-sm" style={{ display: 'flex', justifyContent: 'space-between', background: l.daysToExpiry <= 30 ? '#fef2f2' : '#fffbeb' }}>
-                    <div>
-                      <p style={{ fontSize: 12, fontWeight: 700, margin: 0 }}>{l.customer_name}</p>
-                      <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{l.owner?.name?.split(' ')[0]} · ₹{l.potential_tcv_lakhs}L</p>
-                    </div>
-                    <p style={{ fontSize: 12, fontWeight: 700, color: l.daysToExpiry <= 30 ? '#dc2626' : '#92400e' }}>{l.daysToExpiry}d left</p>
-                  </div>
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              <p className="section-title" style={{ margin: 0 }}>📊 PO Received Trend</p>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select className="input" style={{ width: 110, fontSize: 11, height: 28, padding: '2px 6px' }} value={poTrendMetric} onChange={e => setPoTrendMetric(e.target.value)}>
+                  <option value="count">Count</option>
+                  <option value="tcv">TCV (₹L)</option>
+                  <option value="acv">ACV (₹L)</option>
+                  {isSignage && <option value="licenses">Licenses</option>}
+                </select>
+                {poTrendAvailableYears.map(yr => (
+                  <label key={yr} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={poTrendActiveYears.includes(yr)}
+                      onChange={() => setPoTrendYears(prev => {
+                        const cur = prev.length ? prev : poTrendAvailableYears.slice(0, 2);
+                        return cur.includes(yr) ? cur.filter(y => y !== yr) : [...cur, yr];
+                      })} />
+                    {yr}
+                  </label>
                 ))}
               </div>
             </div>
-          )}
+            {poTrendActiveYears.length === 0 ? (
+              <p style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>No won POs yet.</p>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={poTrendData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={poTrendMetric === 'tcv' || poTrendMetric === 'acv'} />
+                    <Tooltip formatter={(v) => (poTrendMetric === 'tcv' || poTrendMetric === 'acv') ? `₹${Number(v).toFixed(1)}L` : v} />
+                    <Legend />
+                    {poTrendActiveYears.map((yr, i) => (
+                      <Line key={yr} type="monotone" dataKey={`${yr}_${poTrendMetric}`} name={String(yr)}
+                        stroke={PO_TREND_COLORS[i % PO_TREND_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+                <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: '#64748b', flexWrap: 'wrap' }}>
+                  {poTrendActiveYears.map((yr, i) => (
+                    <span key={yr}>
+                      <span style={{ display: 'inline-block', width: 10, height: 10, background: PO_TREND_COLORS[i % PO_TREND_COLORS.length], borderRadius: 2, marginRight: 4 }} />
+                      {yr}: <strong>{poTrendTotals[yr]?.count || 0}</strong> POs · TCV <strong>₹{(poTrendTotals[yr]?.tcv || 0).toFixed(1)}L</strong> · ACV <strong>₹{(poTrendTotals[yr]?.acv || 0).toFixed(1)}L</strong>{isSignage && <> · <strong>{poTrendTotals[yr]?.licenses || 0}</strong> Lic</>}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
         </div>
 
         <div className="card">
@@ -580,6 +978,103 @@ export default function DashboardPage() {
             ))}
           </div>
         </div>
+
+        {/* Geographic Distribution — India choropleth map (bottom of analytics) */}
+        <div className="card" style={{ marginTop: 16 }}>
+          <IndiaMap leads={filtered} />
+        </div>
+
+        {/* Cohort Aging Grid */}
+        <div style={{ marginTop: 16, background: '#1e293b', borderRadius: 10, padding: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cohort Aging Grid</p>
+            <select
+              value={closureFY}
+              onChange={e => setClosureFY(Number(e.target.value))}
+              style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #475569', fontSize: 12, color: '#e2e8f0', background: '#334155', cursor: 'pointer', outline: 'none' }}
+            >
+              {[0, 1, 2].map(offset => {
+                const y = new Date().getFullYear() - offset;
+                return <option key={y} value={y}>FY {y}-{String(y + 1).slice(2)}</option>;
+              })}
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+            {[
+              { color: '#1e40af', label: 'Closed on time' },
+              { color: '#78350f', label: 'Closed late' },
+              { color: '#93c5fd', label: 'Still open' },
+              { color: '#ef4444', label: 'Lost' },
+            ].map(l => (
+              <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#94a3b8' }}>
+                <span style={{ width: 12, height: 12, borderRadius: 3, background: l.color, display: 'inline-block' }} />
+                {l.label}
+              </span>
+            ))}
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 12, whiteSpace: 'nowrap', width: '100%' }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: '8px 10px', textAlign: 'left', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155', position: 'sticky', left: 0, background: '#1e293b', zIndex: 2 }}>Expected in</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', color: '#e2e8f0', fontWeight: 700, borderBottom: '1px solid #334155' }}>Total</th>
+                  {closureData.fyMonths.map(m => (
+                    <th key={m.label} style={{ padding: '8px 10px', textAlign: 'right', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155' }}>{m.label}</th>
+                  ))}
+                  <th style={{ padding: '8px 10px', textAlign: 'right', color: '#93c5fd', fontWeight: 600, borderBottom: '1px solid #334155' }}>Still open</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', color: '#ef4444', fontWeight: 600, borderBottom: '1px solid #334155' }}>Lost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {closureData.rows.map((row, ri) => (
+                  <tr key={row.key}>
+                    <td style={{ padding: '7px 10px', fontWeight: 600, color: '#e2e8f0', borderBottom: '1px solid #334155', position: 'sticky', left: 0, background: '#1e293b', zIndex: 1 }}>{row.label}</td>
+                    <td
+                      onClick={() => row.total > 0 && navigateWithIds(row.totalIds, `Total expected ${row.label}`)}
+                      style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: '#e2e8f0', borderBottom: '1px solid #334155', cursor: row.total > 0 ? 'pointer' : 'default' }}
+                      title={row.total > 0 ? 'Click to view leads' : undefined}
+                    >{row.total}</td>
+                    {row.cells.map((val, ci) => {
+                      const isBefore = ci < ri;
+                      const isOnTime = ci === ri;
+                      const ids = row.cellIds[ci];
+                      let bg = 'transparent';
+                      if (!isBefore && val > 0) bg = isOnTime ? '#1e40af' : '#78350f';
+                      else if (!isBefore && isOnTime) bg = '#1e3a5f';
+                      return (
+                        <td key={ci}
+                          onClick={() => !isBefore && val > 0 && navigateWithIds(ids, `${row.label} → ${closureData.fyMonths[ci].label}`)}
+                          style={{
+                            padding: '7px 10px', textAlign: 'right', borderBottom: '1px solid #334155',
+                            background: bg, color: isBefore ? '#334155' : val > 0 ? '#fff' : '#64748b',
+                            fontWeight: val > 0 ? 700 : 400, borderRadius: 0,
+                            cursor: !isBefore && val > 0 ? 'pointer' : 'default',
+                          }}
+                          title={!isBefore && val > 0 ? 'Click to view leads' : undefined}
+                        >
+                          {isBefore ? '' : val}
+                        </td>
+                      );
+                    })}
+                    <td
+                      onClick={() => row.open > 0 && navigateWithIds(row.openIds, `Still open — expected ${row.label}`)}
+                      style={{ padding: '7px 10px', textAlign: 'right', color: '#93c5fd', fontWeight: row.open > 0 ? 700 : 400, borderBottom: '1px solid #334155', cursor: row.open > 0 ? 'pointer' : 'default' }}
+                      title={row.open > 0 ? 'Click to view leads' : undefined}
+                    >{row.open}</td>
+                    <td
+                      onClick={() => row.lost > 0 && navigateWithIds(row.lostIds, `Lost — expected ${row.label}`)}
+                      style={{ padding: '7px 10px', textAlign: 'right', color: '#ef4444', fontWeight: row.lost > 0 ? 700 : 400, borderBottom: '1px solid #334155', cursor: row.lost > 0 ? 'pointer' : 'default' }}
+                      title={row.lost > 0 ? 'Click to view leads' : undefined}
+                    >{row.lost}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        </>)}
+
       </div>
     </Layout>
   );

@@ -107,12 +107,17 @@ export function AuthProvider({ children }) {
   // The server resolves these and returns them on /api/auth/me; role-derived defaults are filled in
   // there, so an empty map here means genuinely no access rather than "not configured".
   const permissions = user?.permissions || {};
-  // can('leads', 'edit') — at least that level in that module.
-  const can = useCallback((module, minLevel = 'read') => meets(user?.permissions, module, minLevel), [user]);
+  // Per-BU module enablement map (business_units.config.modules), resolved server-side and returned
+  // on /auth/me. When the map is present it's authoritative; when it's absent (older responses) we
+  // treat every module as enabled and defer to the per-user permission below.
+  const buModules = user?.bu_modules || null;
+  const buHasModule = useCallback((module) => (buModules ? buModules[module] !== false : true), [buModules]);
+  // can('leads', 'edit') — at least that level in that module AND the module is enabled for this BU.
+  const can = useCallback((module, minLevel = 'read') => buHasModule(module) && meets(user?.permissions, module, minLevel), [user, buHasModule]);
   // Convenience wrappers for the three questions pages actually ask.
-  const canView = useCallback((module) => meets(user?.permissions, module, 'read'), [user]);
-  const canEdit = useCallback((module) => meets(user?.permissions, module, 'edit'), [user]);
-  const canFull = useCallback((module) => meets(user?.permissions, module, 'full'), [user]);
+  const canView = useCallback((module) => buHasModule(module) && meets(user?.permissions, module, 'read'), [user, buHasModule]);
+  const canEdit = useCallback((module) => buHasModule(module) && meets(user?.permissions, module, 'edit'), [user, buHasModule]);
+  const canFull = useCallback((module) => buHasModule(module) && meets(user?.permissions, module, 'full'), [user, buHasModule]);
   // Who may open the permission editor. Server-side this is the same admin tier that already
   // manages users, so it grants nothing new.
   const canManagePermissions = !!user?.can_manage_permissions;
@@ -125,6 +130,7 @@ export function AuthProvider({ children }) {
     isBusinessAdmin, isBD, isForecastOnly, canManageUsers, canManageDropdowns, canForecast,
     permissions, can, canView, canEdit, canFull, canManagePermissions,
     superAdminScope, isCrossPlatform, isReadOnlyAdmin, canAct, canSeeActivityFeed,
+    buModules, buHasModule,
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

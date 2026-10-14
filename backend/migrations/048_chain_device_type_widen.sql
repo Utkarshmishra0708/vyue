@@ -1,0 +1,1 @@
+ALTER TABLE global_pos MODIFY COLUMN device_type VARCHAR(100) NOT NULL DEFAULT 'Hardware';

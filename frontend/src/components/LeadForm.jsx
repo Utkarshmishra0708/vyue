@@ -1,17 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
 import { useAuth } from '../context/AuthContext';
 import { createLead, updateLead, uploadPoDocument, fileUrl, getBds, getDropdowns, getGlobalPos, createGlobalPo } from '../services/api';
-import { DEVICE_SKU_MAP, LOST_REASONS, SIGNAGE_SERVICES, JHES_SERVICES, SURVEILLANCE_ITEMS, INDIAN_STATES, UNION_TERRITORIES, PROPERTY_TYPES, PROPERTY_CATEGORIES } from '../utils/constants';
-import { todayStr, addDaysStr, computeTcvLakhs, computeAcvLakhs, computeTcvBreakdown, hasConfidence, confidenceTrend } from '../utils/leadHelpers';
+import { LOST_REASONS, INDIAN_STATES, UNION_TERRITORIES, PROPERTY_TYPES, PROPERTY_CATEGORIES } from '../utils/constants';
+import { todayStr, addDaysStr, computeAcvLakhs, hasConfidence, confidenceTrend } from '../utils/leadHelpers';
 import DropdownManager from './DropdownManager';
+import { FieldInput } from './CustomLeadForm';
+import MentionTextarea from './MentionTextarea';
+import ServicesOffered, { parseServiceLines } from './ServicesOffered';
+import { computeServicesTotals } from '../utils/pricing';
 
-const NOTES_TOOLBAR = [['bold', 'italic', 'underline'], [{ list: 'ordered' }, { list: 'bullet' }], ['link'], ['clean']];
 
 const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
 const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales', 'Lead Affiliate'];
-const RENEWALS = ['New', 'Renewal', 'Expansion'];
+// "Expansion" is kept server-side (and in the ENUM) but is NOT a manual choice in the regular New
+// New / Renewal is auto-tagged, not picked: a plain new lead is "New"; the "+ Additional PO" header
+// flow creates "Expansion" (Additional) and "Renewal" leads, prefilled from an existing customer.
 const RATINGS = ['Hot', 'Warm', 'Cold'];
 
 const emptyForm = {
@@ -32,6 +35,7 @@ const emptyForm = {
   global_po_id: '',
   phase: 'New', next_followup_date: '', po_expected_date: '', lost_reason: '', po_actual_value_lakhs: '',
   service_start_date: '', service_end_date: '',
+  billing_cycle: '', payment_terms: '',
   hold_end_date: '', po_number: '',
   additional_notes: '',
 };
@@ -48,27 +52,104 @@ function Field({ label, children, required }) {
   );
 }
 
-// Small tag showing a service's cost nature, so BDs can see how it feeds the TCV calc.
-function NatureChip({ nature }) {
-  const opex = nature === 'opex';
-  return (
-    <span className={`badge ${opex ? 'badge-blue' : 'badge-amber'}`} style={{ marginLeft: 6, fontSize: 10, fontWeight: 700 }}>
-      {opex ? 'Opex · recurring' : 'Capex · one-time'}
-    </span>
-  );
-}
-
-export default function LeadForm({ lead, onSave, onCancel }) {
-  const { user, isAdmin, canManageDropdowns, canEdit, canFull, canAct } = useAuth();
+export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFrom = null, expansionMode = 'additional' }) {
+  const { user, isAdmin, isBD, canManageDropdowns, canEdit, canFull, canAct } = useAuth();
   // Per-module levels: Edit can change existing leads, Full can also create. Read-only opens the
   // form purely to view — a disabled fieldset covers every input at once, so no control is missed.
   const leadsReadOnly = !canAct || !canEdit('leads');
   // 'Manage' opens the dropdown-option editors: module-level configuration, which Edit excludes.
   const showManage = canAct && canManageDropdowns && canFull('leads');
   const isJHES = user.business_unit === 'jhes';
-  const isSurveillance = user.business_unit === 'surveillance';
+  // Admin-defined custom fields added via Edit Template. The three originals render a hardcoded form,
+  // so their core fields never come from the schema — but any custom field (custom + enabled) does,
+  // and its value is stored in the lead's custom_fields JSON. Each field carries the template's
+  // section key/label so it can be rendered INSIDE the matching hardcoded section (e.g. a "district"
+  // field added to Location renders next to City), rather than piled at the bottom.
+  const customFields = React.useMemo(() => {
+    const secs = buConfig?.formSchema?.sections || [];
+    return secs.flatMap(sec => (sec.fields || [])
+      .filter(f => f.custom && f.enabled !== false)
+      .map(f => ({ ...f, _section: sec.key, _sectionLabel: sec.label })));
+  }, [buConfig]);
+  // Group custom fields by their template section key so we can inject them at the right spot.
+  const customBySection = React.useMemo(() => {
+    const m = new Map();
+    for (const f of customFields) {
+      if (!m.has(f._section)) m.set(f._section, []);
+      m.get(f._section).push(f);
+    }
+    return m;
+  }, [customFields]);
+  // Whether the PO Type chooser (Individual vs Global PO) + chain mapping are shown. Driven by the
+  // template's PO section / po_type field: unchecking it in Edit Template hides both, matching
+  // CustomLeadForm. Defaults to shown when the BU has no saved schema yet (or no PO section in it).
+  const poTypeEnabled = React.useMemo(() => {
+    const secs = buConfig?.formSchema?.sections;
+    if (!Array.isArray(secs)) return true;
+    const po = secs.find(s => s.key === 'po');
+    if (!po) return true;
+    if (po.enabled === false) return false;
+    const field = (po.fields || []).find(f => f.slug === 'po_type');
+    return field ? field.enabled !== false : true;
+  }, [buConfig]);
+  // Account Mix fields follow the template too: unchecking "Account Type" or "Account Category" in
+  // Edit Template hides the matching dropdown in the lead form. Defaults to shown when the BU has no
+  // saved schema yet (or no Account section in it). The whole section hides if the Account section is
+  // off or BOTH fields are off AND there are no custom Account fields.
+  const fieldEnabled = React.useCallback((sectionKey, fieldSlug) => {
+    const secs = buConfig?.formSchema?.sections;
+    if (!Array.isArray(secs)) return true;
+    const sec = secs.find(s => s.key === sectionKey);
+    if (!sec) return true;
+    if (sec.enabled === false) return false;
+    const field = (sec.fields || []).find(f => f.slug === fieldSlug);
+    return field ? field.enabled !== false : true;
+  }, [buConfig]);
+  // Short helpers used throughout the form: fieldOn(key, slug) and sectionOn(key, slugs).
+  // A section is shown only if its template section is on AND at least one of its built-in fields
+  // is on, OR a custom field was added into it. Keeps us from rendering a titled, empty block.
+  const fieldOn = fieldEnabled;
+  const sectionOn = React.useCallback((sectionKey, slugs) => {
+    const secs = buConfig?.formSchema?.sections;
+    if (!Array.isArray(secs)) return true;
+    const sec = secs.find(s => s.key === sectionKey);
+    if (!sec) return true;
+    if (sec.enabled === false) return false;
+    for (const s of slugs) if (fieldOn(sectionKey, s)) return true;
+    return (customBySection.get(sectionKey) || []).length > 0;
+  }, [buConfig, fieldOn, customBySection]);
+  const propertyTypeEnabled     = fieldOn('account', 'property_type');
+  const propertyCategoryEnabled = fieldOn('account', 'property_category');
+  const accountSectionEnabled   = sectionOn('account', ['property_type', 'property_category']);
+  // Field mandatory-ness is driven by the template (Edit Template → "mark mandatory"). Only Customer
+  // Name and Phase are ALWAYS mandatory for every business; every other field is required only if the
+  // Global Admin marked it so. Structural Lead Owner stays required (a lead needs an owner).
+  const mandatoryOf = React.useMemo(() => {
+    const m = {};
+    for (const sec of (buConfig?.formSchema?.sections || [])) for (const f of (sec.fields || [])) m[f.slug] = !!f.mandatory;
+    return m;
+  }, [buConfig]);
+  const ALWAYS_REQUIRED = new Set(['customer_name', 'phase', 'owner_id']);
+  const req = (slug) => ALWAYS_REQUIRED.has(slug) || !!mandatoryOf[slug];
+
+  // Contacts (POC) config. Phone & Designation can be hidden per business; Name/Email/Phone/Designation
+  // are each required only if marked mandatory in the template (nothing is forced). Defaults to
+  // shown/optional when the template has no contacts section yet.
+  const contactCfg = React.useMemo(() => {
+    const sec = (buConfig?.formSchema?.sections || []).find(s => s.key === 'contacts');
+    const f = (slug) => sec && sec.fields ? sec.fields.find(x => x.slug === slug) : null;
+    const p = f('contact_phone'), d = f('contact_designation'), n = f('contact_name'), e = f('contact_email');
+    return {
+      showPhone: p ? p.enabled !== false : true, phoneReq: p ? !!p.mandatory : false,
+      showDesig: d ? d.enabled !== false : true, desigReq: d ? !!d.mandatory : false,
+      nameReq: n ? !!n.mandatory : false, emailReq: e ? !!e.mandatory : false,
+    };
+  }, [buConfig]);
 
   const [form, setForm] = useState(emptyForm);
+  const [custom, setCustom] = useState({});
+  const setC = (slug, v) => setCustom(c => ({ ...c, [slug]: v }));
+  const [lines, setLines] = useState([]);   // Services Offered line list (services_json shape)
   const [contacts, setContacts] = useState([]);
   const [bds, setBds] = useState([]);
   const [dropdowns, setDropdowns] = useState({});              // per-business dropdown options
@@ -78,13 +159,8 @@ export default function LeadForm({ lead, onSave, onCancel }) {
   const [pcOther, setPcOther] = useState(false);               // Property Category "Other" → manual entry
   const channelPartners = dropdowns.channel_partner || [];
   const affiliates = dropdowns.lead_affiliate || [];
-  const deviceSkus = dropdowns.device_sku || [];
   const sourceOpts  = (dropdowns.lead_source && dropdowns.lead_source.length)         ? dropdowns.lead_source      : SOURCES;
   const ratingOpts  = (dropdowns.lead_temperature && dropdowns.lead_temperature.length) ? dropdowns.lead_temperature : RATINGS;
-  const renewalOpts = (dropdowns.new_or_renewal && dropdowns.new_or_renewal.length)   ? dropdowns.new_or_renewal   : RENEWALS;
-  // Surveillance services — map keyed by `${label}__${nature}` → { on, rate, qty }.
-  const [survServices, setSurvServices] = useState({});
-  const setSurv = (key, patch) => setSurvServices(prev => ({ ...prev, [key]: { ...(prev[key] || {}), ...patch } }));
   const [phaseChanged, setPhaseChanged] = useState(false);
   const [phaseDate, setPhaseDate] = useState(todayStr());
   const [poFile, setPoFile] = useState(null);
@@ -96,7 +172,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
   const [poType, setPoType] = useState('individual');
   const [chains, setChains] = useState([]);                 // Global POs (chains) for linkage
   const [linkToChain, setLinkToChain] = useState(false);    // Individual: property belongs to a chain
-  const emptyGlobal = { chain_name: '', device_total: '', price_lakhs: '', expected_start_date: '', expected_end_date: '' };
+  const emptyGlobal = { chain_name: '', device_total: '', device_type: '', price_lakhs: '', expected_start_date: '', expected_end_date: '' };
   const [globalForm, setGlobalForm] = useState(emptyGlobal);
   const setGlobal = (k, v) => setGlobalForm(f => ({ ...f, [k]: v }));
 
@@ -140,20 +216,17 @@ export default function LeadForm({ lead, onSave, onCancel }) {
         po_validity_months: lead.po_validity_months || '',
         phase: lead.phase || 'New', next_followup_date: lead.next_followup_date || '', po_expected_date: lead.po_expected_date || '',
         service_start_date: lead.service_start_date || '', service_end_date: lead.service_end_date || '',
+        billing_cycle: lead.billing_cycle || '', payment_terms: lead.payment_terms || '',
         hold_end_date: lead.hold_end_date || '', po_number: lead.po_number || '',
         global_po_id: lead.global_po_id || '',
         lost_reason: lead.lost_reason?.startsWith('Other: ') ? 'Other' : (lead.lost_reason || ''),
         po_actual_value_lakhs: lead.po_actual_value_lakhs || '', additional_notes: lead.additional_notes || '',
       });
       setLostOther(lead.lost_reason?.startsWith('Other: ') ? lead.lost_reason.slice(7) : '');
+      setCustom(lead.custom_fields || {});
       setContacts((lead.contacts || []).map(c => ({ name: c.name, phone: c.phone || '', email: c.email || '', designation: c.designation || '' })));
       setExistingPoUrl(lead.po_document_url || null);
-      try {
-        const arr = lead.services_json ? JSON.parse(lead.services_json) : [];
-        const map = {};
-        for (const s of arr) map[s.label] = { on: true, nature: s.nature === 'opex' ? 'opex' : 'capex', rate: String(s.rate ?? ''), qty: String(s.qty ?? '') };
-        setSurvServices(map);
-      } catch { setSurvServices({}); }
+      setLines(parseServiceLines(lead.services_json));
       setPhaseChanged(false);
       setPoType('individual');            // an existing lead is always an Individual PO
       setLinkToChain(!!lead.global_po_id);
@@ -161,18 +234,57 @@ export default function LeadForm({ lead, onSave, onCancel }) {
       setPtOther(!!lead.property_type && !PROPERTY_TYPES.includes(lead.property_type));
       setPcOther(!!lead.property_category && !PROPERTY_CATEGORIES.includes(lead.property_category));
     } else {
-      // Both business units capture the same itemized services now, so TCV auto-calculates for both
-      // (the BD can still override it by hand).
-      setForm({ ...emptyForm, owner_id: !isAdmin ? user.id : '', next_followup_date: addDaysStr(todayStr(), 14), tcv_manual: false, device_rate: isJHES ? '0' : '' });
-      setPoType('individual'); setLinkToChain(false); setGlobalForm(emptyGlobal); setCpOther(false); setAffOther(false); setPtOther(false); setPcOther(false);
-      // Start with one empty POC row — name & email are mandatory (at least one contact required).
-      setContacts([{ name: '', phone: '', email: '', designation: '' }]);
-      setSurvServices({});
+      // NEW lead flow. Three cases:
+      //   plain new  → everything blank, new_or_renewal = "New".
+      //   additional → copy the source's STATIC fields only; new_or_renewal = "Expansion".
+      //   renewal    → copy statics PLUS services + deal size; new_or_renewal = "Renewal".
+      const ef = expansionFrom || null;
+      const isRenewal = ef && expansionMode === 'renewal';
+      setForm({
+        ...emptyForm,
+        customer_name: ef?.customer_name || '',
+        owner_id: ef?.owner_id || (!isAdmin ? user.id : ''),
+        property_type: ef?.property_type || '',
+        property_category: ef?.property_category || '',
+        state: ef?.state || '',
+        city: ef?.city || '',
+        lead_source: ef?.lead_source || '',
+        channel_partner_name: ef?.channel_partner_name || '',
+        kam_name: ef?.kam_name || '',
+        affiliate_name: ef?.affiliate_name || '',
+        lead_temperature: ef?.lead_temperature || '',
+        // Auto-tagged by flow; the field is no longer shown in the form.
+        new_or_renewal: !ef ? 'New' : (isRenewal ? 'Renewal' : 'Expansion'),
+        // Renewal repeats the same contract, so copy its deal size; additional/new leave it blank.
+        contract_period_months: isRenewal ? (ef.contract_period_months || '') : '',
+        po_validity_months: isRenewal ? (ef.po_validity_months || '') : '',
+        potential_tcv_lakhs: isRenewal ? (ef.potential_tcv_lakhs || '') : '',
+        tcv_manual: isRenewal ? (ef.tcv_manual === undefined ? true : !!ef.tcv_manual) : false,
+        next_followup_date: addDaysStr(todayStr(), 14),
+        device_rate: isJHES ? '0' : '',
+      });
+      setCustom({});
+      if (ef && ef.global_po_id) {
+        setPoType('individual');
+        setLinkToChain(true);
+        setForm(f => ({ ...f, global_po_id: ef.global_po_id }));
+      } else {
+        setPoType('individual'); setLinkToChain(false);
+      }
+      setGlobalForm(emptyGlobal); setCpOther(false); setAffOther(false);
+      setPtOther(!!ef?.property_type && !PROPERTY_TYPES.includes(ef.property_type));
+      setPcOther(!!ef?.property_category && !PROPERTY_CATEGORIES.includes(ef.property_category));
+      const copiedContacts = ef && Array.isArray(ef.contacts) && ef.contacts.length
+        ? ef.contacts.map(c => ({ name: c.name || '', phone: c.phone || '', email: c.email || '', designation: c.designation || '' }))
+        : [{ name: '', phone: '', email: '', designation: '' }];
+      setContacts(copiedContacts);
+      // Renewal copies the services list too; additional/new start blank.
+      setLines(isRenewal ? parseServiceLines(ef.services_json) : []);
       setExistingPoUrl(null);
       setPhaseChanged(true);
       setPhaseDate(todayStr());
     }
-  }, [lead, isAdmin, user?.id, user?.business_unit]);
+  }, [lead, expansionFrom, expansionMode, isAdmin, user?.id, user?.business_unit, isJHES]);
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
@@ -189,41 +301,20 @@ export default function LeadForm({ lead, onSave, onCancel }) {
     setPhaseChanged(true);
   };
 
-  // Surveillance TCV split (lakhs) from its JSON services map. Mirror of computeSurveillanceBreakdown
-  // in backend/routes/leads.js.
-  const survBreakdown = () => {
-    const m = parseInt(form.contract_period_months, 10) || 0;
-    let opex = 0, capex = 0;
-    for (const svc of Object.values(survServices)) {
-      if (!svc || !svc.on) continue;
-      const r = parseFloat(svc.rate) || 0, q = parseInt(svc.qty, 10) || 0;
-      if (!r || !q) continue;
-      if (svc.nature === 'opex') opex += r * q * m; else capex += r * q;
-    }
-    return { opexLakhs: opex / 100000, capexLakhs: capex / 100000 };
-  };
-
-  // TCV auto-calculates from the ticked services × contract period, unless the BD overrides it
-  // (tcv_manual). effectiveTcv is what's shown in the field and persisted on save.
-  const computedTcv = isSurveillance
-    ? (() => { const { opexLakhs, capexLakhs } = survBreakdown(); const t = opexLakhs + capexLakhs; return t > 0 ? +t.toFixed(2) : ''; })()
-    : computeTcvLakhs(form);
+  // TCV/ACV auto-calculate from the Services Offered lines × contract period via the single shared
+  // pricing engine, unless the BD overrides TCV by hand (tcv_manual). effectiveTcv is what's shown in
+  // the field and persisted on save.
+  const serviceTotals = computeServicesTotals(lines, form.contract_period_months);
+  const computedTcv = serviceTotals.tcvLakhs > 0 ? serviceTotals.tcvLakhs : '';
   const effectiveTcv = form.tcv_manual ? form.potential_tcv_lakhs : computedTcv;
   const overrideTcv = () => setForm(f => ({ ...f, tcv_manual: true, potential_tcv_lakhs: computedTcv || 0 }));
   const useAutoTcv = () => setForm(f => ({ ...f, tcv_manual: false }));
 
-  // First-year ACV: OPEX is annualised over the contract term, but CAPEX (one-time) is realised in
-  // full in year 1. JHES / manual-TCV leads have no service breakdown, so the whole TCV is
-  // annualised evenly. Mirrors the backend ACV rule in normalizePayload().
+  // First-year ACV: from the pricing engine for auto mode (OPEX annualised at its cadence, CAPEX full
+  // in year 1); for a hand-typed TCV the whole value is annualised evenly.
   const acv = () => {
-    if (form.tcv_manual || isJHES) return computeAcvLakhs(form, { manual: true, manualTcv: form.potential_tcv_lakhs });
-    if (isSurveillance) {
-      const { opexLakhs, capexLakhs } = survBreakdown();
-      if (opexLakhs + capexLakhs <= 0) return null;
-      const m = parseInt(form.contract_period_months, 10) || 0; const years = m ? m / 12 : 0;
-      return +((years ? opexLakhs / years : opexLakhs) + capexLakhs).toFixed(2);
-    }
-    return computeAcvLakhs(form, { manual: form.tcv_manual, manualTcv: form.potential_tcv_lakhs });
+    if (form.tcv_manual) return computeAcvLakhs(form, { manual: true, manualTcv: form.potential_tcv_lakhs });
+    return serviceTotals.acvLakhs > 0 ? serviceTotals.acvLakhs : null;
   };
 
   const addContact = () => setContacts(c => [...c, { name: '', phone: '', email: '', designation: '' }]);
@@ -238,10 +329,12 @@ export default function LeadForm({ lead, onSave, onCancel }) {
       if (!lead && poType === 'global') {
         if (!globalForm.chain_name.trim()) { setError('Chain name is required.'); return; }
         const devices = parseInt(globalForm.device_total, 10);
-        if (!Number.isFinite(devices) || devices < 0) { setError('Number of devices must be a non-negative whole number.'); return; }
+        if (!Number.isFinite(devices) || devices < 0) { setError('Number of requirement must be a non-negative whole number.'); return; }
+        if (!globalForm.device_type) { setError('Please select a type.'); return; }
         const savedGlobal = await createGlobalPo({
           chain_name: globalForm.chain_name.trim(),
           device_total: devices,
+          device_type: globalForm.device_type,
           price_lakhs: globalForm.price_lakhs === '' ? null : parseFloat(globalForm.price_lakhs),
           expected_start_date: globalForm.expected_start_date || null,
           expected_end_date: globalForm.expected_end_date || null,
@@ -249,10 +342,24 @@ export default function LeadForm({ lead, onSave, onCancel }) {
         onSave(savedGlobal);
         return;
       }
-      // POC is mandatory: at least one contact, each with a name and email.
-      if (contacts.length === 0 || contacts.some(c => !c.name.trim() || !c.email.trim())) {
-        setError('At least one contact (POC) with Name and Email is required.');
-        return;
+      // Contacts (POC) — enforce only what the template marks mandatory. Empty rows are dropped.
+      const nonEmptyContacts = contacts.filter(c => [c.name, c.email, c.phone, c.designation].some(v => String(v || '').trim()));
+      const anyContactReq = contactCfg.nameReq || contactCfg.emailReq || contactCfg.phoneReq || contactCfg.desigReq;
+      if (anyContactReq && nonEmptyContacts.length === 0) { setError('At least one contact (POC) is required.'); return; }
+      for (const c of nonEmptyContacts) {
+        if (contactCfg.nameReq && !String(c.name || '').trim()) { setError('Name is required for each contact.'); return; }
+        if (contactCfg.emailReq && !String(c.email || '').trim()) { setError('Email is required for each contact.'); return; }
+        if (contactCfg.phoneReq && !String(c.phone || '').trim()) { setError('Phone is required for each contact.'); return; }
+        if (contactCfg.desigReq && !String(c.designation || '').trim()) { setError('Designation is required for each contact.'); return; }
+      }
+      // Mandatory custom fields defined in the business template.
+      for (const f of customFields) {
+        if (!f.mandatory) continue;
+        const v = custom[f.slug];
+        if (v === undefined || v === null || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && v.length === 0)) {
+          setError(`${f.label} is required.`);
+          return;
+        }
       }
       // A PO document is mandatory once a deal is marked PO Received.
       if (form.phase === 'PO Received' && !existingPoUrl && !poFile) {
@@ -271,19 +378,18 @@ export default function LeadForm({ lead, onSave, onCancel }) {
         global_po_id: linkToChain && form.global_po_id ? form.global_po_id : null,
         // In auto mode form.potential_tcv_lakhs isn't kept in sync — send the computed value.
         potential_tcv_lakhs: form.tcv_manual ? form.potential_tcv_lakhs : (computedTcv || ''),
-        // Surveillance leads carry their ticked services (backend recomputes TCV from these).
-        surveillance_services: isSurveillance
-          ? Object.entries(survServices)
-              .filter(([, svc]) => svc && svc.on && parseFloat(svc.rate) > 0 && parseInt(svc.qty, 10) > 0)
-              .map(([label, svc]) => ({ label, nature: svc.nature === 'opex' ? 'opex' : 'capex', rate: parseFloat(svc.rate), qty: parseInt(svc.qty, 10) }))
-          : undefined,
+        // Unified Services Offered line list (all businesses). Backend recomputes TCV/ACV from it.
+        services: lines,
         lost_reason: form.phase === 'Lost' && form.lost_reason === 'Other' && lostOther.trim()
           ? `Other: ${lostOther.trim()}` : form.lost_reason,
-        contacts,
+        contacts: nonEmptyContacts,
+        custom_fields: custom,
         phase_date: phaseChanged ? phaseDate : undefined,
         // Resume/hold-until date — only meaningful while On Hold (freezes confidence until manual resume).
         hold_end_date: form.phase === 'On Hold' ? (form.hold_end_date || undefined) : undefined,
         po_document_url: existingPoUrl,
+        // Renewal flow: link this new lead back to the specific PO it renews.
+        renewed_from_lead_id: (!lead && expansionFrom && expansionMode === 'renewal') ? expansionFrom.id : undefined,
       };
 
       let saved = lead ? await updateLead(lead.id, payload) : await createLead(payload);
@@ -301,12 +407,33 @@ export default function LeadForm({ lead, onSave, onCancel }) {
     }
   };
 
-  // "New" can't be backdated (a lead starts today at the earliest); every other phase move may
-  // have happened up to 2 days ago. The high end is always today+2.
+  // Phase-date window: a BD may adjust it ±7 days ("New" can't be backdated — a lead starts today at
+  // the earliest). Manager / Business Admin / Global Admin (any non-BD role) are unrestricted and may
+  // set any date, so no min/max is applied for them.
   const isNewPhase = form.phase === 'New';
-  const minPhaseDate = isNewPhase ? todayStr() : addDaysStr(todayStr(), -2);
-  const maxPhaseDate = addDaysStr(todayStr(), 2);
+  // BDs can only backdate a phase change — up to 7 days back, no future dates. A phase change
+  // records something that already happened. Non-BDs are unrestricted.
+  const minPhaseDate = isBD ? addDaysStr(todayStr(), -7) : undefined;
+  const maxPhaseDate = isBD ? todayStr() : undefined;
   const inactivePhase = ['PO Received', 'Lost'].includes(form.phase);
+
+  // Extras helper — renders custom fields (from Edit Template) for one template section key,
+  // inline as raw <div> children so they flow into whatever grid the caller is in. Returns null
+  // when the section has no custom fields, so an unused injection point costs nothing.
+  const KNOWN_SECTIONS = new Set(['account', 'location', 'source', 'classification', 'commercials', 'pipeline', 'po', 'dates', 'other']);
+  const renderExtras = (sectionKey) => {
+    const fields = customBySection.get(sectionKey);
+    if (!fields || fields.length === 0) return null;
+    return fields.map(f => (
+      <FieldInput key={f.slug} field={f}
+        value={custom[f.slug] ?? ''}
+        onChange={(v) => setC(f.slug, v)}
+        options={Array.isArray(f.options) ? f.options : []} />
+    ));
+  };
+  // Any template section keys that DON'T map to a hardcoded LeadForm section — rendered at the
+  // bottom as their own labelled block so user-created custom sections still appear somewhere.
+  const extraSectionKeys = [...customBySection.keys()].filter(k => !KNOWN_SECTIONS.has(k));
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -315,11 +442,26 @@ export default function LeadForm({ lead, onSave, onCancel }) {
           👁 Read-only — you can view this lead but not change it.
         </div>
       )}
+      {expansionFrom && !lead && (
+        <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#3730a3', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>{expansionMode === 'renewal' ? '🔄' : '➕'}</span>
+          <span>
+            <strong>{expansionMode === 'renewal' ? 'Renewal of' : 'Additional PO for'} {expansionFrom.customer_name}</strong>
+            {expansionFrom.lead_ref && <span style={{ color: '#6366f1', fontFamily: 'monospace', marginLeft: 6 }}>· copied from {expansionFrom.lead_ref}</span>}
+            <span style={{ color: '#64748b', marginLeft: 6, fontSize: 12 }}>
+              {expansionMode === 'renewal'
+                ? 'Statics, services and deal size copied from the PO being renewed. Adjust the dates and price.'
+                : 'Static details filled in. Fill the services, deal size and dates fresh.'}
+            </span>
+          </span>
+        </div>
+      )}
       <fieldset disabled={leadsReadOnly} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 22 }}>
       {error && <div className="badge badge-red" style={{ padding: '8px 12px', fontSize: 13 }}>{error}</div>}
 
-      {/* PO Type — chosen at creation. An existing lead is always an Individual PO. */}
-      {!lead && (
+      {/* PO Type — chosen at creation. An existing lead is always an Individual PO. Hidden when the
+          business has disabled the PO Type field in Edit Template. */}
+      {!lead && poTypeEnabled && !expansionFrom && (
         <section>
           <p className="section-title">PO Type</p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -346,13 +488,20 @@ export default function LeadForm({ lead, onSave, onCancel }) {
             <Field label="Chain Name" required>
               <input required className="input" value={globalForm.chain_name} onChange={e => setGlobal('chain_name', e.target.value)} placeholder="e.g. Sunrise Hotels" />
             </Field>
-            <Field label="Number of Devices" required>
+            <Field label="Number of Requirement" required>
               <input required type="number" min="0" className="input" value={globalForm.device_total} onChange={e => setGlobal('device_total', e.target.value)} placeholder="Total capacity across the chain" />
+            </Field>
+            <Field label="Type" required>
+              <select required className="input" value={globalForm.device_type} onChange={e => setGlobal('device_type', e.target.value)}>
+                <option value="">Select type…</option>
+                {(buConfig?.services || []).map(s => (
+                  <option key={s.slug} value={s.label}>{s.label}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Price (₹ Lakhs)">
               <input type="number" step="0.01" min="0" className="input" value={globalForm.price_lakhs} onChange={e => setGlobal('price_lakhs', e.target.value)} />
             </Field>
-            <div />
             <Field label="Expected Start Date">
               <input type="date" className="input" value={globalForm.expected_start_date} onChange={e => setGlobal('expected_start_date', e.target.value)} />
             </Field>
@@ -365,7 +514,10 @@ export default function LeadForm({ lead, onSave, onCancel }) {
       )}
 
       {poType === 'individual' && (<>
-      {/* Chain Mapping — link this Individual PO to a chain, or leave it standalone. */}
+      {/* Chain Mapping — link this Individual PO to a chain, or leave it standalone. Hidden when PO
+          Type is disabled for this business (no Global POs → nothing to map to).
+          For Additional/Renewal flows, chain mapping is inherited from the source lead automatically. */}
+      {poTypeEnabled && !expansionFrom && (
       <section>
         <p className="section-title">Chain Mapping</p>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#334155' }}>
@@ -379,7 +531,7 @@ export default function LeadForm({ lead, onSave, onCancel }) {
                 <option value="">Select a chain…</option>
                 {chains.map(c => {
                   const s = c.status || {};
-                  return <option key={c.id} value={c.id}>{c.chain_name} — {s.consumed ?? 0} of {c.device_total} won{s.exceeded ? ' · exceeded' : ` · ${s.remaining} left`}</option>;
+                  return <option key={c.id} value={c.id}>{c.chain_name} ({c.device_type || 'Hardware'}) — {s.consumed ?? 0} of {c.device_total} won{s.exceeded ? ' · exceeded' : ` · ${s.remaining} left`}</option>;
                 })}
               </select>
             </Field>
@@ -389,42 +541,64 @@ export default function LeadForm({ lead, onSave, onCancel }) {
           <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Standalone property — no chain mapping.</p>
         )}
       </section>
-
-      {/* Account Mix — captured before the customer details (all businesses). Optional; "Other" lets the
-          user type a custom value. */}
+      )}
+      {poTypeEnabled && expansionFrom && linkToChain && (
       <section>
-        <p className="section-title">Account Mix</p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <Field label="Property Type">
-            <select className="input" value={ptOther ? 'Other' : form.property_type}
-              onChange={e => {
-                if (e.target.value === 'Other') { setPtOther(true); set('property_type', ''); }
-                else { setPtOther(false); set('property_type', e.target.value); }
-              }}>
-              <option value="">Select type</option>
-              {PROPERTY_TYPES.map(t => <option key={t}>{t}</option>)}
-            </select>
-            {ptOther && (
-              <input className="input" style={{ marginTop: 8 }} placeholder="Enter property type"
-                value={form.property_type} onChange={e => set('property_type', e.target.value)} />
-            )}
-          </Field>
-          <Field label="Property Category">
-            <select className="input" value={pcOther ? 'Other' : form.property_category}
-              onChange={e => {
-                if (e.target.value === 'Other') { setPcOther(true); set('property_category', ''); }
-                else { setPcOther(false); set('property_category', e.target.value); }
-              }}>
-              <option value="">Select category</option>
-              {PROPERTY_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-            </select>
-            {pcOther && (
-              <input className="input" style={{ marginTop: 8 }} placeholder="Enter property category"
-                value={form.property_category} onChange={e => set('property_category', e.target.value)} />
-            )}
-          </Field>
-        </div>
+        <p className="section-title">Chain Mapping</p>
+        <p style={{ fontSize: 13, color: '#334155' }}>
+          Linked to chain: <strong>{chains.find(c => String(c.id) === String(form.global_po_id))?.chain_name || '—'}</strong>
+          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 6 }}>(inherited from source PO)</span>
+        </p>
       </section>
+      )}
+
+      {/* Account Mix — captured before the customer details (all businesses). Each field is driven by
+          the template (Edit Template → Account section). Unchecking a field hides it here; unchecking
+          both built-in fields with no custom fields hides the whole section. */}
+      {accountSectionEnabled && (
+        <section>
+          <p className="section-title">Account Mix</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            {propertyTypeEnabled && (
+              <Field label="Property Type">
+                {ptOther ? (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input className="input" style={{ flex: 1 }} placeholder="Enter property type" value={form.property_type} onChange={e => set('property_type', e.target.value)} autoFocus />
+                    <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => { setPtOther(false); set('property_type', ''); }}>✕</button>
+                  </div>
+                ) : (
+                  <select className="input" value={form.property_type} onChange={e => {
+                    if (e.target.value === 'Other') { setPtOther(true); set('property_type', ''); }
+                    else set('property_type', e.target.value);
+                  }}>
+                    <option value="">Select type</option>
+                    {PROPERTY_TYPES.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                )}
+              </Field>
+            )}
+            {propertyCategoryEnabled && (
+              <Field label="Property Category">
+                {pcOther ? (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input className="input" style={{ flex: 1 }} placeholder="Enter property category" value={form.property_category} onChange={e => set('property_category', e.target.value)} autoFocus />
+                    <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => { setPcOther(false); set('property_category', ''); }}>✕</button>
+                  </div>
+                ) : (
+                  <select className="input" value={form.property_category} onChange={e => {
+                    if (e.target.value === 'Other') { setPcOther(true); set('property_category', ''); }
+                    else set('property_category', e.target.value);
+                  }}>
+                    <option value="">Select category</option>
+                    {PROPERTY_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                )}
+              </Field>
+            )}
+            {renderExtras('account')}
+          </div>
+        </section>
+      )}
 
       {/* Section 1: Lead Info */}
       <section>
@@ -443,18 +617,24 @@ export default function LeadForm({ lead, onSave, onCancel }) {
               <input className="input" value={user.name} readOnly disabled style={{ background: '#f8fafc' }} />
             )}
           </Field>
-          <Field label="State / UT" required>
-            <select required className="input" value={form.state} onChange={e => set('state', e.target.value)}>
-              <option value="">Select State / UT</option>
-              {form.state && ![...INDIAN_STATES, ...UNION_TERRITORIES].includes(form.state) && <option value={form.state}>{form.state}</option>}
-              <optgroup label="States">{INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}</optgroup>
-              <optgroup label="Union Territories">{UNION_TERRITORIES.map(s => <option key={s} value={s}>{s}</option>)}</optgroup>
-            </select>
-          </Field>
-          <Field label="City"><input className="input" value={form.city} onChange={e => set('city', e.target.value)} /></Field>
-          <Field label="Lead Source" required>
+          {fieldOn('location', 'state') && (
+            <Field label="State / UT" required={req('state')}>
+              <select required={req('state')} className="input" value={form.state} onChange={e => set('state', e.target.value)}>
+                <option value="">Select State / UT</option>
+                {form.state && ![...INDIAN_STATES, ...UNION_TERRITORIES].includes(form.state) && <option value={form.state}>{form.state}</option>}
+                <optgroup label="States">{INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}</optgroup>
+                <optgroup label="Union Territories">{UNION_TERRITORIES.map(s => <option key={s} value={s}>{s}</option>)}</optgroup>
+              </select>
+            </Field>
+          )}
+          {fieldOn('location', 'city') && (
+            <Field label="City" required={req('city')}><input required={req('city')} className="input" value={form.city} onChange={e => set('city', e.target.value)} /></Field>
+          )}
+          {renderExtras('location')}
+          {fieldOn('source', 'lead_source') && (
+          <Field label="Lead Source" required={req('lead_source')}>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <select required className="input" style={{ flex: 1 }} value={form.lead_source} onChange={e => set('lead_source', e.target.value)}>
+              <select required={req('lead_source')} className="input" style={{ flex: 1 }} value={form.lead_source} onChange={e => set('lead_source', e.target.value)}>
                 <option value="">Select</option>
                 {form.lead_source && !sourceOpts.includes(form.lead_source) && <option value={form.lead_source}>{form.lead_source}</option>}
                 {sourceOpts.map(s => <option key={s}>{s}</option>)}
@@ -462,27 +642,28 @@ export default function LeadForm({ lead, onSave, onCancel }) {
               {showManage && <DropdownManager field="lead_source" label="Lead Source" onChange={loadDropdowns} />}
             </div>
           </Field>
+          )}
           {form.lead_source === 'Channel Partner' && (
             <Field label="Channel Partner Name" required>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <select
-                  required
-                  className="input"
-                  style={{ flex: 1 }}
-                  value={cpOther ? '__other__' : form.channel_partner_name}
-                  onChange={e => {
-                    if (e.target.value === '__other__') { setCpOther(true); set('channel_partner_name', ''); }
-                    else { setCpOther(false); set('channel_partner_name', e.target.value); }
-                  }}>
-                  <option value="">Select channel partner</option>
-                  {channelPartners.map(cp => <option key={cp} value={cp}>{cp}</option>)}
-                  <option value="__other__">Other (enter name)…</option>
-                </select>
-                {showManage && <DropdownManager field="channel_partner" label="Channel Partner" onChange={loadDropdowns} />}
-              </div>
-              {cpOther && (
-                <input required className="input" style={{ marginTop: 8 }} placeholder="Enter new channel partner name"
-                  value={form.channel_partner_name} onChange={e => set('channel_partner_name', e.target.value)} />
+              {cpOther ? (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input required className="input" style={{ flex: 1 }} placeholder="Enter new channel partner name" value={form.channel_partner_name} onChange={e => set('channel_partner_name', e.target.value)} autoFocus />
+                  {showManage && <DropdownManager field="channel_partner" label="Channel Partner" onChange={loadDropdowns} />}
+                  <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => { setCpOther(false); set('channel_partner_name', ''); }}>✕</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <select required className="input" style={{ flex: 1 }} value={form.channel_partner_name}
+                    onChange={e => {
+                      if (e.target.value === '__other__') { setCpOther(true); set('channel_partner_name', ''); }
+                      else set('channel_partner_name', e.target.value);
+                    }}>
+                    <option value="">Select channel partner</option>
+                    {channelPartners.map(cp => <option key={cp} value={cp}>{cp}</option>)}
+                    <option value="__other__">Other (enter name)…</option>
+                  </select>
+                  {showManage && <DropdownManager field="channel_partner" label="Channel Partner" onChange={loadDropdowns} />}
+                </div>
               )}
             </Field>
           )}
@@ -495,25 +676,25 @@ export default function LeadForm({ lead, onSave, onCancel }) {
             <Field label="Affiliate Name" required>
               {isJHES ? (
                 <>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <select
-                      required
-                      className="input"
-                      style={{ flex: 1 }}
-                      value={affOther ? '__other__' : form.affiliate_name}
-                      onChange={e => {
-                        if (e.target.value === '__other__') { setAffOther(true); set('affiliate_name', ''); }
-                        else { setAffOther(false); set('affiliate_name', e.target.value); }
-                      }}>
-                      <option value="">Select affiliate</option>
-                      {affiliates.map(a => <option key={a} value={a}>{a}</option>)}
-                      <option value="__other__">Other (enter name)…</option>
-                    </select>
-                    {showManage && <DropdownManager field="lead_affiliate" label="Lead Affiliate" onChange={loadDropdowns} />}
-                  </div>
-                  {affOther && (
-                    <input required className="input" style={{ marginTop: 8 }} placeholder="Enter new affiliate name"
-                      value={form.affiliate_name} onChange={e => set('affiliate_name', e.target.value)} />
+                  {affOther ? (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input required className="input" style={{ flex: 1 }} placeholder="Enter new affiliate name" value={form.affiliate_name} onChange={e => set('affiliate_name', e.target.value)} autoFocus />
+                      {showManage && <DropdownManager field="lead_affiliate" label="Lead Affiliate" onChange={loadDropdowns} />}
+                      <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => { setAffOther(false); set('affiliate_name', ''); }}>✕</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <select required className="input" style={{ flex: 1 }} value={form.affiliate_name}
+                        onChange={e => {
+                          if (e.target.value === '__other__') { setAffOther(true); set('affiliate_name', ''); }
+                          else set('affiliate_name', e.target.value);
+                        }}>
+                        <option value="">Select affiliate</option>
+                        {affiliates.map(a => <option key={a} value={a}>{a}</option>)}
+                        <option value="__other__">Other (enter name)…</option>
+                      </select>
+                      {showManage && <DropdownManager field="lead_affiliate" label="Lead Affiliate" onChange={loadDropdowns} />}
+                    </div>
                   )}
                 </>
               ) : (
@@ -521,170 +702,45 @@ export default function LeadForm({ lead, onSave, onCancel }) {
               )}
             </Field>
           )}
-          <Field label="New / Renewal" required>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <select required className="input" style={{ flex: 1 }} value={form.new_or_renewal} onChange={e => set('new_or_renewal', e.target.value)}>
-                <option value="">Select</option>
-                {form.new_or_renewal && !renewalOpts.includes(form.new_or_renewal) && <option value={form.new_or_renewal}>{form.new_or_renewal}</option>}
-                {renewalOpts.map(r => <option key={r}>{r}</option>)}
-              </select>
-              {showManage && <DropdownManager field="new_or_renewal" label="New / Renewal" onChange={loadDropdowns} />}
-            </div>
-          </Field>
-          <Field label="Lead Rating" required>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <select required className="input" style={{ flex: 1 }} value={form.lead_temperature} onChange={e => set('lead_temperature', e.target.value)}>
-                <option value="">Select</option>
-                {form.lead_temperature && !ratingOpts.includes(form.lead_temperature) && <option value={form.lead_temperature}>{form.lead_temperature}</option>}
-                {ratingOpts.map(r => <option key={r}>{r}</option>)}
-              </select>
-              {showManage && <DropdownManager field="lead_temperature" label="Lead Rating" onChange={loadDropdowns} />}
-            </div>
-          </Field>
-          <Field label="Competitor"><input className="input" value={form.competitor} onChange={e => set('competitor', e.target.value)} placeholder="Optional" /></Field>
+          {renderExtras('source')}
+          {/* New / Renewal is no longer a manual field. A plain new lead is auto-tagged "New";
+              the "+ Additional PO" header flow tags leads "Expansion" (Additional) or "Renewal". */}
+          {fieldOn('classification', 'lead_temperature') && (
+            <Field label="Lead Rating" required={req('lead_temperature')}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <select required={req('lead_temperature')} className="input" style={{ flex: 1 }} value={form.lead_temperature} onChange={e => set('lead_temperature', e.target.value)}>
+                  <option value="">Select</option>
+                  {form.lead_temperature && !ratingOpts.includes(form.lead_temperature) && <option value={form.lead_temperature}>{form.lead_temperature}</option>}
+                  {ratingOpts.map(r => <option key={r}>{r}</option>)}
+                </select>
+                {showManage && <DropdownManager field="lead_temperature" label="Lead Rating" onChange={loadDropdowns} />}
+              </div>
+            </Field>
+          )}
+          {fieldOn('classification', 'competitor') && (
+            <Field label="Competitor"><input className="input" value={form.competitor} onChange={e => set('competitor', e.target.value)} placeholder="Optional" /></Field>
+          )}
+          {renderExtras('classification')}
         </div>
       </section>
 
-      {/* Section 2: Services Offered. Signage/JHES share the itemised list; Surveillance has its own
-          catalogue (each service selectable as Opex and/or Capex). */}
-      <section>
-          <p className="section-title">Services Offered</p>
-        {isSurveillance ? (
-          <>
-            <p style={{ fontSize: 12, color: '#94a3b8', margin: '-6px 0 10px' }}>
-              Tick each service, choose whether it's <b>Opex</b> (recurring) or <b>Capex</b> (one-time),
-              then enter its unit rate and quantity. These feed the auto-calculated TCV below.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {SURVEILLANCE_ITEMS.map(label => {
-                const ssvc = survServices[label] || {};
-                const son = !!ssvc.on;
-                const snat = ssvc.nature || 'opex';
-                return (
-                  <div key={label} className="card-sm" style={{ borderColor: son ? '#c7d2fe' : '#e2e8f0', background: son ? '#eef2ff' : '#fff' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                      <input type="checkbox" checked={son} onChange={e => setSurv(label, e.target.checked ? { on: true, nature: snat } : { on: false, rate: '', qty: '' })} />
-                      {label}
-                      {son && <NatureChip nature={snat} />}
-                    </label>
-                    {son && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-                        <Field label="Cost Type" required>
-                          <div style={{ display: 'flex', gap: 18 }}>
-                            {[['opex', 'Opex (recurring)'], ['capex', 'Capex (one-time)']].map(([ct, lbl]) => (
-                              <label key={ct} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
-                                <input type="radio" name={`surv_nature_${label}`} checked={snat === ct} onChange={() => setSurv(label, { nature: ct })} />
-                                {lbl}
-                              </label>
-                            ))}
-                          </div>
-                        </Field>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                          <Field label={snat === 'opex' ? 'Unit Rate (₹/month)' : 'Unit Rate (₹, one-time)'}>
-                            <input type="number" step="0.01" min="0" className="input" value={ssvc.rate || ''} onChange={e => setSurv(label, { rate: e.target.value })} />
-                          </Field>
-                          <Field label="Quantity" required><input required type="number" min="1" className="input" value={ssvc.qty || ''} onChange={e => setSurv(label, { qty: e.target.value })} /></Field>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          <>
-          <p style={{ fontSize: 12, color: '#94a3b8', margin: '-6px 0 10px' }}>
-            Tick each service, then enter its unit rate and quantity. <b>Opex</b> is recurring (billed monthly over the contract);
-            <b> Capex</b> is one-time. These feed the auto-calculated TCV below.
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(isJHES ? JHES_SERVICES : SIGNAGE_SERVICES).map(svc => {
-              const on = form[`includes_${svc.key}`];
-              return (
-                <div key={svc.key} className="card-sm" style={{ borderColor: on ? '#c7d2fe' : '#e2e8f0', background: on ? '#eef2ff' : '#fff' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                    <input type="checkbox" checked={on} onChange={e => {
-                      set(`includes_${svc.key}`, e.target.checked);
-                      if (!e.target.checked) { set(`${svc.key}_rate`, ''); set(`${svc.key}_qty`, ''); }
-                    }} />
-                    {svc.label}
-                    <NatureChip nature={svc.nature} />
-                  </label>
-                  {on && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-                      <Field label={svc.nature === 'opex' ? 'Unit Rate (₹/month)' : 'Unit Rate (₹, one-time)'}>
-                        <input type="number" step="0.01" min="0" className="input" value={form[`${svc.key}_rate`]} onChange={e => set(`${svc.key}_rate`, e.target.value)} />
-                      </Field>
-                      <Field label="Quantity" required><input required type="number" min="1" className="input" value={form[`${svc.key}_qty`]} onChange={e => set(`${svc.key}_qty`, e.target.value)} /></Field>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            <div className="card-sm" style={{ borderColor: form.includes_device ? '#c7d2fe' : '#e2e8f0', background: form.includes_device ? '#eef2ff' : '#fff' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                <input type="checkbox" checked={form.includes_device} onChange={e => {
-                  set('includes_device', e.target.checked);
-                  if (e.target.checked) {
-                    if (!form.device_cost_type) set('device_cost_type', 'capex');
-                    // JHES: device unit price defaults to 0.
-                    if (isJHES) setForm(f => (f.device_rate === '' || f.device_rate == null) ? { ...f, device_rate: '0' } : f);
-                  }
-                  else { set('device_sku', ''); set('device_rate', ''); set('device_qty', ''); set('device_requested_date', ''); set('device_cost_type', 'capex'); }
-                }} />
-                Device
-                <NatureChip nature={form.device_cost_type === 'opex' ? 'opex' : 'capex'} />
-              </label>
-              {form.includes_device && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-                  <Field label="Cost Type" required>
-                    <div style={{ display: 'flex', gap: 18 }}>
-                      {[['capex', 'Capex (one-time)'], ['opex', 'Opex (recurring)']].map(([ct, lbl]) => (
-                        <label key={ct} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
-                          <input type="radio" name="device_cost_type" checked={(form.device_cost_type || 'capex') === ct} onChange={() => set('device_cost_type', ct)} />
-                          {lbl}
-                        </label>
-                      ))}
-                    </div>
-                  </Field>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <Field label="Device SKU" required>
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <select required className="input" style={{ flex: 1 }} value={form.device_sku} onChange={e => set('device_sku', e.target.value)}>
-                          <option value="">Select SKU</option>
-                          {form.device_sku && !deviceSkus.includes(form.device_sku) && <option value={form.device_sku}>{form.device_sku}</option>}
-                          {deviceSkus.map(sku => <option key={sku} value={sku}>{sku}</option>)}
-                        </select>
-                        {showManage && <DropdownManager field="device_sku" label="Device SKU" onChange={loadDropdowns} />}
-                      </div>
-                    </Field>
-                    {form.device_sku && DEVICE_SKU_MAP[form.device_sku] && <Field label="Device Type"><input className="input" readOnly disabled value={DEVICE_SKU_MAP[form.device_sku]} style={{ background: '#f8fafc' }} /></Field>}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <Field label={form.device_cost_type === 'opex' ? 'Unit Rate (₹/month)' : 'Unit Rate (₹, one-time)'}><input type="number" step="0.01" min="0" className="input" value={form.device_rate} onChange={e => set('device_rate', e.target.value)} /></Field>
-                    <Field label="Quantity" required><input required type="number" min={isJHES ? 0 : 1} className="input" value={form.device_qty} onChange={e => set('device_qty', e.target.value)} /></Field>
-                  </div>
-                  <Field label="Device Expected Date">
-                    <input type="date" className="input" value={form.device_requested_date} onChange={e => set('device_requested_date', e.target.value)} />
-                    <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>When these devices are expected — used (and sorted by) in the Inventory Pipeline.</p>
-                  </Field>
-                </div>
-              )}
-            </div>
-          </div>
-          </>
-        )}
-      </section>
+      {/* Section 2: Services Offered — the shared, catalog-driven, three-category section (same for
+          every business). The Global Admin defines the catalog in Edit Template; the BD picks items
+          and sets OPEX/CAPEX, frequency, rate and qty here. */}
+      <ServicesOffered catalog={buConfig?.services || []} contractMonths={form.contract_period_months}
+        value={lines} onChange={setLines} readOnly={leadsReadOnly} />
 
       {/* Section 3: Deal Size — Contract Period first, since the auto-calculated TCV depends on it */}
       <section>
         <p className="section-title">Deal Size</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-          <Field label="Contract Period (Months)" required><input required type="number" min="1" className="input" value={form.contract_period_months} onChange={e => set('contract_period_months', e.target.value)} /></Field>
-          <Field label="Potential TCV (Lakhs)" required>
+          {fieldOn('commercials', 'contract_period_months') && (
+            <Field label="Contract Period (Months)" required={req('contract_period_months')}><input required={req('contract_period_months')} type="number" min="1" className="input" value={form.contract_period_months} onChange={e => set('contract_period_months', e.target.value)} /></Field>
+          )}
+          {fieldOn('commercials', 'potential_tcv_lakhs') && (
+          <Field label="Potential TCV (Lakhs)" required={req('potential_tcv_lakhs')}>
             <input
-              required type="number" step="0.01" min="0" className="input"
+              required={req('potential_tcv_lakhs')} type="number" step="0.01" min="0" className="input"
               value={effectiveTcv}
               readOnly={!form.tcv_manual}
               onChange={e => set('potential_tcv_lakhs', e.target.value)}
@@ -709,14 +765,18 @@ export default function LeadForm({ lead, onSave, onCancel }) {
               )}
             </div>
           </Field>
-          <Field label="PO Validity (Months)">
-            <input type="number" min="1" className="input" value={form.po_validity_months} onChange={e => set('po_validity_months', e.target.value)} />
-          </Field>
+          )}
+          {fieldOn('commercials', 'po_validity_months') && (
+            <Field label="PO Validity (Months)">
+              <input type="number" min="1" className="input" value={form.po_validity_months} onChange={e => set('po_validity_months', e.target.value)} />
+            </Field>
+          )}
+          {renderExtras('commercials')}
         </div>
         {acv() !== null && (
           <div className="badge badge-blue" style={{ marginTop: 10, padding: '6px 12px' }}>
             First-Year ACV: ₹{acv()} L/yr
-            {!form.tcv_manual && computeTcvBreakdown(form).capexLakhs > 0 && (
+            {!form.tcv_manual && lines.some(l => (l.hw && l.hw.nature === 'capex') || (l.svc && l.svc.nature === 'capex')) && (
               <span style={{ marginLeft: 6, fontWeight: 500 }}>· incl. one-time CAPEX in year 1</span>
             )}
           </div>
@@ -749,18 +809,18 @@ export default function LeadForm({ lead, onSave, onCancel }) {
               {PHASES.map(p => <option key={p}>{p}</option>)}
             </select>
           </Field>
-          {!inactivePhase && (
+          {!inactivePhase && fieldOn('pipeline', 'next_followup_date') && (
             <Field label="Next Follow-Up Date">
               <input type="date" className="input" value={form.next_followup_date} onChange={e => set('next_followup_date', e.target.value)} />
             </Field>
           )}
           {phaseChanged && (
-            <Field label={`"${form.phase}" Date ${isNewPhase ? '(today to +2 days)' : '(±2 days)'}`}>
+            <Field label={`"${form.phase}" Date${isBD ? ' (today − up to 7 days back)' : ''}`}>
               <input type="date" className="input" value={phaseDate} min={minPhaseDate} max={maxPhaseDate} onChange={e => setPhaseDate(e.target.value)} />
               <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                {isNewPhase
-                  ? 'Defaults to today. A new lead can be dated today up to 2 days ahead.'
-                  : 'Defaults to today. Adjust ±2 days if this phase actually happened earlier or later.'}
+                {!isBD
+                  ? 'Defaults to today. You can set any date.'
+                  : 'Defaults to today. You can backdate up to 7 days if this phase actually happened earlier — no future dates.'}
               </p>
             </Field>
           )}
@@ -770,73 +830,142 @@ export default function LeadForm({ lead, onSave, onCancel }) {
               <p style={{ fontSize: 11, color: '#0ea5e9', marginTop: 4 }}>Confidence is frozen while On Hold. Reaching this date does not auto-resume — move the phase back manually to restart the lead.</p>
             </Field>
           )}
-          {form.phase === 'Lost' && (
+          {form.phase === 'Lost' && fieldOn('other', 'lost_reason') && (
             <Field label="Lost Reason" required>
-              <select required className="input" value={form.lost_reason} onChange={e => set('lost_reason', e.target.value)}>
-                <option value="">Select reason</option>
-                {LOST_REASONS.map(r => <option key={r}>{r}</option>)}
-              </select>
-              {form.lost_reason === 'Other' && (
-                <textarea className="input" rows={2} style={{ marginTop: 8, resize: 'none' }} value={lostOther} onChange={e => setLostOther(e.target.value)} placeholder="Please describe the reason…" />
+              {form.lost_reason === 'Other' ? (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input className="input" style={{ flex: 1 }} placeholder="Please describe the reason…" value={lostOther} onChange={e => setLostOther(e.target.value)} autoFocus />
+                  <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => { set('lost_reason', ''); setLostOther(''); }}>✕</button>
+                </div>
+              ) : (
+                <select required className="input" value={form.lost_reason} onChange={e => set('lost_reason', e.target.value)}>
+                  <option value="">Select reason</option>
+                  {LOST_REASONS.map(r => <option key={r}>{r}</option>)}
+                </select>
               )}
             </Field>
           )}
-          {form.phase === 'PO Received' && (
-            <Field label="Actual PO Value (Lakhs)">
-              <input type="number" step="0.01" min="0" className="input" value={form.po_actual_value_lakhs} onChange={e => set('po_actual_value_lakhs', e.target.value)} />
-            </Field>
-          )}
-          {form.phase === 'PO Received' && (
-            <Field label="Service Start Date" required>
+          {form.phase === 'PO Received' && fieldOn('dates', 'service_start_date') && (
+            <Field label="PO Start Date" required>
               <input type="date" required className="input" value={form.service_start_date} onChange={e => set('service_start_date', e.target.value)} />
             </Field>
           )}
-          {form.phase === 'PO Received' && (
-            <Field label="Service End Date" required>
+          {form.phase === 'PO Received' && fieldOn('dates', 'service_end_date') && (
+            <Field label="PO End Date" required>
               <input type="date" required min={form.service_start_date || undefined} className="input" value={form.service_end_date} onChange={e => set('service_end_date', e.target.value)} />
             </Field>
           )}
-          <Field label="PO Expected Date" required={form.phase !== 'Lost'}>
-            <input type="date" required={form.phase !== 'Lost'} className="input" value={form.po_expected_date} onChange={e => set('po_expected_date', e.target.value)} />
+          {form.phase === 'PO Received' && (() => {
+            const BILLING_OPTS = ['Monthly', 'Quarterly', 'Semi-annually', 'Annually', 'Advance'];
+            const isCustomBilling = form.billing_cycle && !BILLING_OPTS.includes(form.billing_cycle);
+            return (
+              <Field label="Billing Cycle">
+                {isCustomBilling ? (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input className="input" style={{ flex: 1 }} placeholder="Enter billing cycle" value={form.billing_cycle} onChange={e => set('billing_cycle', e.target.value)} autoFocus />
+                    <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => set('billing_cycle', '')}>✕</button>
+                  </div>
+                ) : (
+                  <select className="input" value={form.billing_cycle} onChange={e => set('billing_cycle', e.target.value === 'Others' ? ' ' : e.target.value)}>
+                    <option value="">Select billing cycle</option>
+                    {BILLING_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+                    <option value="Others">Others (type custom)</option>
+                  </select>
+                )}
+              </Field>
+            );
+          })()}
+          {form.phase === 'PO Received' && (() => {
+            const PAYMENT_OPTS = ['100% Advance', '7 Days Credit', '15 Days Credit', '30 Days Credit', '45 Days Credit'];
+            const isCustomPayment = form.payment_terms && !PAYMENT_OPTS.includes(form.payment_terms);
+            return (
+              <Field label="Payment Terms">
+                {isCustomPayment ? (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input className="input" style={{ flex: 1 }} placeholder="Enter payment terms" value={form.payment_terms} onChange={e => set('payment_terms', e.target.value)} autoFocus />
+                    <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => set('payment_terms', '')}>✕</button>
+                  </div>
+                ) : (
+                  <select className="input" value={form.payment_terms} onChange={e => set('payment_terms', e.target.value === 'Others' ? ' ' : e.target.value)}>
+                    <option value="">Select payment terms</option>
+                    {PAYMENT_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+                    <option value="Others">Others (type custom)</option>
+                  </select>
+                )}
+              </Field>
+            );
+          })()}
+          <Field label="Hardware Requested Date">
+            <input type="date" className="input" value={form.device_requested_date || ''} onChange={e => set('device_requested_date', e.target.value)} />
+            <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>When the hardware for this deal is expected — used (and sorted by) in the Inventory Pipeline.</p>
           </Field>
+          {fieldOn('pipeline', 'po_expected_date') && (
+            <Field label="PO Expected Date" required={req('po_expected_date')}>
+              <input type="date" required={req('po_expected_date')} className="input" value={form.po_expected_date} onChange={e => set('po_expected_date', e.target.value)} />
+            </Field>
+          )}
+          {renderExtras('pipeline')}
+          {renderExtras('dates')}
         </div>
       </section>
 
-      {/* Section 5: Contacts */}
+      {/* Section 5: Contacts — the whole section hides when the contacts section is off in the
+          template (unless a custom field was added into it). Per-field visibility (Phone, Designation)
+          is already driven by contactCfg. */}
+      {sectionOn('contacts', ['contact_name', 'contact_email', 'contact_phone', 'contact_designation']) && (
       <section>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <p className="section-title" style={{ margin: 0 }}>Contacts (POC) *</p>
+          <p className="section-title" style={{ margin: 0 }}>Contacts (POC){(contactCfg.nameReq || contactCfg.emailReq || contactCfg.phoneReq || contactCfg.desigReq) ? ' *' : ''}</p>
           <button type="button" className="btn btn-sm" onClick={addContact}>+ Add Contact</button>
         </div>
-        <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 0' }}>At least one contact is required — Name and Email are mandatory.</p>
+        <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 0' }}>Add the point(s) of contact for this deal.{(contactCfg.nameReq || contactCfg.emailReq) ? ' At least one contact is required.' : ''}</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
-          {contacts.map((c, i) => (
-            <div key={i} className="card-sm" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-              <Field label="Name" required><input required className="input" value={c.name} onChange={e => updateContact(i, 'name', e.target.value)} /></Field>
-              <Field label="Phone"><input className="input" value={c.phone} onChange={e => updateContact(i, 'phone', e.target.value)} /></Field>
-              <Field label="Email" required><input required type="email" className="input" value={c.email} onChange={e => updateContact(i, 'email', e.target.value)} /></Field>
-              <Field label="Designation"><input className="input" value={c.designation} onChange={e => updateContact(i, 'designation', e.target.value)} /></Field>
+          {contacts.map((c, i) => {
+            const cols = ['1fr', ' 1fr', contactCfg.showPhone ? ' 1fr' : '', contactCfg.showDesig ? ' 1fr' : '', ' auto'].join('');
+            return (
+            <div key={i} className="card-sm" style={{ display: 'grid', gridTemplateColumns: cols, gap: 8, alignItems: 'end' }}>
+              <Field label="Name" required={contactCfg.nameReq}><input required={contactCfg.nameReq} className="input" value={c.name} onChange={e => updateContact(i, 'name', e.target.value)} /></Field>
+              <Field label="Email" required={contactCfg.emailReq}><input required={contactCfg.emailReq} type="email" className="input" value={c.email} onChange={e => updateContact(i, 'email', e.target.value)} /></Field>
+              {contactCfg.showPhone && <Field label="Phone" required={contactCfg.phoneReq}><input required={contactCfg.phoneReq} className="input" value={c.phone} onChange={e => updateContact(i, 'phone', e.target.value)} /></Field>}
+              {contactCfg.showDesig && <Field label="Designation" required={contactCfg.desigReq}><input required={contactCfg.desigReq} className="input" value={c.designation} onChange={e => updateContact(i, 'designation', e.target.value)} /></Field>}
               <button type="button" className="btn btn-sm btn-danger" onClick={() => removeContact(i)}>✕</button>
             </div>
-          ))}
-          {contacts.length === 0 && <p style={{ fontSize: 12, color: '#dc2626' }}>At least one contact (POC) is required — click “+ Add Contact”.</p>}
+            );
+          })}
+          {/* Only show the "required" prompt when the template actually marks a contact field mandatory.
+              Otherwise contacts are optional, and an empty section must not read as an error. */}
+          {contacts.length === 0 && (contactCfg.nameReq || contactCfg.emailReq) && (
+            <p style={{ fontSize: 12, color: '#dc2626' }}>At least one contact (POC) is required — click “+ Add Contact”.</p>
+          )}
         </div>
       </section>
+      )}
 
-      {/* Section 6: PO Document */}
+      {/* Section 6: PO Document — the Document uploader and PO Number input each follow the template.
+          po_type (Chain vs Individual) is already gated above by poTypeEnabled. Whole section hides
+          when both built-in fields are off AND no custom fields were added into 'po'. */}
+      {(fieldOn('po', 'po_document_url') || fieldOn('po', 'po_number') || customBySection.get('po')) && (
       <section>
-        <p className="section-title">PO Document{form.phase === 'PO Received' ? ' *' : ''}</p>
-        {form.phase === 'PO Received' && !existingPoUrl && !poFile && (
-          <p style={{ fontSize: 12, color: '#dc2626', margin: '0 0 8px' }}>A PO document is required once the phase is PO Received.</p>
-        )}
-        {existingPoUrl && !poFile && (
-          <div className="badge badge-green" style={{ marginBottom: 8, padding: '6px 12px' }}>
-            <a href={fileUrl(existingPoUrl)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>📄 View uploaded document</a>
-          </div>
-        )}
-        <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e => setPoFile(e.target.files[0] || null)} />
+        <p className="section-title">PO Document{form.phase === 'PO Received' && fieldOn('po', 'po_document_url') ? ' *' : ''}</p>
+        {fieldOn('po', 'po_document_url') && (<>
+          {form.phase === 'PO Received' && !existingPoUrl && !poFile && (
+            <p style={{ fontSize: 12, color: '#dc2626', margin: '0 0 8px' }}>A PO document is required once the phase is PO Received.</p>
+          )}
+          {existingPoUrl && !poFile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div className="badge badge-green" style={{ padding: '6px 12px' }}>
+                <a href={fileUrl(existingPoUrl)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>📄 View uploaded document</a>
+              </div>
+              <button type="button" className="btn btn-sm" style={{ color: '#dc2626', fontSize: 11 }}
+                onClick={() => { if (window.confirm('Remove the uploaded PO document?')) setExistingPoUrl(null); }}>
+                🗑 Remove
+              </button>
+            </div>
+          )}
+          <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e => setPoFile(e.target.files[0] || null)} />
+        </>)}
         {/* PO Number is asked for ONLY after a PO document is attached (identifier for the received PO). */}
-        {form.phase === 'PO Received' && (poFile || existingPoUrl) && (
+        {fieldOn('po', 'po_number') && form.phase === 'PO Received' && (poFile || existingPoUrl) && (
           <div style={{ marginTop: 12 }}>
             <Field label="PO Number" required>
               <input required className="input" value={form.po_number} onChange={e => set('po_number', e.target.value)} placeholder="Enter PO number (identifier)" />
@@ -844,19 +973,54 @@ export default function LeadForm({ lead, onSave, onCancel }) {
             </Field>
           </div>
         )}
+        {customBySection.get('po') && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 12 }}>
+            {renderExtras('po')}
+          </div>
+        )}
       </section>
+      )}
 
-      {/* Section 7: Notes */}
-      <section>
-        <p className="section-title">Additional Notes</p>
-        <ReactQuill
-          theme="snow"
-          value={form.additional_notes}
-          onChange={val => set('additional_notes', val)}
-          modules={{ toolbar: NOTES_TOOLBAR }}
-          style={{ background: '#fff' }}
-        />
-      </section>
+      {/* Section 7: Notes — the whole section hides when 'other' is off in the template, unless custom
+          fields were added into it. Lost Reason also lives in 'other' but renders in Phase & Timeline. */}
+      {(fieldOn('other', 'additional_notes') || customBySection.get('other')) && (
+        <section>
+          {fieldOn('other', 'additional_notes') && (
+            <>
+              <p className="section-title">Additional Notes</p>
+              <MentionTextarea
+                value={form.additional_notes || ''}
+                onChange={val => set('additional_notes', val)}
+                placeholder="Add notes… Use @Name to mention someone"
+                className="input"
+                rows={4}
+                style={{ resize: 'vertical' }}
+              />
+            </>
+          )}
+          {customBySection.get('other') && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 12 }}>
+              {renderExtras('other')}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Any user-created custom template sections (i.e. sections whose key doesn't match a
+          hardcoded LeadForm section) are surfaced here, each as its own labelled block. Standard
+          template sections are injected inline above and never land in this bottom pile. */}
+      {extraSectionKeys.map(key => {
+        const fields = customBySection.get(key) || [];
+        const label = fields[0]?._sectionLabel || key;
+        return (
+          <section key={key}>
+            <p className="section-title">{label}</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              {renderExtras(key)}
+            </div>
+          </section>
+        );
+      })}
       </>)}
 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>

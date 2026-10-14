@@ -26,8 +26,25 @@ function chainStatus(deviceTotal, individualPos) {
   return { original, consumed, remaining, exceeded: remaining < 0, wonCount };
 }
 
-// The device count a single lead (Individual PO) contributes to its chain — the headline Quantity.
-function leadDevices(lead) {
+// The device count a single lead (Individual PO) contributes to its chain.
+// When the chain specifies a device_type matching a service label, the matching
+// service line's qty from services_json is used. Falls back to headline quantity.
+function leadDevices(lead, deviceType) {
+  if (deviceType) {
+    try {
+      const raw = lead.services_json;
+      const lines = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : null);
+      if (Array.isArray(lines)) {
+        for (const line of lines) {
+          if (line.label === deviceType) {
+            const hwQty = (line.hw && Number(line.hw.qty)) || 0;
+            const svcQty = (line.svc && Number(line.svc.qty)) || 0;
+            return hwQty + svcQty;
+          }
+        }
+      }
+    } catch { /* fall through to headline qty */ }
+  }
   return Number(lead.quantity) || 0;
 }
 

@@ -14,8 +14,7 @@
 // ---------------------------------------------------------------------------
 import { fmtDate, fmtMonthYear } from './leadHelpers';
 
-// Units for a lead: the device-specific quantity, falling back to the generic one.
-export const forecastUnits = (l) => l.device_qty ?? l.quantity ?? 0;
+export const forecastUnits = (l) => l.hw_qty ?? l.device_qty ?? l.quantity ?? 0;
 
 // Normalise any date-ish value to 'YYYY-MM-DD' for comparison, or '' when absent.
 // Date inputs emit this format, so filters compare as plain strings.
@@ -65,15 +64,15 @@ export const FORECAST_COLUMNS = [
     filter: 'multi', filterValue: (l) => l.owner?.name || '' },
 
   // --- Hardware ---
-  { key: 'device_sku', label: 'Device SKU', default: true,
-    cell: (l) => l.device_sku || 'Unspecified', excel: (l) => l.device_sku || 'Unspecified',
-    filter: 'multi', filterValue: (l) => l.device_sku || 'Unspecified' },
+  { key: 'hw_service', label: 'Hardware Item', default: true,
+    cell: (l) => l.hw_service || 'Unspecified', excel: (l) => l.hw_service || 'Unspecified',
+    filter: 'multi', filterValue: (l) => l.hw_service || 'Unspecified' },
   { key: 'units', label: 'Units', align: 'right', default: true,
     cell: (l) => String(forecastUnits(l)), excel: (l) => forecastUnits(l),
     filter: 'number', filterValue: (l) => forecastUnits(l) },
 
   // --- Dates ---
-  { key: 'device_requested_date', label: 'Device Expected', default: true,
+  { key: 'device_requested_date', label: 'Hardware Requested', default: true,
     cell: (l) => l.device_requested_date ? fmtDate(l.device_requested_date) : '—',
     excel: (l) => l.device_requested_date ? fmtDate(l.device_requested_date) : '',
     filter: 'date', filterValue: (l) => isoDate(l.device_requested_date) },
@@ -83,16 +82,10 @@ export const FORECAST_COLUMNS = [
     filter: 'date', filterValue: (l) => isoDate(l.po_expected_date) },
 
   // --- Commercials (opt-in; derived server-side, see backend/routes/forecast.js) ---
-  // Price / TCV is the JHES platform line plus the device line. IPTV is deliberately
-  // NOT folded in here — it is its own column below so it can be read separately.
-  { key: 'price_tcv_lakhs', label: 'Price / TCV (₹L)', align: 'right',
+  { key: 'price_tcv_lakhs', label: 'Service Cost (₹L)', align: 'right',
     cell: (l) => lakhCell(l.price_tcv_lakhs), excel: (l) => lakhExcel(l.price_tcv_lakhs),
     filter: 'number', filterValue: (l) => num(l.price_tcv_lakhs) },
-  { key: 'iptv_price_lakhs', label: 'IPTV Price (₹L)', align: 'right',
-    cell: (l) => lakhCell(l.iptv_price_lakhs), excel: (l) => lakhExcel(l.iptv_price_lakhs),
-    filter: 'number', filterValue: (l) => num(l.iptv_price_lakhs) },
-  // The lead's overall contract value — everything, including IPTV and the signage lines.
-  { key: 'potential_tcv_lakhs', label: 'Total TCV (₹L)', align: 'right',
+  { key: 'potential_tcv_lakhs', label: 'Lead TCV (₹L)', align: 'right',
     cell: (l) => lakhCell(l.potential_tcv_lakhs), excel: (l) => lakhExcel(l.potential_tcv_lakhs),
     filter: 'number', filterValue: (l) => num(l.potential_tcv_lakhs) },
   { key: 'contract_period_months', label: 'Contract (months)', align: 'right',
@@ -127,8 +120,11 @@ export const DEFAULT_FORECAST_KEYS = FORECAST_COLUMNS.filter(c => c.default).map
 // Normalise a stored/selected key list: drop keys that no longer exist (the registry
 // changed since the preference was saved), force the locked ones back in, and return
 // them in registry order so the table layout is stable however they were clicked.
+const KEY_MIGRATIONS = { device_sku: 'hw_service', iptv_price_lakhs: null };
+
 export function normalizeColumnKeys(keys) {
-  const wanted = new Set([...(Array.isArray(keys) ? keys : []), ...LOCKED_KEYS]);
+  const migrated = (Array.isArray(keys) ? keys : []).map(k => KEY_MIGRATIONS.hasOwnProperty(k) ? KEY_MIGRATIONS[k] : k).filter(Boolean);
+  const wanted = new Set([...migrated, ...LOCKED_KEYS]);
   return FORECAST_COLUMNS.filter(c => wanted.has(c.key)).map(c => c.key);
 }
 

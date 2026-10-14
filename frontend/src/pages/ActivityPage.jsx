@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getActivityFeed, getActivityFilters } from '../services/api';
-import { fmtDate } from '../utils/leadHelpers';
 
 // ---------------------------------------------------------------------------
 // ActivityPage — the tool-wide activity feed.
@@ -25,16 +24,18 @@ const TYPE_STYLE = {
 
 const PAGE = 40;
 
-// "2 minutes ago" for recent events, falling back to a date for older ones.
-function relative(iso) {
-  const then = new Date(iso);
-  if (isNaN(then.getTime())) return '';
-  const secs = Math.floor((Date.now() - then.getTime()) / 1000);
-  if (secs < 60) return 'just now';
-  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
-  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
-  if (secs < 604800) return `${Math.floor(secs / 86400)}d ago`;
-  return fmtDate(then);
+// Absolute timestamp — "7 Oct 2026, 14:32". The Activity feed is an audit log, so an exact
+// date+time reads more usefully than relative "18h ago" for anyone reviewing what changed when.
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtTimestamp(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mon = MONTHS_SHORT[d.getMonth()];
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${dd} ${mon} ${yyyy}, ${hh}:${mm}`;
 }
 
 const EMPTY_FILTERS = { user_id: '', platform: '', type: '', from: '', to: '' };
@@ -250,7 +251,7 @@ export default function ActivityPage() {
                       {e.note && !e.field && <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{e.note}</div>}
                     </div>
                     <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <div style={{ fontSize: 11, color: '#94a3b8' }} title={new Date(e.at).toLocaleString()}>{relative(e.at)}</div>
+                      <div style={{ fontSize: 11, color: '#94a3b8' }} title={new Date(e.at).toLocaleString()}>{fmtTimestamp(e.at)}</div>
                       {e.businessUnit && <div style={{ fontSize: 10, color: '#cbd5e1', marginTop: 2 }}>{e.businessUnit.toUpperCase()}</div>}
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PHASE_BADGE } from '../utils/constants';
-import { hasConfidence, confidenceTrend } from '../utils/leadHelpers';
+import { hasConfidence, confidenceTrend, stageAging } from '../utils/leadHelpers';
 import { sortByPriority } from '../utils/leadPriority';
 
 // Small confidence chip for a Kanban card: coloured by score band with a week-over-week trend mark.
@@ -21,6 +21,21 @@ function ConfChip({ lead }) {
   );
 }
 
+// Small aging chip for a Kanban card: days-in-stage coloured against the stage's TAT target.
+// Hidden for closed/paused phases (where stageAging returns null).
+function AgingChip({ lead, tatMap }) {
+  const a = stageAging(lead, tatMap || {});
+  if (a.days === null) return null;
+  const color = a.level === 'over' ? '#dc2626' : a.level === 'warn' ? '#b45309' : a.level === 'ok' ? '#059669' : '#64748b';
+  const bg    = a.level === 'over' ? '#fef2f2' : a.level === 'warn' ? '#fffbeb' : a.level === 'ok' ? '#ecfdf5' : '#f1f5f9';
+  const tip   = a.target != null ? `${a.days}d in ${lead.phase} · target ${a.target}d` : `${a.days}d in ${lead.phase} · no target set`;
+  return (
+    <span title={tip} style={{ background: bg, color, border: `1px solid ${color}22`, borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 700 }}>
+      {a.days}d
+    </span>
+  );
+}
+
 const COLUMNS = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
 
 // Per-column tint + accent so every column is clearly distinguishable and never renders low-contrast
@@ -37,7 +52,7 @@ const COLUMN_STYLE = {
   'On Hold':     { bg: '#f1f5f9', accent: '#64748b' },
 };
 
-export default function KanbanView({ leads, onOpen, onPhaseChange }) {
+export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap }) {
   const [dragId, setDragId] = useState(null);
   const [overCol, setOverCol] = useState(null);
 
@@ -71,23 +86,31 @@ export default function KanbanView({ leads, onOpen, onPhaseChange }) {
               <span style={{ fontSize: 12, fontWeight: 700, color: cs.accent }}>{items.length}</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 48 }}>
-              {items.map(l => (
-                <div
-                  key={l.id}
-                  draggable
-                  onDragStart={() => setDragId(l.id)}
-                  onClick={() => onOpen(l)}
-                  style={{
-                    cursor: 'grab', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
-                    padding: 10, boxShadow: '0 1px 2px rgba(15,23,42,.06)',
-                  }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
-                    <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 4px', color: '#0f172a' }}>{l.customer_name}</p>
-                    <ConfChip lead={l} />
+              {items.map(l => {
+                // Left-edge tint by aging level, so a red card jumps out of the column at a glance.
+                const ageLvl = stageAging(l, tatMap || {}).level;
+                const leftEdge = ageLvl === 'over' ? '#dc2626' : ageLvl === 'warn' ? '#b45309' : ageLvl === 'ok' ? '#059669' : '#e2e8f0';
+                return (
+                  <div
+                    key={l.id}
+                    draggable
+                    onDragStart={() => setDragId(l.id)}
+                    onClick={() => onOpen(l)}
+                    style={{
+                      cursor: 'grab', background: '#fff', border: '1px solid #e2e8f0', borderLeft: `3px solid ${leftEdge}`, borderRadius: 10,
+                      padding: 10, boxShadow: '0 1px 2px rgba(15,23,42,.06)',
+                    }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 4px', color: '#0f172a' }}>{l.customer_name}</p>
+                      <span style={{ display: 'inline-flex', gap: 4, flexShrink: 0 }}>
+                        <AgingChip lead={l} tatMap={tatMap} />
+                        <ConfChip lead={l} />
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{l.owner?.name?.split(' ')[0]} · ₹{l.potential_tcv_lakhs}L</p>
                   </div>
-                  <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{l.owner?.name?.split(' ')[0]} · ₹{l.potential_tcv_lakhs}L</p>
-                </div>
-              ))}
+                );
+              })}
               {items.length === 0 && (
                 <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', padding: '12px 0', fontStyle: 'italic' }}>
                   Drop here

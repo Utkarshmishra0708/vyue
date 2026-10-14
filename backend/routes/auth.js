@@ -1,10 +1,11 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User } = require('../models');
+const { User, BusinessUnit } = require('../models');
 const { authenticate } = require('../middleware/auth');
 const {
   effectivePermissions, PERMISSION_MANAGER_ROLES, isSuperAdmin, superAdminScope, canSeeActivityFeed,
+  MODULES, moduleEnabledForBu,
 } = require('../services/permissions');
 
 // The user object every authenticated response returns. Must match GET /auth/me exactly: the
@@ -35,6 +36,18 @@ async function authUserPayload(user) {
   safe.super_admin_read_only = user.super_admin_scope === 'read';
   // Platform-wide Activity feed visibility (J1) — resolved so the client just reads a boolean.
   safe.can_see_activity_feed = canSeeActivityFeed(user);
+  // Per-BU module enablement — which modules the caller's business unit has switched on. The
+  // frontend sidebar / router combines this with the per-user permission to decide what to show.
+  // Kept next to permissions so both dimensions travel together and refresh on the same poll.
+  try {
+    const bu = await BusinessUnit.findOne({ where: { slug: user.business_unit }, attributes: ['config'] });
+    const cfg = bu?.config || null;
+    const map = {};
+    for (const m of MODULES) map[m] = moduleEnabledForBu(cfg, m);
+    safe.bu_modules = map;
+  } catch {
+    safe.bu_modules = null;
+  }
   // Platforms this person can switch between in-tool (N1): every active account under the same
   // email. One email holds at most one account per business unit (migration 002), so this is the
   // set of platforms they may hop to without re-entering credentials. A BD (no email) has just one.

@@ -35,21 +35,26 @@ export default function ForecastPage() {
 
   // 'Sent to SCM' is a manual, shared marker — no automation reads or resets it. Updated
   // optimistically so the checkbox responds instantly, then reconciled with the server's
-  // authoritative timestamp/author (or rolled back if the call fails).
+  // authoritative timestamp/author (or rolled back if the call fails). Tracked per HARDWARE LINE:
+  // one lead with two hardware services shows up as two rows and each row has its own SCM flag, so
+  // busy-state and the state update are keyed by _row_id rather than the shared lead id.
   const [scmBusy, setScmBusy] = useState(() => new Set());
-  const toggleSentToScm = async (lead, next) => {
-    const prev = { sent_to_scm: lead.sent_to_scm, sent_to_scm_at: lead.sent_to_scm_at, sent_to_scm_by: lead.sent_to_scm_by };
-    const patch = (fields) => setLeads(ls => ls.map(l => (l.id === lead.id ? { ...l, ...fields } : l)));
-    setScmBusy(s => new Set(s).add(lead.id));
+  const toggleSentToScm = async (row, next) => {
+    const rowId = row._row_id;
+    const slug = row.hw_slug;
+    if (!rowId || !slug) return;
+    const prev = { sent_to_scm: row.sent_to_scm, sent_to_scm_at: row.sent_to_scm_at, sent_to_scm_by: row.sent_to_scm_by };
+    const patch = (fields) => setLeads(ls => ls.map(l => (l._row_id === rowId ? { ...l, ...fields } : l)));
+    setScmBusy(s => new Set(s).add(rowId));
     patch({ sent_to_scm: next, sent_to_scm_at: next ? new Date().toISOString() : null, sent_to_scm_by: next ? (user?.name || '') : null });
     try {
-      const saved = await setSentToScm(lead.id, next);
+      const saved = await setSentToScm(row.id, next, slug);
       patch({ sent_to_scm: saved.sent_to_scm, sent_to_scm_at: saved.sent_to_scm_at, sent_to_scm_by: saved.sent_to_scm_by });
     } catch {
       patch(prev);
       window.alert('Could not update "Sent to SCM". Please try again.');
     } finally {
-      setScmBusy(s => { const n = new Set(s); n.delete(lead.id); return n; });
+      setScmBusy(s => { const n = new Set(s); n.delete(rowId); return n; });
     }
   };
 
@@ -127,7 +132,7 @@ export default function ForecastPage() {
     const clickable = canOpenLead(l);
     return (
       <tr
-        key={l.id}
+        key={l._row_id || l.id}
         onClick={(e) => openLead(e, l)}
         onKeyDown={(e) => { if (clickable && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openLead(e, l); } }}
         tabIndex={clickable ? 0 : undefined}
@@ -149,12 +154,12 @@ export default function ForecastPage() {
                 title={l.sent_to_scm
                   ? `Sent to SCM${l.sent_to_scm_by ? ` by ${l.sent_to_scm_by}` : ''}${l.sent_to_scm_at ? ` on ${fmtDate(l.sent_to_scm_at)}` : ''}`
                   : 'Not yet sent to SCM'}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: !forecastCanEdit ? 'not-allowed' : scmBusy.has(l.id) ? 'wait' : 'pointer' }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: !forecastCanEdit ? 'not-allowed' : scmBusy.has(l._row_id) ? 'wait' : 'pointer' }}
               >
                 <input
                   type="checkbox"
                   checked={!!l.sent_to_scm}
-                  disabled={scmBusy.has(l.id) || !forecastCanEdit}
+                  disabled={scmBusy.has(l._row_id) || !forecastCanEdit}
                   onChange={(e) => toggleSentToScm(l, e.target.checked)}
                   style={{ cursor: 'inherit' }}
                 />
@@ -169,7 +174,7 @@ export default function ForecastPage() {
     );
   };
 
-  const skus = useMemo(() => [...new Set(deviceLeads.map(l => l.device_sku || 'Unspecified'))].sort(), [deviceLeads]);
+  const skus = useMemo(() => [...new Set(deviceLeads.map(l => l.hw_service || 'Unspecified'))].sort(), [deviceLeads]);
   const months = useMemo(() => {
     const m = [...new Set(deviceLeads.map(l => monthKey(l.po_expected_date)))];
     return m.sort((a, b) => a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : a.localeCompare(b));
@@ -178,11 +183,11 @@ export default function ForecastPage() {
   const pivot = useMemo(() => {
     const grid = {};
     months.forEach(m => { grid[m] = {}; skus.forEach(s => grid[m][s] = 0); });
-    deviceLeads.forEach(l => { grid[monthKey(l.po_expected_date)][l.device_sku || 'Unspecified'] += units(l); });
+    deviceLeads.forEach(l => { grid[monthKey(l.po_expected_date)][l.hw_service || 'Unspecified'] += units(l); });
     return grid;
   }, [deviceLeads, months, skus]);
 
-  const skuTotal = (s) => deviceLeads.filter(l => (l.device_sku || 'Unspecified') === s).reduce((sum, l) => sum + units(l), 0);
+  const skuTotal = (s) => deviceLeads.filter(l => (l.hw_service || 'Unspecified') === s).reduce((sum, l) => sum + units(l), 0);
   const monthTotal = (m) => skus.reduce((sum, s) => sum + (pivot[m]?.[s] || 0), 0);
   const grandTotal = deviceLeads.reduce((sum, l) => sum + units(l), 0);
 
@@ -200,7 +205,7 @@ export default function ForecastPage() {
     skus.forEach(s => totalsRow[s] = skuTotal(s));
     totalsRow.Total = grandTotal;
     pivotRows.push(totalsRow);
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pivotRows), 'Units by Month');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pivotRows), 'Units by Month & Item');
 
     // Detail sheet follows the user's Excel column selection (independent of the on-screen set),
     // then always appends the POC contact columns — contacts are requested in every export, so they
@@ -228,7 +233,7 @@ export default function ForecastPage() {
       subtitle: `${buName} · ${grandTotal} total units · generated ${fmtDate(new Date())}`,
       tables: [
         {
-          heading: 'Units by Month & SKU',
+          heading: 'Units by Month & Hardware Item',
           columns: ['Month', ...skus, 'Total'],
           rows: [
             ...months.map(m => [monthLabel(m), ...skus.map(s => pivot[m][s] || 0), monthTotal(m)]),
@@ -237,7 +242,7 @@ export default function ForecastPage() {
         },
         {
           // The PDF prints what's on screen, so it follows the view's column selection.
-          heading: 'Device Demand — Detail',
+          heading: 'Hardware Demand — Detail',
           columns: viewColumns.map(c => c.label),
           rows: deviceLeads.map(l => viewColumns.map(c => c.cell(l))),
         },
@@ -248,12 +253,12 @@ export default function ForecastPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 20, background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button className="btn btn-sm" onClick={() => isForecastOnly ? logout() : navigate('/leads')}>{isForecastOnly ? 'Sign out' : '← Back'}</button>
           <div>
             <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Inventory Pipeline</h1>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Hardware units expected — by month &amp; SKU · prioritized by stage, confidence, chain, then TCV</p>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Hardware units expected — by month &amp; item · prioritized by stage, confidence, chain, then TCV</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -278,19 +283,19 @@ export default function ForecastPage() {
         {/* Gated on the UNFILTERED set: if filters exclude everything the table must stay on
             screen, or the user loses the controls needed to clear them. */}
         {loading ? <p style={{ color: '#94a3b8' }}>Loading…</p> : allLeads.length === 0 ? (
-          <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hardware (device) leads found for this selection.</p>
+          <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hardware items found — check that services are flagged as HW in the BU template.</p>
         ) : (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
               <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Units in Pipeline</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{grandTotal.toLocaleString()}</p></div>
-              <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Device Deals</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{deviceLeads.length}</p></div>
-              <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Distinct SKUs</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{skus.length}</p></div>
+              <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Hardware Lines</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{deviceLeads.length}</p></div>
+              <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Hardware Types</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{skus.length}</p></div>
               <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Units</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{deviceLeads.filter(l => l.phase === 'PO Received').reduce((s,l) => s + units(l), 0).toLocaleString()}</p></div>
             </div>
 
             <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9' }}>
-                <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Units by Month & SKU</p>
+                <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Units by Month & Hardware Item</p>
               </div>
               <table className="data-table">
                 <thead><tr><th>Month</th>{skus.map(s => <th key={s} style={{ textAlign: 'right' }}>{s}</th>)}<th style={{ textAlign: 'right' }}>Total</th></tr></thead>
@@ -310,14 +315,14 @@ export default function ForecastPage() {
                 state so a chain spanning states lands in the right buckets. */}
             <div className="card" style={{ padding: 0 }}>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Device Load by State</p>
+                <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Hardware Load by State</p>
                 <span style={{ fontSize: 12, color: '#64748b' }}>
-                  {stateRollupTotal.toLocaleString()} device{stateRollupTotal === 1 ? '' : 's'} across {stateRollup.length} {stateRollup.length === 1 ? 'state' : 'states'} · {INSTALL_STAGES.join(' + ')} only
+                  {stateRollupTotal.toLocaleString()} unit{stateRollupTotal === 1 ? '' : 's'} across {stateRollup.length} {stateRollup.length === 1 ? 'state' : 'states'} · {INSTALL_STAGES.join(' + ')} only
                 </span>
               </div>
               {stateRollup.length === 0 ? (
                 <p style={{ color: '#94a3b8', textAlign: 'center', padding: 28, margin: 0, fontSize: 13 }}>
-                  No committed hardware yet — nothing at {INSTALL_STAGES.join(' or ')}{activeKeys.length ? ' matches the current filters' : ''}.
+                  No committed hardware yet — nothing at {INSTALL_STAGES.join(' or ')}{activeKeys.length ? ' matching the current filters' : ''}.
                 </p>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
@@ -326,7 +331,7 @@ export default function ForecastPage() {
                       <tr>
                         <th style={{ whiteSpace: 'nowrap' }}>State / Geography</th>
                         <th style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>Properties</th>
-                        <th style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>Devices</th>
+                        <th style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>Units</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -353,9 +358,10 @@ export default function ForecastPage() {
                               <td style={{ textAlign: 'right', fontWeight: 700 }}>{row.totalQty.toLocaleString()}</td>
                             </tr>
                             {open && row.leads.map(l => (
-                              <tr key={`${row.state}-${l.id}`} style={{ background: '#f8fafc' }}>
+                              <tr key={`${row.state}-${l._row_id || l.id}`} style={{ background: '#f8fafc' }}>
                                 <td style={{ paddingLeft: 34, fontSize: 12 }}>
                                   {l.customer_name}
+                                  {l.hw_service && <span style={{ color: '#6366f1', fontWeight: 600 }}>{` · ${l.hw_service}`}</span>}
                                   <span style={{ color: '#94a3b8' }}>{l.city ? ` · ${l.city}` : ''} · {l.phase}</span>
                                 </td>
                                 <td />
@@ -381,7 +387,7 @@ export default function ForecastPage() {
             <div className="card" style={{ padding: 0 }}>
               <div ref={tableTopRef} style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Device Demand — Detail</p>
+                  <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Hardware Demand — Detail</p>
                   <span style={{ fontSize: 12, color: '#64748b' }}>
                     {activeKeys.length ? `${deviceLeads.length} of ${allLeads.length} rows` : `${allLeads.length} rows`}
                   </span>

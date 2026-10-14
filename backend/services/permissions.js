@@ -18,13 +18,14 @@
 
 // The four general modules. Settings is intentionally absent — it is role-gated to
 // the admin tier and cannot be granted to anyone else at any level.
-const MODULES = ['leads', 'dashboard', 'forecast', 'reports'];
+const MODULES = ['leads', 'dashboard', 'forecast', 'reports', 'activities', 'voc'];
 
 const MODULE_LABELS = {
   leads: 'Leads',
   dashboard: 'Dashboard',
-  forecast: 'Forecast',
+  forecast: 'Inventory Pipeline',
   reports: 'Reports',
+  activities: 'Task Board',
 };
 
 // Ordered weakest → strongest. RANK drives every comparison.
@@ -59,7 +60,7 @@ const isSuperAdminRead  = (user) => user?.super_admin_scope === 'read';
 function defaultPermissionsFor(user) {
   const role = user?.role;
   if (PERMISSION_MANAGER_ROLES.includes(role)) {
-    return { leads: 'full', dashboard: 'full', forecast: 'full', reports: 'full' };
+    return { leads: 'full', dashboard: 'full', forecast: 'full', reports: 'full', activities: 'full' };
   }
   // N3: forecast role removed. If a legacy row with role='forecast' is somehow loaded, treat it
   // the same as a Team Member with forecast access.
@@ -69,6 +70,10 @@ function defaultPermissionsFor(user) {
     // Team Member forecast is Read-only when enabled (E5) — never edit/full.
     forecast: user?.forecast_access ? 'read' : 'none',
     reports: 'none',
+    // Task Board is available to Team Members (BDs) by default — full access so they can create and
+    // move cards. An admin can still revoke it per user via the permission editor. Enablement is
+    // still per-business-unit, so the board only appears where the module is turned on.
+    activities: 'full',
   };
 }
 
@@ -109,7 +114,11 @@ function levelFor(user, module) {
   if (user?.role === 'business_admin') return 'full';
   const stored = storedPermissions(user);
   const map = stored || defaultPermissionsFor(user);
-  const value = map[module];
+  let value = map[module];
+  // 'activities' (Task Board) was added after permission maps were first seeded, so a map stored
+  // before it existed simply omits the key. Inherit the role default in that case, rather than
+  // silently denying — otherwise users (e.g. BDs) whose map predates the module never see it.
+  if (value === undefined && stored && module === 'activities') value = defaultPermissionsFor(user).activities;
   const resolved = LEVELS.includes(value) ? value : 'none';
   // Team Member forecast (E5): when they have any forecast access it is fixed Read-only (the data
   // shown is every Team Member's, read-only) — never Edit/Full, whatever a stored map might say.
@@ -149,9 +158,29 @@ function sanitizePermissions(input) {
   return { value: out };
 }
 
+// --- Per-BU module enablement -----------------------------------------------------------------
+// Modules are enabled per business unit via business_units.config.modules (an array of
+// { slug, enabled }). Existing modules default to ENABLED when the BU has no explicit config
+// (backwards compat — original signage/jhes/surveillance rows never carried this field). Modules
+// added AFTER this system was introduced (e.g. 'activities') default to DISABLED and must be turned
+// on explicitly via the BU wizard or the template editor.
+const OPT_IN_MODULES = new Set(['activities', 'voc']);
+
+function moduleEnabledForBu(buConfig, moduleSlug) {
+  const mods = buConfig?.modules;
+  if (Array.isArray(mods)) {
+    const found = mods.find(m => m && m.slug === moduleSlug);
+    if (found) return found.enabled !== false;
+    // Slug missing from an explicit list -> opt-in modules stay off, others stay on.
+    return !OPT_IN_MODULES.has(moduleSlug);
+  }
+  // No config.modules array at all (legacy BUs) -> opt-in modules off, others on.
+  return !OPT_IN_MODULES.has(moduleSlug);
+}
+
 module.exports = {
-  MODULES, MODULE_LABELS, LEVELS, LEVEL_LABELS, RANK, PERMISSION_MANAGER_ROLES,
+  MODULES, MODULE_LABELS, LEVELS, LEVEL_LABELS, RANK, PERMISSION_MANAGER_ROLES, OPT_IN_MODULES,
   isSuperAdmin, superAdminScope, isSuperAdminWrite, isSuperAdminRead,
   defaultPermissionsFor, levelFor, hasLevel, hasLevelInAny, effectivePermissions, sanitizePermissions,
-  canSeeActivityFeed,
+  canSeeActivityFeed, moduleEnabledForBu,
 };

@@ -41,14 +41,25 @@ const FIELD_SECTIONS = [
     { slug: 'next_followup_date', label: 'Next Follow-up Date', type: 'date',  core: true },
     { slug: 'po_expected_date',   label: 'PO Expected Date',    type: 'date',  core: true },
   ] },
+  // Contacts (POC): the repeatable contact sub-form on the lead. Name & Email are always required
+  // and always shown (at least one POC is mandatory on every lead). Phone and Designation can be
+  // toggled off or marked mandatory per business via Edit Template.
+  { key: 'contacts', label: 'Contacts (POC)', fields: [
+    { slug: 'contact_name',        label: 'Name',        type: 'text', core: true },
+    { slug: 'contact_email',       label: 'Email',       type: 'text', core: true },
+    { slug: 'contact_phone',       label: 'Phone',       type: 'text', core: true },
+    { slug: 'contact_designation', label: 'Designation', type: 'text', core: true },
+  ] },
   { key: 'po', label: 'PO', fields: [
-    { slug: 'po_type',         label: 'PO Type',     type: 'select', core: true, options: ['Individual', 'Global'] },
-    { slug: 'po_number',       label: 'PO Number',   type: 'text',   core: true },
-    { slug: 'po_document_url', label: 'PO Document', type: 'file',   core: true },
+    { slug: 'po_type',         label: 'PO Type',       type: 'select', core: true, options: ['Individual', 'Global'] },
+    { slug: 'po_number',       label: 'PO Number',     type: 'text',   core: true },
+    { slug: 'po_document_url', label: 'PO Document',   type: 'file',   core: true },
+    { slug: 'billing_cycle',   label: 'Billing Cycle',  type: 'select', core: true, options: ['Monthly', 'Quarterly', 'Semi-annually', 'Annually', 'Advance', 'Others'] },
+    { slug: 'payment_terms',   label: 'Payment Terms',  type: 'select', core: true, options: ['100% Advance', '7 Days Credit', '15 Days Credit', '30 Days Credit', '45 Days Credit', 'Others'] },
   ] },
   { key: 'dates', label: 'Dates', fields: [
-    { slug: 'service_start_date', label: 'Service Start Date', type: 'date', core: true },
-    { slug: 'service_end_date',   label: 'Service End Date',   type: 'date', core: true },
+    { slug: 'service_start_date', label: 'PO Start Date', type: 'date', core: true },
+    { slug: 'service_end_date',   label: 'PO End Date',   type: 'date', core: true },
   ] },
   { key: 'other', label: 'Other', fields: [
     { slug: 'jhes_product',     label: 'Product (free text)', type: 'text',     core: true },
@@ -74,11 +85,12 @@ const FIELD_TYPES = [
 
 // Process modules that can be enabled per business unit. Core ones cannot be turned off.
 const MODULE_CATALOG = [
-  { slug: 'leads',     label: 'Lead Management', core: true },
-  { slug: 'dashboard', label: 'Dashboard',       core: true },
-  { slug: 'forecast',  label: 'Forecast' },
-  { slug: 'reports',   label: 'Reports' },
-  { slug: 'voc',       label: 'Voice of Customer (VOC)' },
+  { slug: 'leads',      label: 'Lead Management', core: true },
+  { slug: 'dashboard',  label: 'Dashboard',       core: true },
+  { slug: 'forecast',   label: 'Inventory Pipeline' },
+  { slug: 'reports',    label: 'Reports' },
+  { slug: 'voc',        label: 'Voice of Customer (VOC)', optIn: true },
+  { slug: 'activities', label: 'Task Board (kanban)' },
 ];
 
 // Dashboard / report options offered by the wizard. Captured as the unit's settings for now; the

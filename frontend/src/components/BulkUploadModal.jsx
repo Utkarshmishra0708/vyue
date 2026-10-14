@@ -51,12 +51,20 @@ export default function BulkUploadModal({ businessUnit, config, onClose, onImpor
   };
 
   const handleDownloadTemplate = async () => {
-    await downloadTemplate(businessUnit, config, users);
+    setErr('');
+    try {
+      await downloadTemplate(businessUnit, config, users);
+    } catch (ex) {
+      console.error('Template download failed:', ex);
+      setErr(ex?.message || 'Could not generate the template. Please try again.');
+    }
   };
 
+  // No close-on-backdrop-click: a parsed upload / current step must not be discarded by a stray
+  // click. Use the × button to close.
   return (
-    <div className="modal-overlay" onClick={() => !busy && onClose()}>
-      <div className="modal" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth: 640 }}>
         <div className="modal-header">
           <span style={{ fontWeight: 700, fontSize: 15 }}>Bulk Import Leads</span>
           <button className="btn btn-sm" onClick={onClose} disabled={busy}>✕</button>

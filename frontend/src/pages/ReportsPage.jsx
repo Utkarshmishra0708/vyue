@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Layout from '../components/Layout';
 import MultiSelect from '../components/MultiSelect';
 import { useAuth } from '../context/AuthContext';
-import { getLeads, getBds, getDropdowns } from '../services/api';
+import { getLeads, getBds, getDropdowns, getBusinessUnitConfig } from '../services/api';
 import { fmtDate, fmtMonthYear } from '../utils/leadHelpers';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import { writeFormattedSheet } from '../utils/excelExport';
@@ -10,8 +10,6 @@ import { writeFormattedSheet } from '../utils/excelExport';
 const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
 const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales', 'Lead Affiliate'];
 const RENEWALS = ['New', 'Renewal', 'Expansion'];
-const SERVICES = ['Platform', 'CMS', 'Connectivity', 'AMC', 'Display', 'Installation', 'Device'];
-const SERVICE_KEY = { Platform: 'includes_platform', CMS: 'includes_cms', Connectivity: 'includes_connectivity', AMC: 'includes_amc', Display: 'includes_display', Installation: 'includes_installation', Device: 'includes_device' };
 
 export default function ReportsPage() {
   const { user } = useAuth();
@@ -31,9 +29,18 @@ export default function ReportsPage() {
   const [selStates, setSelStates] = useState([]);
   const [selPOMonths, setSelPOMonths] = useState([]);
 
+  const [buConfig, setBuConfig] = useState(null);
   const [dropdowns, setDropdowns] = useState({});
   useEffect(() => { getBds(user.business_unit).then(setBds); }, [user.business_unit]);
+  useEffect(() => { getBusinessUnitConfig(user.business_unit).then(setBuConfig).catch(() => {}); }, [user.business_unit]);
   useEffect(() => { getDropdowns().then(setDropdowns).catch(() => {}); }, []);
+
+  // Service filter options come straight from this business's catalog (every BU now stores its lines
+  // in services_json, so the filter matches by catalog label against each lead's lines).
+  const serviceOptions = useMemo(() => {
+    if (!buConfig?.services) return [];
+    return buConfig.services.filter(s => s.active !== false).map(s => s.label);
+  }, [buConfig]);
   const sourceOpts  = [...new Set([...(dropdowns.lead_source || SOURCES), ...allLeads.map(l => l.lead_source).filter(Boolean)])];
   const renewalOpts = [...new Set([...(dropdowns.new_or_renewal || RENEWALS), ...allLeads.map(l => l.new_or_renewal).filter(Boolean)])];
 
@@ -59,7 +66,11 @@ export default function ReportsPage() {
     if (selSources.length && !selSources.includes(l.lead_source)) return false;
     if (selRenewals.length && !selRenewals.includes(l.new_or_renewal)) return false;
     if (selStates.length && !selStates.includes(l.state)) return false;
-    if (selServices.length && !selServices.every(s => l[SERVICE_KEY[s]])) return false;
+    if (selServices.length) {
+      let svcLabels;
+      try { svcLabels = new Set((JSON.parse(l.services_json || '[]')).map(s => s.label)); } catch { svcLabels = new Set(); }
+      if (!selServices.every(s => svcLabels.has(s))) return false;
+    }
     if (selPOMonths.length) {
       if (!l.po_expected_date || !selPOMonths.includes(fmtMonthYear(l.po_expected_date))) return false;
     }
@@ -151,7 +162,7 @@ export default function ReportsPage() {
           <MultiSelect label="Phase" options={PHASES} selected={selPhases} onChange={setSelPhases} width={200} />
           <MultiSelect label="Lead Source" options={sourceOpts} selected={selSources} onChange={setSelSources} width={200} />
           <MultiSelect label="New/Renewal" options={renewalOpts} selected={selRenewals} onChange={setSelRenewals} width={200} />
-          <MultiSelect label="Services" options={SERVICES} selected={selServices} onChange={setSelServices} width={200} />
+          <MultiSelect label="Services" options={serviceOptions} selected={selServices} onChange={setSelServices} width={200} />
           {availableStates.length > 0 && <MultiSelect label="State" options={availableStates} selected={selStates} onChange={setSelStates} width={200} />}
           <MultiSelect label="PO Expected Month" options={poMonths} selected={selPOMonths} onChange={setSelPOMonths} width={200} />
           {activeFilterCount > 0 && <button className="btn btn-sm btn-danger" onClick={clearAll}>✕ Clear all</button>}

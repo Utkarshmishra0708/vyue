@@ -92,7 +92,7 @@ export const PROPERTY_CATEGORIES = [
 // --- VOC (Voice of Customer) — Surveillance only ---
 export const VOC_SEGMENTS = ['Enterprise', 'SMB', 'Government', 'Residential', 'Other'];
 export const VOC_PRODUCTS = ['Camera', 'VMS', 'Cloud Storage', 'Analytics', 'NVR', 'Other'];
-export const VOC_TYPES = ['Feature Gap', 'Configuration Mismatch', 'Integration Requirement', 'Performance Issue', 'Enhancement Request', 'Other'];
+export const VOC_TYPES = ['Feature Gap', 'Configuration Mismatch', 'Integration Requirement', 'Performance Issue', 'Enhancement Request', 'Commercial Gap', 'Other'];
 export const VOC_IMPACTS = ['Deal Blocker', 'Deal Delay', 'Competitive Gap', 'Nice to Have'];
 export const VOC_PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
 export const VOC_STATUSES = ['New', 'Under Review', 'Accepted', 'Planned', 'In Development', 'Released', 'Rejected', 'Closed'];

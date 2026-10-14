@@ -22,10 +22,13 @@ export const INSTALL_STAGES = ['PO Expected', 'PO Received'];
 
 export const UNSPECIFIED_STATE = 'Unspecified';
 
-// The confirmed physical-device count for one property. Anything missing or
-// non-numeric counts as zero rather than silently borrowing `quantity`.
 export function deviceOnlyQty(lead) {
-  if (!lead || lead.includes_device === false) return 0;
+  if (!lead) return 0;
+  if (lead.hw_qty != null) {
+    const n = parseInt(lead.hw_qty, 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+  if (lead.includes_device === false) return 0;
   const n = parseInt(lead.device_qty, 10);
   return Number.isFinite(n) && n > 0 ? n : 0;
 }

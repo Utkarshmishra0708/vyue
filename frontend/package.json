@@ -6,6 +6,7 @@
   "//homepage": "JIOAUTIFY INTEGRATION: served under /sales_crm by the STB backend in production builds; assets resolve to /sales_crm/static/...",
   "homepage": "/sales_crm",
   "dependencies": {
+    "@svg-maps/india": "^2.0.0",
     "axios": "^1.7.2",
     "date-fns": "^3.6.0",
     "exceljs": "^4.4.0",

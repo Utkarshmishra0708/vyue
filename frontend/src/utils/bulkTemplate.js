@@ -1,4 +1,4 @@
-import { STAGE_ORDER, INDIAN_STATES, UNION_TERRITORIES, LOST_REASONS, PROPERTY_TYPES, PROPERTY_CATEGORIES, SIGNAGE_SERVICES, JHES_SERVICES } from './constants';
+import { STAGE_ORDER, INDIAN_STATES, UNION_TERRITORIES, LOST_REASONS, PROPERTY_TYPES, PROPERTY_CATEGORIES } from './constants';
 
 // --- Column definitions ---
 
@@ -20,29 +20,35 @@ const DEAL_COLUMNS = [
   { header: 'TCV (Lakhs)', slug: 'tcv_lakhs' },
 ];
 
-const SIGNAGE_SVC_COLUMNS = SIGNAGE_SERVICES.flatMap(s => [
-  { header: `${s.label} Included (Yes/No)`, slug: `includes_${s.key}` },
-  { header: `${s.label} Rate`, slug: `${s.key}_rate` },
-  { header: `${s.label} Qty`, slug: `${s.key}_qty` },
-]);
+// Service columns are built from the business's own catalog (config.services), keyed by a stable
+// slug the backend recognises: svc:<serviceSlug>:rate / :qty, and for Hardware + Software items a
+// separate HW and SVC pair. Nature (OPEX/CAPEX) comes from the catalog default; frequency defaults
+// to monthly on import (editable afterwards on the lead form).
+function serviceColumns(config) {
+  const svcs = (config && Array.isArray(config.services)) ? config.services : [];
+  const cols = [];
+  for (const s of svcs) {
+    const cat = s.category || (s.hardware ? 'hardware' : 'software');
+    const base = `svc:${s.slug}:`;
+    if (cat === 'hardware_software') {
+      cols.push(
+        { header: `${s.label} — HW Rate`, slug: `${base}hw_rate` },
+        { header: `${s.label} — HW Qty`,  slug: `${base}hw_qty` },
+        { header: `${s.label} — SVC Rate`, slug: `${base}svc_rate` },
+        { header: `${s.label} — SVC Qty`,  slug: `${base}svc_qty` },
+      );
+    } else {
+      cols.push(
+        { header: `${s.label} Rate`, slug: `${base}rate` },
+        { header: `${s.label} Qty`,  slug: `${base}qty` },
+      );
+    }
+  }
+  return cols;
+}
 
-const JHES_SVC_COLUMNS = JHES_SERVICES.flatMap(s => [
-  { header: `${s.label} Included (Yes/No)`, slug: `includes_${s.key}` },
-  { header: `${s.label} Rate`, slug: `${s.key}_rate` },
-  { header: `${s.label} Qty`, slug: `${s.key}_qty` },
-]);
-
-const DEVICE_COLUMNS = [
-  { header: 'Device Included (Yes/No)', slug: 'includes_device' },
-  { header: 'Device SKU', slug: 'device_sku' },
-  { header: 'Device Cost Type', slug: 'device_cost_type' },
-  { header: 'Device Rate', slug: 'device_rate' },
-  { header: 'Device Qty', slug: 'device_qty' },
-  { header: 'Device Expected Date', slug: 'device_requested_date' },
-];
-
-const JHES_EXTRA = [
-  { header: 'JHES Product', slug: 'jhes_product' },
+const HARDWARE_DATE_COLUMN = [
+  { header: 'Hardware Requested Date', slug: 'device_requested_date' },
 ];
 
 const PHASE_COLUMNS = [
@@ -55,9 +61,11 @@ const PHASE_COLUMNS = [
 
 const PO_COLUMNS = [
   { header: 'PO Number', slug: 'po_number' },
-  { header: 'Actual PO Value (Lakhs)', slug: 'po_actual_value_lakhs' },
-  { header: 'Service Start Date', slug: 'service_start_date' },
-  { header: 'Service End Date', slug: 'service_end_date' },
+  { header: 'PO Received Date', slug: 'po_received_date' },
+  { header: 'PO Start Date', slug: 'service_start_date' },
+  { header: 'PO End Date', slug: 'service_end_date' },
+  { header: 'Billing Cycle', slug: 'billing_cycle' },
+  { header: 'Payment Terms', slug: 'payment_terms' },
 ];
 
 const NOTES_COLUMN = [
@@ -65,23 +73,32 @@ const NOTES_COLUMN = [
 ];
 
 const OWNER_COLUMN = [
-  { header: 'Lead Owner Email *', slug: 'owner_email' },
+  { header: 'Lead Owner *', slug: 'owner_name' },
 ];
 
-const CONTACT_COLUMNS = [
-  { header: 'Contact 1 Name *', slug: 'contact_1_name' },
-  { header: 'Contact 1 Email *', slug: 'contact_1_email' },
-  { header: 'Contact 1 Phone', slug: 'contact_1_phone' },
-  { header: 'Contact 1 Designation', slug: 'contact_1_designation' },
-  { header: 'Contact 2 Name', slug: 'contact_2_name' },
-  { header: 'Contact 2 Email', slug: 'contact_2_email' },
-  { header: 'Contact 2 Phone', slug: 'contact_2_phone' },
-  { header: 'Contact 2 Designation', slug: 'contact_2_designation' },
-  { header: 'Contact 3 Name', slug: 'contact_3_name' },
-  { header: 'Contact 3 Email', slug: 'contact_3_email' },
-  { header: 'Contact 3 Phone', slug: 'contact_3_phone' },
-  { header: 'Contact 3 Designation', slug: 'contact_3_designation' },
-];
+// Contact columns are template-driven: a field only carries a " *" (mandatory) marker when the
+// Global Admin marked it mandatory in Edit Template — exactly the rule the backend enforces. By
+// default (nothing marked) contacts are optional, so no asterisks appear. Contacts 2/3 are always
+// optional extras.
+function contactColumns(config) {
+  const sec = (config && config.formSchema && Array.isArray(config.formSchema.sections))
+    ? config.formSchema.sections.find(s => s.key === 'contacts') : null;
+  const star = (slug) => ((sec && (sec.fields || []).find(f => f.slug === slug && f.mandatory)) ? ' *' : '');
+  return [
+    { header: `Contact 1 Name${star('contact_name')}`, slug: 'contact_1_name' },
+    { header: `Contact 1 Email${star('contact_email')}`, slug: 'contact_1_email' },
+    { header: `Contact 1 Phone${star('contact_phone')}`, slug: 'contact_1_phone' },
+    { header: `Contact 1 Designation${star('contact_designation')}`, slug: 'contact_1_designation' },
+    { header: 'Contact 2 Name', slug: 'contact_2_name' },
+    { header: 'Contact 2 Email', slug: 'contact_2_email' },
+    { header: 'Contact 2 Phone', slug: 'contact_2_phone' },
+    { header: 'Contact 2 Designation', slug: 'contact_2_designation' },
+    { header: 'Contact 3 Name', slug: 'contact_3_name' },
+    { header: 'Contact 3 Email', slug: 'contact_3_email' },
+    { header: 'Contact 3 Phone', slug: 'contact_3_phone' },
+    { header: 'Contact 3 Designation', slug: 'contact_3_designation' },
+  ];
+}
 
 const SKIP_CUSTOM_SLUGS = new Set([
   'phase', 'next_followup_date', 'po_expected_date', 'lost_reason', 'po_type',
@@ -91,30 +108,26 @@ const SKIP_CUSTOM_SLUGS = new Set([
   'quantity', 'potential_tcv_lakhs', 'acv_lakhs', 'contract_value_lakhs',
   'contract_period_months', 'po_validity_months', 'po_number',
   'additional_notes', 'jhes_product', 'service_start_date', 'service_end_date',
+  'billing_cycle', 'payment_terms',
 ]);
 
 export function getTemplateColumns(businessUnit, config) {
-  const bu = (businessUnit || '').toLowerCase();
+  // Services come from this business's own catalog now — the same for every business (originals and
+  // custom) — so the template always matches what the Global Admin defined in Edit Template.
   const cols = [
     ...LEAD_INFO_COLUMNS,
     ...DEAL_COLUMNS,
-  ];
-
-  if (bu === 'signage') {
-    cols.push(...SIGNAGE_SVC_COLUMNS, ...DEVICE_COLUMNS);
-  } else if (bu === 'jhes') {
-    cols.push(...JHES_SVC_COLUMNS, ...DEVICE_COLUMNS, ...JHES_EXTRA);
-  }
-
-  cols.push(
+    ...serviceColumns(config),
+    ...HARDWARE_DATE_COLUMN,
     ...PHASE_COLUMNS,
     ...PO_COLUMNS,
     ...NOTES_COLUMN,
     ...OWNER_COLUMN,
-    ...CONTACT_COLUMNS,
-  );
+    ...contactColumns(config),
+  ];
 
-  if (config && config.formSchema && !config.isOriginal) {
+  // Custom fields apply to any business (added via Edit Template).
+  if (config && config.formSchema && Array.isArray(config.formSchema.sections)) {
     for (const sec of config.formSchema.sections) {
       if (!sec.enabled) continue;
       for (const f of sec.fields) {
@@ -129,7 +142,9 @@ export function getTemplateColumns(businessUnit, config) {
 
 const DROPDOWN_MAP = {
   lead_source:      ['Channel Partner', 'KAM', 'Direct Sales', 'Lead Affiliate'],
-  new_or_renewal:   ['New', 'Renewal', 'Expansion'],
+  // Expansion is only created through the UI's dedicated "+ Expansion" flow, so the bulk-import
+  // dropdown stays at New / Renewal. Backend still accepts "Expansion" if someone types it manually.
+  new_or_renewal:   ['New', 'Renewal'],
   lead_temperature: ['Hot', 'Warm', 'Cold'],
   property_type:    PROPERTY_TYPES,
   property_category: PROPERTY_CATEGORIES,
@@ -145,9 +160,14 @@ export async function downloadTemplate(businessUnit, config, users) {
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
   const columns = getTemplateColumns(businessUnit, config);
-  const ownerEmails = users.map(u => u.email).filter(Boolean);
+  const ownerNames = users.map(u => u.name).filter(Boolean);
+  // Whether the template marks a contact field mandatory (drives the Instructions wording).
+  const contactsSecForInstr = (config && config.formSchema && Array.isArray(config.formSchema.sections))
+    ? config.formSchema.sections.find(s => s.key === 'contacts') : null;
+  const contactsMandatory = !!(contactsSecForInstr && (contactsSecForInstr.fields || [])
+    .find(f => (f.slug === 'contact_name' || f.slug === 'contact_email') && f.mandatory));
 
-  // ---- Lookups sheet (hidden) — holds long lists referenced by dropdowns ----
+  // ---- Lookups sheet (hidden) — holds long lists referenced by the (non-restrictive) dropdowns ----
   const lookupSheet = wb.addWorksheet('Lookups', { state: 'veryHidden' });
   const lookupLists = [];
 
@@ -162,7 +182,7 @@ export async function downloadTemplate(businessUnit, config, users) {
   };
 
   const stateRef = addLookupList('States', ALL_STATES);
-  const ownerRef = ownerEmails.length > 0 ? addLookupList('Owners', ownerEmails) : null;
+  const ownerRef = ownerNames.length > 0 ? addLookupList('Owners', ownerNames) : null;
 
   // ---- Lead Data sheet ----
   const dataSheet = wb.addWorksheet('Lead Data');
@@ -192,20 +212,19 @@ export async function downloadTemplate(businessUnit, config, users) {
       }
     } else if (col.slug === 'state') {
       formulae = [stateRef];
-    } else if (col.slug === 'owner_email' && ownerRef) {
+    } else if (col.slug === 'owner_name' && ownerRef) {
       formulae = [ownerRef];
     }
 
     if (!formulae) return;
 
+    // Keep the dropdown for convenience, but DO NOT restrict input: showErrorMessage:false means
+    // Excel never warns or blocks when a user types a value outside the list — free entry is allowed.
     const validation = {
       type: 'list',
       allowBlank: true,
       formulae,
-      showErrorMessage: true,
-      errorStyle: 'information',
-      errorTitle: 'Custom value',
-      error: 'This value is not in the dropdown list. You can still use it.',
+      showErrorMessage: false,
     };
 
     for (let r = 2; r <= MAX_DATA_ROW; r++) {
@@ -238,36 +257,18 @@ export async function downloadTemplate(businessUnit, config, users) {
     ['TCV (Lakhs)', 'Number. If blank AND service rates are provided, TCV is auto-calculated.'],
   ];
 
-  if (bu === 'signage') {
+  const catSvcs = (config && Array.isArray(config.services)) ? config.services : [];
+  if (catSvcs.length) {
     instrRows.push(
       [],
-      ['— SIGNAGE SERVICES —', ''],
-      ...SIGNAGE_SERVICES.map(s => [
-        `${s.label} Included`, 'Yes or No (dropdown). If Yes, provide Rate and Qty.',
-      ]),
-      [`${SIGNAGE_SERVICES[0].label} Rate / Qty`, 'Number. Rate per unit per month (OPEX) or one-time (CAPEX).'],
-    );
-  }
-  if (bu === 'jhes') {
-    instrRows.push(
-      [],
-      ['— JHES SERVICES —', ''],
-      ...JHES_SERVICES.map(s => [
-        `${s.label} Included`, 'Yes or No (dropdown). If Yes, provide Rate and Qty.',
-      ]),
-      ['JHES Product', 'Text. Free-text product description.'],
-    );
-  }
-  if (bu === 'signage' || bu === 'jhes') {
-    instrRows.push(
-      [],
-      ['— DEVICE —', ''],
-      ['Device Included', 'Yes or No (dropdown).'],
-      ['Device SKU', 'e.g. MCM3000, JSB210, J100, C2Av2, M2S'],
-      ['Device Cost Type', 'capex or opex (dropdown)'],
-      ['Device Rate', 'Number. Unit rate.'],
-      ['Device Qty', 'Number.'],
-      ['Device Expected Date', 'YYYY-MM-DD. For forecast planning.'],
+      ['— SERVICES OFFERED —', 'Rate + Qty columns per catalog item. Leave both blank to skip an item.'],
+      ...catSvcs.map(s => {
+        const cat = s.category || (s.hardware ? 'hardware' : 'software');
+        const flow = (cat === 'hardware' || cat === 'hardware_software') ? ' (flows to Inventory Pipeline)' : '';
+        const cols = cat === 'hardware_software' ? 'HW Rate / HW Qty + SVC Rate / SVC Qty' : 'Rate / Qty';
+        return [`${s.label}`, `${cat.replace('_', ' + ')}${flow}. Columns: ${cols}. Default ${s.nature ? s.nature.toUpperCase() : 'OPEX'} (monthly for OPEX).`];
+      }),
+      ['Hardware Requested Date', 'YYYY-MM-DD. When the hardware is expected — for the Inventory Pipeline.'],
     );
   }
 
@@ -282,13 +283,15 @@ export async function downloadTemplate(businessUnit, config, users) {
     [],
     ['— PO RECEIVED FIELDS —', ''],
     ['PO Number', 'Text.'],
-    ['Actual PO Value (Lakhs)', 'Number. The actual contracted value for won deals.'],
-    ['Service Start Date', 'YYYY-MM-DD. When service delivery begins.'],
-    ['Service End Date', 'YYYY-MM-DD. When service contract ends.'],
+    ['PO Received Date', 'YYYY-MM-DD. The date the PO was actually received. IMPORTANT for PO Received leads — this is the date used for weekly/monthly/quarterly performance. If left blank, the lead is counted on the import date instead.'],
+    ['PO Start Date', 'YYYY-MM-DD. When the PO/service delivery begins.'],
+    ['PO End Date', 'YYYY-MM-DD. When the PO/service contract ends.'],
     [],
     ['— OWNER & CONTACTS —', ''],
-    ['Lead Owner Email *', `Required (dropdown). Must match an active user. Available: ${ownerEmails.join(', ')}`],
-    ['Contact 1 Name / Email *', 'At least one contact with Name and Email is required.'],
+    ['Lead Owner *', `Required (dropdown). The salesperson/BD who will OWN each lead — the import assigns the lead to that user. Pick from the list. Must match an active user in this business. Available: ${ownerNames.join(', ')}`],
+    (contactsMandatory
+      ? ['Contact 1 Name / Email *', 'Required — at least one contact with both Name and Email.']
+      : ['Contact 1 Name / Email', 'Optional. If you fill a contact Name you must also fill its Email (and vice-versa).']),
     ['Contact 2/3', 'Optional additional contacts, same format.'],
     [],
     ['Notes', ''],
@@ -327,7 +330,12 @@ export function parseUploadedFile(XLSX, file, businessUnit, config) {
     reader.onload = (e) => {
       try {
         const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
+        // Read the "Lead Data" sheet specifically — the template also ships a hidden "Lookups" sheet
+        // (first in the workbook) and an "Instructions" sheet, so SheetNames[0] is NOT the data sheet.
+        const dataSheetName = wb.SheetNames.includes('Lead Data')
+          ? 'Lead Data'
+          : (wb.SheetNames.find(n => !['Lookups', 'Instructions'].includes(n)) || wb.SheetNames[0]);
+        const sheet = wb.Sheets[dataSheetName];
         const raw = XLSX.utils.sheet_to_json(sheet, { defval: '' });
         if (raw.length === 0) { reject(new Error('No data rows found.')); return; }
 
@@ -348,7 +356,7 @@ export function parseUploadedFile(XLSX, file, businessUnit, config) {
             }
           }
           return mapped;
-        }).filter(r => r.customer_name || r.owner_email || r.phase);
+        }).filter(r => r.customer_name || r.owner_name || r.phase);
 
         resolve(rows);
       } catch (err) {

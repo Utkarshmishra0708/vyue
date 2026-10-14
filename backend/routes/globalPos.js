@@ -18,13 +18,14 @@ router.use((req, res, next) => {
 function linkedPos(globalPoId) {
   return Lead.findAll({
     where: { global_po_id: globalPoId },
-    attributes: ['id', 'sr_no', 'customer_name', 'quantity', 'phase', 'po_received_date', 'phase_changed_at', 'owner_id'],
+    attributes: ['id', 'sr_no', 'customer_name', 'quantity', 'services_json', 'phase', 'po_received_date', 'phase_changed_at', 'owner_id'],
     order: [['sr_no', 'ASC']],
   });
 }
 
 function statusOf(globalPo, pos) {
-  return chainStatus(globalPo.device_total, pos.map(p => ({ phase: p.phase, devices: leadDevices(p) })));
+  const dt = globalPo.device_type || null;
+  return chainStatus(globalPo.device_total, pos.map(p => ({ phase: p.phase, devices: leadDevices(p, dt) })));
 }
 
 // GET /api/global-pos — chains for the caller's business, each with live pool status (for the
@@ -35,7 +36,7 @@ router.get('/', requireAnyModule(['leads', 'dashboard', 'reports'], 'read'), asy
     const out = [];
     for (const c of chains) {
       const pos = await linkedPos(c.id);
-      out.push({ ...c.toJSON(), status: statusOf(c, pos), linked_count: pos.length });
+      out.push({ ...c.toJSON(), poolStatus: statusOf(c, pos), linked_count: pos.length });
     }
     return res.json(out);
   } catch (err) {
@@ -52,13 +53,14 @@ router.get('/:id', requireAnyModule(['leads', 'dashboard', 'reports'], 'read'), 
     const pos = await linkedPos(c.id);
     const status = statusOf(c, pos);
     // Contributors = the Individual POs that have actually been won (traceability, doc §4.4).
+    const dt = c.device_type || null;
     const contributors = pos
       .filter(p => p.phase === WON_STAGE)
       .map(p => ({
-        id: p.id, sr_no: p.sr_no, customer_name: p.customer_name, devices: leadDevices(p),
+        id: p.id, sr_no: p.sr_no, customer_name: p.customer_name, devices: leadDevices(p, dt),
         won_date: p.po_received_date || (p.phase_changed_at ? String(p.phase_changed_at).slice(0, 10) : null),
       }));
-    return res.json({ ...c.toJSON(), status, contributors, linked_count: pos.length });
+    return res.json({ ...c.toJSON(), poolStatus: status, contributors, linked_count: pos.length });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -75,9 +77,20 @@ function parseChainBody(body) {
     if (!Number.isFinite(d) || d < 0) errs.push('Number of devices must be a non-negative whole number');
     else out.device_total = d;
   }
+  if (body.device_type !== undefined) {
+    const dt = String(body.device_type).trim();
+    if (!dt) errs.push('Device type is required');
+    else out.device_type = dt;
+  }
   if (body.price_lakhs !== undefined) out.price_lakhs = (body.price_lakhs === '' || body.price_lakhs === null) ? null : parseFloat(body.price_lakhs);
   if (body.expected_start_date !== undefined) out.expected_start_date = body.expected_start_date || null;
   if (body.expected_end_date !== undefined) out.expected_end_date = body.expected_end_date || null;
+  const VALID_STATUSES = ['New', 'Under Discussion', 'Contract Received'];
+  if (body.status !== undefined) {
+    if (!VALID_STATUSES.includes(body.status)) errs.push('Status must be one of: ' + VALID_STATUSES.join(', '));
+    else out.status = body.status;
+  }
+  if (body.notes !== undefined) out.notes = body.notes || null;
   return { out, errs };
 }
 
@@ -113,7 +126,7 @@ router.put('/:id', requireModule('leads', 'full'), async (req, res) => {
     const before = c.toJSON();
     await GlobalPo.update({ ...out, updated_by: req.user.id }, { where: { id: c.id } });
     const CHAIN_LABELS = {
-      chain_name: 'Chain Name', device_total: 'Device Total', price_lakhs: 'Price (L)',
+      chain_name: 'Chain Name', device_total: 'Device Total', device_type: 'Device Type', status: 'Status', notes: 'Notes', price_lakhs: 'Price (L)',
       expected_start_date: 'Expected Start', expected_end_date: 'Expected End',
     };
     await audit.recordDiff(
@@ -123,6 +136,15 @@ router.put('/:id', requireModule('leads', 'full'), async (req, res) => {
         .filter(k => k in out)
         .map(k => ({ field: CHAIN_LABELS[k], from: before[k], to: out[k] })),
     );
+    if ('notes' in out) {
+      const { processMentions } = require('../services/mentions');
+      processMentions({
+        text: out.notes, oldText: before.notes,
+        businessUnit: c.business_unit, actorId: req.user.id,
+        entityType: 'chain', entityLabel: `Chain: ${out.chain_name || before.chain_name}`,
+        linkPath: '/global-pos',
+      }).catch(() => {});
+    }
     return res.json(await GlobalPo.findByPk(c.id));
   } catch (err) {
     return res.status(500).json({ message: err.message });

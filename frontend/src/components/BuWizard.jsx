@@ -21,6 +21,12 @@ const APPROVER_ROLES = [
   { value: 'pmo', label: 'Manager' },
   { value: 'bd', label: 'Business Development' },
 ];
+// The three service catalog categories the Global Admin builds per business.
+export const SERVICE_CATEGORIES = [
+  { key: 'hardware',          title: 'Hardware',             hint: 'Devices / SKUs — flow into the Inventory Pipeline.' },
+  { key: 'software',          title: 'Software / Services',  hint: 'Services & licences (OPEX recurring or CAPEX one-time). Do not flow to the Inventory Pipeline.' },
+  { key: 'hardware_software', title: 'Hardware + Software',  hint: 'A device plus a licensing / service component — the hardware flows into the Inventory Pipeline.' },
+];
 
 export default function BuWizard({ onClose, onCreated }) {
   const [step, setStep] = useState(0);
@@ -48,7 +54,8 @@ export default function BuWizard({ onClose, onCreated }) {
           key: sec.key, label: sec.label, enabled: true, custom: false, collapsed: false,
           fields: sec.fields.map(f => ({ ...f, enabled: true, mandatory: false })),
         })));
-        setServices(cat.services.map(s => ({ slug: s.slug, label: s.label, nature: s.nature, enabled: true })));
+        // Services start EMPTY — the admin builds this business's catalog from scratch, by category.
+        setServices([]);
         setModules(cat.modules.map(m => ({ ...m, enabled: true })));
       })
       .catch(e => setLoadErr(e.response?.data?.message || 'Could not load the field/service catalog.'));
@@ -56,15 +63,19 @@ export default function BuWizard({ onClose, onCreated }) {
 
   const onName = (v) => setBasics(b => ({ ...b, name: v, slug: slugTouched ? b.slug : slugify(v) }));
 
-  // Template selection pre-selects the services that template uses ("union" = everything).
-  const applyTemplate = (val) => {
-    setTemplate(val);
-    if (!catalog) return;
-    if (val === 'union') { setServices(s => s.map(x => ({ ...x, enabled: true }))); return; }
-    const tpl = (catalog.templates || []).find(t => t.slug === val);
-    const use = new Set(tpl ? tpl.serviceSlugs : []);
-    setServices(s => s.map(x => ({ ...x, enabled: x.custom ? x.enabled : use.has(x.slug) })));
+  // Template selection only affects the starting field/section set — services are always built from
+  // scratch per business (no pre-filled service list).
+  const applyTemplate = (val) => setTemplate(val);
+
+  // ---- service catalog builder (grouped by category) ----
+  const addService = (category, label, nature) => {
+    const name = String(label || '').trim();
+    if (!name) return;
+    const slug = fieldSlugify(name);
+    setServices(ss => ss.some(x => x.slug === slug) ? ss : [...ss, { slug, label: name, nature: nature || 'opex', category, enabled: true }]);
   };
+  const removeService = (slug) => setServices(ss => ss.filter(x => x.slug !== slug));
+  const setServiceNature = (slug, nature) => setServices(ss => ss.map(x => x.slug === slug ? { ...x, nature } : x));
 
   // ---- section / field mutations ----
   const patchSection = (key, fn) => setSections(secs => secs.map(s => s.key === key ? fn(s) : s));
@@ -114,7 +125,7 @@ export default function BuWizard({ onClose, onCreated }) {
             })),
           })),
         },
-        services: services.map(s => ({ slug: s.slug, label: s.label, nature: s.nature, enabled: s.enabled, custom: !!s.custom })),
+        services: services.map(s => ({ slug: s.slug, label: s.label, nature: s.nature, category: s.category || 'software', hardware: s.category === 'hardware' || s.category === 'hardware_software', enabled: s.enabled, custom: !!s.custom })),
         modules: modules.map(m => ({ slug: m.slug, enabled: m.enabled })),
         dashboards, reports,
         workflow: workflow.enabled ? workflow : { enabled: false, levels: [] },
@@ -133,9 +144,11 @@ export default function BuWizard({ onClose, onCreated }) {
 
   const totalFields = sections.reduce((n, s) => n + s.fields.filter(f => f.enabled && s.enabled).length, 0);
 
+  // Deliberately NO close-on-backdrop-click: a stray click outside must not discard in-progress
+  // wizard state. Use the × or Cancel button to close.
   return (
-    <div onClick={onClose} style={ov.backdrop}>
-      <div onClick={e => e.stopPropagation()} style={ov.modal}>
+    <div style={ov.backdrop}>
+      <div style={ov.modal}>
         <div style={{ padding: '18px 22px 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>New Business Unit — Guided Setup</h2>
@@ -202,18 +215,15 @@ export default function BuWizard({ onClose, onCreated }) {
 
           {catalog && step === 2 && (
             <div>
-              <Intro>Which services does {basics.name || 'this business'} sell? Toggle off, or add your own.</Intro>
-              <SelectAllRow onAll={() => setServices(ss => ss.map(x => ({ ...x, enabled: true })))} onNone={() => setServices(ss => ss.map(x => ({ ...x, enabled: false })))} />
-              {services.map(s => (
-                <div key={s.slug} style={ov.row}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={s.enabled} onChange={() => setServices(ss => ss.map(x => x.slug === s.slug ? { ...x, enabled: !x.enabled } : x))} />
-                    <span style={{ fontSize: 13, color: s.enabled ? '#0f172a' : '#94a3b8' }}>{s.label}{s.custom && <span style={ov.pillGreen}>custom</span>}</span>
-                  </label>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: s.nature === 'capex' ? '#b45309' : '#0369a1', background: s.nature === 'capex' ? '#fffbeb' : '#f0f9ff', padding: '2px 8px', borderRadius: 999 }}>{s.nature.toUpperCase()}</span>
-                </div>
+              <Intro>Build the services {basics.name || 'this business'} offers. Add each item under its category and set a default OPEX/CAPEX. <b>Hardware</b> and <b>Hardware + Software</b> items flow into the Inventory Pipeline. BDs later pick these on the lead form — they cannot add new ones.</Intro>
+              {SERVICE_CATEGORIES.map(cat => (
+                <ServiceCategoryBuilder key={cat.key}
+                  category={cat}
+                  items={services.filter(s => (s.category || 'software') === cat.key)}
+                  onAdd={(label, nature) => addService(cat.key, label, nature)}
+                  onRemove={removeService}
+                  onNature={setServiceNature} />
               ))}
-              <CustomServiceAdd onAdd={(svc) => setServices(ss => ss.some(x => x.slug === svc.slug) ? ss : [...ss, svc])} />
             </div>
           )}
 
@@ -367,22 +377,44 @@ export function SectionCard({ sec, catalog, onToggle, onCollapse, onToggleField,
   );
 }
 
-function CustomServiceAdd({ onAdd }) {
-  const [d, setD] = useState({ label: '', nature: 'opex' });
+// One category's catalog builder: the list of items added so far, plus an input to add a new one.
+// The default OPEX/CAPEX is editable for every category (a "service" can be a one-time CAPEX charge
+// like installation); category only decides whether the item flows to the Inventory Pipeline.
+export function ServiceCategoryBuilder({ category, items, onAdd, onRemove, onNature }) {
+  const defaultNature = category.key === 'software' ? 'opex' : 'capex';
+  const [draft, setDraft] = useState({ label: '', nature: defaultNature });
   const add = () => {
-    const label = d.label.trim();
-    if (!label) return;
-    onAdd({ slug: fieldSlugify(label), label, nature: d.nature, custom: true, enabled: true });
-    setD({ label: '', nature: 'opex' });
+    if (!draft.label.trim()) return;
+    onAdd(draft.label, draft.nature);
+    setDraft({ label: '', nature: defaultNature });
   };
   return (
-    <div style={ov.addRow}>
-      <input style={{ ...ov.input, margin: 0, flex: 1 }} value={d.label} onChange={e => setD(x => ({ ...x, label: e.target.value }))}
-        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} placeholder="Add a custom service…" />
-      <select style={{ ...ov.input, margin: 0, width: 100 }} value={d.nature} onChange={e => setD(x => ({ ...x, nature: e.target.value }))}>
-        <option value="opex">OPEX</option><option value="capex">CAPEX</option>
-      </select>
-      <button type="button" className="btn btn-sm" style={ov.ghost} onClick={add}>+ Add</button>
+    <div style={{ border: '1px solid #e5e9f0', borderRadius: 10, marginBottom: 12 }}>
+      <div style={{ padding: '9px 12px', background: '#f8fafc', borderRadius: '10px 10px 0 0' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{category.title}</span>
+        <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 8 }}>{category.hint}</span>
+      </div>
+      <div style={{ padding: '8px 12px' }}>
+        {items.length === 0 && <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 8px' }}>No items yet — add the {category.title.toLowerCase()} this business offers.</p>}
+        {items.map(s => (
+          <div key={s.slug} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid #f1f5f9' }}>
+            <span style={{ fontSize: 13, flex: 1, color: '#0f172a' }}>{s.label}</span>
+            <select value={s.nature} onChange={e => onNature(s.slug, e.target.value)} style={{ ...ov.input, margin: 0, width: 90, padding: '4px 6px' }}>
+              <option value="opex">OPEX</option><option value="capex">CAPEX</option>
+            </select>
+            <button type="button" style={ov.x} title="Remove" onClick={() => onRemove(s.slug)}>×</button>
+          </div>
+        ))}
+        <div style={ov.addRow}>
+          <input style={{ ...ov.input, margin: 0, flex: 1 }} value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+            placeholder={category.key === 'hardware' ? 'Add a device / SKU name…' : category.key === 'hardware_software' ? 'Add a hardware + software item…' : 'Add a service…'} />
+          <select style={{ ...ov.input, margin: 0, width: 90 }} value={draft.nature} onChange={e => setDraft(d => ({ ...d, nature: e.target.value }))}>
+            <option value="opex">OPEX</option><option value="capex">CAPEX</option>
+          </select>
+          <button type="button" className="btn btn-sm" style={ov.ghost} onClick={add}>+ Add</button>
+        </div>
+      </div>
     </div>
   );
 }

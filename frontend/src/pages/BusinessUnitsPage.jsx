@@ -20,7 +20,17 @@ const PRESET_COLORS = ['#4f46e5', '#ea580c', '#0891b2', '#16a34a', '#db2777', '#
 const slugify = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
 
 export default function BusinessUnitsPage() {
-  const { canAct } = useAuth();
+  const { canAct, isSuperAdmin, user } = useAuth();
+  // A Business Admin reaches this page scoped to their OWN BU only. They can Edit and Edit template
+  // but cannot Create / Clone / Disable / Archive / Delete — those remain Global-Admin-only. The
+  // backend enforces the same via per-route guards; this gate just hides the controls accordingly.
+  const isGa = isSuperAdmin;
+  const isBaOwnOnly = !isGa && user?.role === 'business_admin';
+  const canCreate     = canAct && isGa;
+  const canClone      = canAct && isGa;
+  const canStatusEdit = canAct && isGa;   // Disable / Archive / Activate
+  const canDelete     = canAct && isGa;
+  const canEditBu     = canAct && (isGa || isBaOwnOnly);
   const [units, setUnits] = useState(null);
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);   // { mode: 'create'|'edit'|'clone', bu? }
@@ -57,12 +67,14 @@ export default function BusinessUnitsPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '8px 4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#0f172a' }}>Business Units</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#0f172a' }}>{isGa ? 'Business Units' : 'Business Unit'}</h1>
             <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
-              Create and manage business platforms. A new unit appears in login and across the app immediately — no code changes.
+              {isGa
+                ? 'Create and manage business platforms. A new unit appears in login and across the app immediately — no code changes.'
+                : 'Edit the presentation and template for your business. Only a Global Admin can create, clone, disable, archive or delete a business unit.'}
             </p>
           </div>
-          {canAct && (
+          {canCreate && (
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn" style={s.ghost} onClick={() => setModal({ mode: 'create' })}>+ Quick add</button>
               <button className="btn" style={s.primary} onClick={() => setWizard(true)}>+ Guided setup</button>
@@ -99,15 +111,15 @@ export default function BusinessUnitsPage() {
                   <Stat label="VOCs" n={u.vocs} />
                 </div>
 
-                {canAct && (
+                {canEditBu && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
                     <button className="btn btn-sm" style={s.ghost} onClick={() => setModal({ mode: 'edit', bu })}>Edit</button>
                     <button className="btn btn-sm" style={s.ghost} onClick={() => setEditTpl({ slug: bu.slug, name: bu.name })}>Edit template</button>
-                    <button className="btn btn-sm" style={s.ghost} onClick={() => setModal({ mode: 'clone', bu })}>Clone</button>
-                    {bu.status !== 'active'   && <button className="btn btn-sm" style={s.ghost} onClick={() => onStatus(bu, 'active')}>Activate</button>}
-                    {bu.status === 'active'   && <button className="btn btn-sm" style={s.ghost} onClick={() => onStatus(bu, 'disabled')}>Disable</button>}
-                    {bu.status !== 'archived' && <button className="btn btn-sm" style={s.ghost} onClick={() => onStatus(bu, 'archived')}>Archive</button>}
-                    <button className="btn btn-sm" style={s.danger} onClick={() => setConfirmDel({ bu, usage: u, deletable: !(u.users || u.leads || u.chains || u.vocs) })}>Delete</button>
+                    {canClone && <button className="btn btn-sm" style={s.ghost} onClick={() => setModal({ mode: 'clone', bu })}>Clone</button>}
+                    {canStatusEdit && bu.status !== 'active'   && <button className="btn btn-sm" style={s.ghost} onClick={() => onStatus(bu, 'active')}>Activate</button>}
+                    {canStatusEdit && bu.status === 'active'   && <button className="btn btn-sm" style={s.ghost} onClick={() => onStatus(bu, 'disabled')}>Disable</button>}
+                    {canStatusEdit && bu.status !== 'archived' && <button className="btn btn-sm" style={s.ghost} onClick={() => onStatus(bu, 'archived')}>Archive</button>}
+                    {canDelete && <button className="btn btn-sm" style={s.danger} onClick={() => setConfirmDel({ bu, usage: u, deletable: !(u.users || u.leads || u.chains || u.vocs) })}>Delete</button>}
                   </div>
                 )}
               </div>
@@ -289,10 +301,12 @@ function DeleteModal({ info, onClose, onArchive, onDelete }) {
   );
 }
 
-function Overlay({ children, onClose }) {
+function Overlay({ children }) {
+  // Deliberately NO close-on-backdrop-click: a stray click outside must not discard in-progress form
+  // input or a typed delete-confirm slug. Use the × / Cancel button inside to close.
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 440, boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
+      <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 440, boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
         {children}
       </div>
     </div>

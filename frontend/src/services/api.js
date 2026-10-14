@@ -74,8 +74,14 @@ export const getBuCatalog           = ()                     => api.get('/busine
 // may read their own business's config — the lead form renders from it.
 export const getBusinessUnitConfig  = (slug)                 => api.get(`/business-units/${slug}/config`).then(r => r.data);
 
+// Customer -> Location roll-up for the Customers tab inside Leads. Scoped by the backend to the
+// caller's BU (and to their own leads for a BD), so no client-side scoping is needed.
+export const getLeadCustomers       = ()                     => api.get('/leads/customers').then(r => r.data);
+
 // Users / BDs
 export const getBds         = (businessUnit)                  => api.get('/users', { params: { role: 'bd', business_unit: businessUnit } }).then(r => r.data);
+// All active members of a business (any role) — used by the Task Board owner picker.
+export const getBusinessMembers = (businessUnit)              => api.get('/users', { params: { business_unit: businessUnit } }).then(r => r.data);
 export const resetBdPassword= (id, newPassword)               => api.put(`/users/${id}/reset-password`, { newPassword }).then(r => r.data);
 // Full user management (admin only). getManagedUsers lists BD + PMO (including disabled) with
 // email/mobile for the Settings page; addUser/updateUser take { name, email, mobile, role }
@@ -106,6 +112,18 @@ export const getGlobalPo    = (id)                            => api.get(`/globa
 export const createGlobalPo = (data)                          => api.post('/global-pos', data).then(r => r.data);
 export const updateGlobalPo = (id, data)                      => api.put(`/global-pos/${id}`, data).then(r => r.data);
 export const deleteGlobalPo = (id)                            => api.delete(`/global-pos/${id}`).then(r => r.data);
+
+// Activities — multi-tab kanban board (opt-in per BU via config.modules.activities). Access limited
+// to Manager / Business Admin / Global Admin via server-side role guard + default permissions.
+export const getActivityTabs   = ()                            => api.get('/activities/tabs').then(r => r.data);
+export const createActivityTab = (label)                       => api.post('/activities/tabs', { label }).then(r => r.data);
+export const renameActivityTab = (id, label)                   => api.patch(`/activities/tabs/${id}`, { label }).then(r => r.data);
+export const deleteActivityTab = (id)                          => api.delete(`/activities/tabs/${id}`).then(r => r.data);
+
+export const getActivities   = ()                              => api.get('/activities').then(r => r.data);
+export const createActivity  = (data)                          => api.post('/activities', data).then(r => r.data);
+export const updateActivity  = (id, data)                      => api.patch(`/activities/${id}`, data).then(r => r.data);
+export const deleteActivity  = (id)                            => api.delete(`/activities/${id}`).then(r => r.data);
 
 // VOC (Voice of Customer) — Surveillance business only.
 export const getVocs        = (params)                        => api.get('/voc', { params }).then(r => r.data);
@@ -138,7 +156,7 @@ export const updateUserPermissions = (id, permissions)       => api.put(`/users/
 // Forecast (login-gated: admin tier, 'forecast' accounts, or a granted user)
 export const getForecastDevices = ()                          => api.get('/forecast/devices').then(r => r.data);
 // Manual 'Sent to SCM' handoff marker. Writable by anyone who can see the dashboard row.
-export const setSentToScm = (id, sent)                        => api.patch(`/forecast/devices/${id}/sent-to-scm`, { sent_to_scm: sent }).then(r => r.data);
+export const setSentToScm = (id, sent, lineSlug)              => api.patch(`/forecast/devices/${id}/sent-to-scm`, { sent_to_scm: sent, line_slug: lineSlug }).then(r => r.data);
 
 // Settings
 export const getSettings    = ()                              => api.get('/settings').then(r => r.data);
@@ -168,5 +186,13 @@ export const fileUrl = (path) => {
   if (path.startsWith('http')) return path;
   return (process.env.REACT_APP_API_BASE || '') + path;
 };
+
+// Notifications
+export const getNotifications       = (params)     => api.get('/notifications', { params }).then(r => r.data);
+export const getUnreadCount         = ()           => api.get('/notifications/unread-count').then(r => r.data);
+export const markRead               = (id)         => api.patch(`/notifications/${id}/read`).then(r => r.data);
+export const markAllRead            = ()           => api.post('/notifications/read-all').then(r => r.data);
+export const getNotifPreferences    = ()           => api.get('/notifications/preferences').then(r => r.data);
+export const updateNotifPreferences = (prefs)      => api.put('/notifications/preferences', prefs).then(r => r.data);
 
 export default api;

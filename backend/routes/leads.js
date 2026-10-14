@@ -1,12 +1,17 @@
 const router = require('express').Router();
-const { sequelize, Lead, LeadContact, ActivityLog, StageHistory, User, DropdownOption, GlobalPo } = require('../models');
+const { sequelize, Lead, LeadContact, ActivityLog, StageHistory, User, DropdownOption, GlobalPo, ServiceDefinition, BusinessUnit } = require('../models');
 const { authenticate, adminOnly, requireModule, requireAnyModule } = require('../middleware/auth');
 // Lead rows back three modules — the Leads list, the Dashboard and Reports all read them — so a
 // read is allowed if ANY of those grants it. Writes are specifically a Leads-module capability.
 const canReadLeadData = requireAnyModule(['leads', 'dashboard', 'reports'], 'read');
 const { leadScopeWhere } = require('../middleware/scope');
-const { applyHoldTransition, scoringFieldsForSave } = require('../services/scoringEngine');
+const { applyHoldTransition, scoringFieldsForSave, slaMapFor } = require('../services/scoringEngine');
+const { computeConfidence } = require('../services/scoring');
+const { cleanServiceLines, computeServicesTotals } = require('../services/pricing');
+const { assignLeadCodes, recomputeLocationOnEdit } = require('../services/leadCodes');
 const { Op } = require('sequelize');
+const leadNotif = require('../services/notifications/rules/leadRules');
+const renewalNotif = require('../services/notifications/rules/renewalRules');
 
 router.use(authenticate);
 
@@ -26,26 +31,20 @@ const PHASE_DATE_MAP = {
   'PO Received': 'po_received_date',
 };
 
+// Columns tracked by the activity log. The legacy per-service columns (includes_platform,
+// *_rate, *_qty, sent_to_scm, etc.) were REMOVED when the unified services_json model landed —
+// keeping them here produced a wall of "false → (empty)" noise entries on every save because
+// the new save path never writes those columns.
 const FIELD_LABELS = {
   property_type: 'Property Type', property_category: 'Property Category',
   customer_name: 'Customer Name', city: 'City', state: 'State', lead_source: 'Lead Source',
   channel_partner_name: 'Channel Partner', kam_name: 'KAM Name', affiliate_name: 'Affiliate Name', new_or_renewal: 'New/Renewal',
   lead_temperature: 'Lead Rating', competitor: 'Competitor', quantity: 'Quantity',
-  sent_to_scm: 'Sent to SCM',
   potential_tcv_lakhs: 'Potential TCV (L)', contract_period_months: 'Contract Period (Mo)',
   po_validity_months: 'PO Validity (Mo)', phase: 'Phase', next_followup_date: 'Next Follow-Up Date',
   po_expected_date: 'PO Expected Date', service_start_date: 'Service Start Date', service_end_date: 'Service End Date',
   po_number: 'PO Number', lost_reason: 'Lost Reason', po_actual_value_lakhs: 'Actual PO Value (L)',
-  includes_platform: 'Service: Platform', platform_rate: 'Platform Rate', platform_qty: 'Platform Qty',
-  includes_cms: 'Service: CMS', cms_rate: 'CMS Rate', cms_qty: 'CMS Qty',
-  includes_connectivity: 'Service: Connectivity', connectivity_rate: 'Connectivity Rate', connectivity_qty: 'Connectivity Qty',
-  includes_display: 'Service: Display', display_rate: 'Display Rate', display_qty: 'Display Qty',
-  includes_device: 'Service: Device', device_sku: 'Device SKU', device_cost_type: 'Device Cost Type',
-  device_rate: 'Device Rate', device_qty: 'Device Qty', device_requested_date: 'Device Expected Date',
-  includes_amc: 'Service: AMC', amc_rate: 'AMC Rate', amc_qty: 'AMC Qty',
-  includes_installation: 'Service: Installation', installation_rate: 'Installation Rate', installation_qty: 'Installation Qty',
-  includes_iptv: 'Service: IPTV', iptv_rate: 'IPTV Rate', iptv_qty: 'IPTV Qty',
-  includes_jhes: 'Service: JHES', jhes_rate: 'JHES Rate', jhes_qty: 'JHES Qty',
+  device_requested_date: 'Hardware Requested Date',
   jhes_product: 'JHES Product', additional_notes: 'Additional Notes',
 };
 
@@ -134,65 +133,48 @@ function addDaysLocal(dateStr, days) {
 }
 
 // Clamp a phase date — defense-in-depth for the "BD can adjust the phase date" business rule.
-// Window is [today+2] on the high end for every phase; the low end depends on the phase:
-//   * "New"   → today (a brand-new lead can't have started in the past)
-//   * others  → today-2 (a phase move may have actually happened up to 2 days ago)
-function clampPhaseDate(input, phase) {
+// A BD can only backdate a phase change: today-7 to today, no future dates (a phase change records
+// something that already happened). Manager / Business Admin / Global Admin (any non-BD role) are
+// unrestricted and may set any date.
+function clampPhaseDate(input, phase, role) {
   const todayStr = localDateString();
-  const minStr = phase === 'New' ? todayStr : addDaysLocal(todayStr, -2);
-  const maxStr = addDaysLocal(todayStr, 2);
   let val = (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) ? input : todayStr;
-  if (val < minStr) val = minStr;
-  if (val > maxStr) val = maxStr;
+  if (role === 'bd') {
+    const minStr = addDaysLocal(todayStr, -7);
+    const maxStr = todayStr;
+    if (val < minStr) val = minStr;
+    if (val > maxStr) val = maxStr;
+  }
   return val;
 }
 
 // Build the persisted payload from a raw request body, applying all
 // business rules server-side (quantity totals, phase-gated fields, etc).
-function normalizePayload(body, { isCreate, existing }) {
-  // TCV is either hand-typed (tcv_manual) or auto-calculated from the services × contract period.
-  // Computing it server-side keeps the stored value authoritative regardless of the client.
+function normalizePayload(body, { isCreate, existing, role }) {
+  // TCV is either hand-typed (tcv_manual) or auto-calculated from the Services Offered lines ×
+  // contract period. Computing it server-side keeps the stored value authoritative.
   const tcvManual = !!body.tcv_manual;
   const months = parseInt(body.contract_period_months, 10) || null;
   const years = months ? months / 12 : null;
-  const isSurveillance = body.business_unit === 'surveillance';
-  // Custom (wizard-created) business units are anything other than the three originals. They store
-  // their services the flexible JSON way (like Surveillance) rather than in per-service columns, and
-  // keep admin-defined custom field values in custom_fields. The three originals are untouched.
-  const isOriginalBu = ['signage', 'jhes', 'surveillance'].includes(body.business_unit);
-  const useJsonServices = isSurveillance || !isOriginalBu;
-  const survServices = useJsonServices ? cleanSurveillanceServices(body.surveillance_services) : null;
+
+  // Unified Services Offered model (v2): EVERY business stores its lines in services_json. Each line
+  // is { category, label, hw, svc } — see backend/services/pricing.js. cleanServiceLines validates
+  // and strips blanks; computeServicesTotals derives TCV/ACV (frequency-aware).
+  const serviceLines = cleanServiceLines(body.services);
   let tcv, acv;
   if (tcvManual) {
     // Hand-typed TCV has no service breakdown, so annualise the whole value evenly.
     tcv = parseFloat(body.potential_tcv_lakhs) || 0;
     acv = tcv && years ? +(tcv / years).toFixed(2) : 0;
   } else {
-    // Auto-calc from services. OPEX is annualised across the contract term, CAPEX (one-time) is
-    // realised in full in year 1 → first-year ACV = OPEX/years + full CAPEX. Surveillance and custom
-    // units use their JSON services list; signage/jhes use their per-service columns.
-    const { opexLakhs, capexLakhs } = useJsonServices
-      ? computeSurveillanceBreakdown(survServices, months)
-      : computeTcvBreakdown(body);
-    tcv = +(opexLakhs + capexLakhs).toFixed(2);
-    const opexPerYear = years ? opexLakhs / years : opexLakhs;
-    acv = +(opexPerYear + capexLakhs).toFixed(2);
+    const totals = computeServicesTotals(serviceLines, months);
+    tcv = totals.tcvLakhs;
+    acv = totals.acvLakhs;
   }
   const phase = body.phase || 'New';
 
-  const svcQty = (included, qty) => (included && qty) ? (parseInt(qty, 10) || 0) : 0;
-  const platformQty = svcQty(body.includes_platform, body.platform_qty);
-  const cmsQty = svcQty(body.includes_cms, body.cms_qty);
-  const connQty = svcQty(body.includes_connectivity, body.connectivity_qty);
-  const displayQty = svcQty(body.includes_display, body.display_qty);
-  const deviceQty = svcQty(body.includes_device, body.device_qty);
-  const amcQty = svcQty(body.includes_amc, body.amc_qty);
-  const installationQty = svcQty(body.includes_installation, body.installation_qty);
-  const iptvQty = svcQty(body.includes_iptv, body.iptv_qty);
-  const jhesQty = svcQty(body.includes_jhes, body.jhes_qty);
-  // `quantity` stays the sum of the original hardware/service lines so the device Forecast
-  // (which falls back to it) is unaffected; AMC/installation counts live in their own columns.
-  const totalQty = platformQty + cmsQty + connQty + displayQty + deviceQty;
+  // `quantity` = total hardware units across the lead, the Inventory Pipeline's fallback count.
+  const totalQty = serviceLines.reduce((n, l) => n + (l.hw ? (parseInt(l.hw.qty, 10) || 0) : 0), 0);
 
   const phaseChanged = isCreate || (existing && existing.phase !== phase);
   const inactivePhase = ['PO Received', 'Lost'].includes(phase);
@@ -214,6 +196,8 @@ function normalizePayload(body, { isCreate, existing }) {
     kam_name: body.lead_source === 'KAM' ? (body.kam_name || null) : null,
     affiliate_name: body.lead_source === 'Lead Affiliate' ? (body.affiliate_name || null) : null,
     new_or_renewal: body.new_or_renewal || null,
+    // Link a Renewal PO back to the specific PO it renews (set by the + Additional PO → Renewal flow).
+    renewed_from_lead_id: body.renewed_from_lead_id ? (parseInt(body.renewed_from_lead_id, 10) || null) : null,
     lead_temperature: body.lead_temperature || null,
     competitor: body.competitor || null,
     quantity: totalQty,
@@ -229,45 +213,17 @@ function normalizePayload(body, { isCreate, existing }) {
     next_followup_date: inactivePhase
       ? null
       : (body.next_followup_date || (phaseChanged ? defaultFollowup() : (existing ? existing.next_followup_date : defaultFollowup()))),
-    includes_platform: !!body.includes_platform,
-    includes_cms: !!body.includes_cms,
-    includes_connectivity: !!body.includes_connectivity,
-    includes_display: !!body.includes_display,
-    includes_device: !!body.includes_device,
-    includes_amc: !!body.includes_amc,
-    includes_installation: !!body.includes_installation,
-    includes_iptv: !!body.includes_iptv,
-    includes_jhes: !!body.includes_jhes,
-    platform_rate: body.includes_platform && body.platform_rate ? parseFloat(body.platform_rate) : null,
-    cms_rate: body.includes_cms && body.cms_rate ? parseFloat(body.cms_rate) : null,
-    connectivity_rate: body.includes_connectivity && body.connectivity_rate ? parseFloat(body.connectivity_rate) : null,
-    display_rate: body.includes_display && body.display_rate ? parseFloat(body.display_rate) : null,
-    device_rate: body.includes_device && body.device_rate ? parseFloat(body.device_rate) : null,
-    amc_rate: body.includes_amc && body.amc_rate ? parseFloat(body.amc_rate) : null,
-    installation_rate: body.includes_installation && body.installation_rate ? parseFloat(body.installation_rate) : null,
-    iptv_rate: body.includes_iptv && body.iptv_rate ? parseFloat(body.iptv_rate) : null,
-    jhes_rate: body.includes_jhes && body.jhes_rate ? parseFloat(body.jhes_rate) : null,
-    platform_qty: platformQty || null,
-    cms_qty: cmsQty || null,
-    connectivity_qty: connQty || null,
-    display_qty: displayQty || null,
-    device_qty: deviceQty || null,
-    amc_qty: amcQty || null,
-    installation_qty: installationQty || null,
-    iptv_qty: iptvQty || null,
-    jhes_qty: jhesQty || null,
-    // JHES only: a device quantity of 0 is a valid value (device bundled at no unit count), so persist
-    // it as 0 rather than nulling it. Other businesses keep the "0 → null" behaviour.
-    ...(body.business_unit === 'jhes' && body.includes_device ? { device_qty: deviceQty } : {}),
-    device_sku: body.includes_device ? (body.device_sku || null) : null,
-    // Device cost nature: BD's choice, defaulting to capex when a device is included; null otherwise.
-    device_cost_type: body.includes_device ? (body.device_cost_type === 'opex' ? 'opex' : 'capex') : null,
-    device_requested_date: body.includes_device ? (body.device_requested_date || null) : null,
-    jhes_product: body.business_unit === 'jhes' ? (body.jhes_product || null) : null,
-    services_json: useJsonServices ? JSON.stringify(survServices || []) : null,
-    // Custom field values (admin-defined fields with no dedicated column), keyed by slug. Only custom
-    // business units use this; the three originals leave it null.
-    custom_fields: (!isOriginalBu && body.custom_fields && typeof body.custom_fields === 'object')
+    // Device Expected Date — when the hardware for this deal is expected (drives Inventory Pipeline
+    // sorting). Captured on the lead regardless of category; save whatever the client sent.
+    device_requested_date: body.device_requested_date || null,
+    // Unified Services Offered storage: the validated line list for EVERY business. The legacy
+    // per-service columns (includes_*, *_rate, *_qty, device_*) are no longer written — they were
+    // cleared by migration 038 and stay at their defaults.
+    services_json: JSON.stringify(serviceLines),
+    // Custom field values (admin-defined fields with no dedicated column), keyed by slug. Any business
+    // unit — including the three originals — may add custom fields via Edit Template, so all of them
+    // persist here. When the client sends no map, preserve whatever was already stored.
+    custom_fields: (body.custom_fields && typeof body.custom_fields === 'object')
       ? body.custom_fields
       : (existing ? existing.custom_fields : null),
     additional_notes: body.additional_notes || null,
@@ -279,12 +235,14 @@ function normalizePayload(body, { isCreate, existing }) {
     // Service period is captured only once a deal is won (PO Received).
     service_start_date: phase === 'PO Received' ? (body.service_start_date || null) : null,
     service_end_date: phase === 'PO Received' ? (body.service_end_date || null) : null,
+    billing_cycle: phase === 'PO Received' ? (body.billing_cycle || null) : null,
+    payment_terms: phase === 'PO Received' ? (body.payment_terms || null) : null,
   };
 
   // Phase date handling — only touched on an actual phase transition.
   if (phaseChanged) {
     const dateCol = PHASE_DATE_MAP[phase];
-    const clamped = clampPhaseDate(body.phase_date, phase);
+    const clamped = clampPhaseDate(body.phase_date, phase, role);
     payload.phase_changed_at = new Date(`${clamped}T12:00:00`);
     if (dateCol) payload[dateCol] = clamped;
   } else if (existing) {
@@ -338,21 +296,27 @@ function valuesEqual(o, n) {
 
 // `actor` is the full req.user, not a name string: names repeat across accounts (two are called
 // "PMO") and can be renamed, so the id and email are what actually identify who made the change.
+// Values that read as "nothing" (null, undefined, '', false, 0, '0'). Used to skip no-op diffs
+// where a legacy column transitions from falsy-stored to falsy-missing — that's not a real change.
+function isEmptyish(v) {
+  return v === null || v === undefined || v === '' || v === false || v === 0 || v === '0';
+}
+
 function diffActivity(before, after, leadId, srNo, customerName, actor) {
   const rows = [];
   for (const [key, label] of Object.entries(FIELD_LABELS)) {
     const o = before ? before[key] : undefined;
     const n = after[key];
+    if (valuesEqual(o, n)) continue;
+    if (isEmptyish(o) && isEmptyish(n)) continue; // both effectively empty — not a real change
     const os = o === null || o === undefined ? '' : String(o);
     const ns = n === null || n === undefined ? '' : String(n);
-    if (!valuesEqual(o, n)) {
-      rows.push({
-        lead_id: leadId, lead_sr_no: srNo, customer_name: customerName,
-        user_name: actor?.name, user_id: actor?.id ?? null, user_email: actor?.email ?? null,
-        action_type: key === 'phase' ? 'phase_change' : 'field_update',
-        field_changed: label, old_value: os || '(empty)', new_value: ns || '(empty)',
-      });
-    }
+    rows.push({
+      lead_id: leadId, lead_sr_no: srNo, customer_name: customerName,
+      user_name: actor?.name, user_id: actor?.id ?? null, user_email: actor?.email ?? null,
+      action_type: key === 'phase' ? 'phase_change' : 'field_update',
+      field_changed: label, old_value: os || '(empty)', new_value: ns || '(empty)',
+    });
   }
   return rows;
 }
@@ -384,14 +348,93 @@ router.get('/', canReadLeadData, async (req, res) => {
       where,
       include: [
         { model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] },
-        // Contacts (POCs) are included in the list now so the Leads export can carry them. The list
-        // is already scoped to what the caller may see (a BD only gets their own leads), so this
-        // exposes no contact the caller couldn't already open on the lead itself.
         { model: LeadContact, as: 'contacts', attributes: ['name', 'phone', 'email', 'designation'] },
       ],
       order: [['sr_no', 'ASC']],
     });
-    return res.json(leads);
+    const slaMap = await slaMapFor(req.user.business_unit);
+    const now = new Date();
+    const result = leads.map(l => {
+      const j = l.toJSON();
+      const live = computeConfidence(j, slaMap, now);
+      if (live !== null) j.confidence_score = live;
+      return j;
+    });
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// --------------------------------------------------------------------------
+// GET /api/leads/customers
+//
+// Customer → Location roll-up for the Customers tab on the Leads page. Scoped the same way as
+// GET /leads (leadScopeWhere), so a BD sees only their own customers. Returns:
+//   [{ customer_code, customer_name, totals, locations: [{ location_code, city, state, totals,
+//      sources: { 'Channel Partner': [...names], 'KAM': [...names] }, lead_ids: [...] }] }]
+// totals = { leads, open, won, lost, openTCV, wonTCV }
+// --------------------------------------------------------------------------
+router.get('/customers', canReadLeadData, async (req, res) => {
+  try {
+    const where = leadScopeWhere(req.user);
+    const rows = await Lead.findAll({
+      where,
+      attributes: [
+        'id', 'customer_code', 'customer_name', 'location_code', 'city', 'state',
+        'phase', 'potential_tcv_lakhs', 'po_actual_value_lakhs',
+        'lead_source', 'channel_partner_name', 'kam_name', 'affiliate_name',
+      ],
+      order: [['customer_code', 'ASC'], ['location_code', 'ASC'], ['id', 'ASC']],
+    });
+
+    const emptyTotals = () => ({ leads: 0, open: 0, won: 0, lost: 0, openTCV: 0, wonTCV: 0 });
+    const addTotals = (totals, l) => {
+      totals.leads += 1;
+      const tcv = parseFloat(l.potential_tcv_lakhs) || 0;
+      const paid = parseFloat(l.po_actual_value_lakhs) || tcv;
+      if (l.phase === 'PO Received') { totals.won += 1; totals.wonTCV += paid; }
+      else if (l.phase === 'Lost')   { totals.lost += 1; }
+      else { totals.open += 1; totals.openTCV += tcv; }
+    };
+
+    const byCustomer = new Map();
+    for (const l of rows) {
+      const cc = l.customer_code || 'UNCODED';
+      let cust = byCustomer.get(cc);
+      if (!cust) {
+        cust = { customer_code: cc, customer_name: l.customer_name, totals: emptyTotals(), locations: new Map() };
+        byCustomer.set(cc, cust);
+      }
+      addTotals(cust.totals, l);
+      const lc = l.location_code || 'UNK';
+      let loc = cust.locations.get(lc);
+      if (!loc) {
+        loc = { location_code: lc, city: l.city || '', state: l.state || '', totals: emptyTotals(), sources: {}, lead_ids: [] };
+        cust.locations.set(lc, loc);
+      }
+      addTotals(loc.totals, l);
+      loc.lead_ids.push(l.id);
+      // Capture the specific source name (Channel Partner / KAM / Affiliate) so the UI can show it.
+      if (l.lead_source) {
+        const name = l.channel_partner_name || l.kam_name || l.affiliate_name || null;
+        if (!loc.sources[l.lead_source]) loc.sources[l.lead_source] = new Set();
+        if (name) loc.sources[l.lead_source].add(name);
+      }
+    }
+
+    // Flatten Maps -> arrays, Sets -> arrays.
+    const out = [...byCustomer.values()].map(c => ({
+      customer_code: c.customer_code,
+      customer_name: c.customer_name,
+      totals: c.totals,
+      locations: [...c.locations.values()].map(l => ({
+        ...l,
+        sources: Object.fromEntries(Object.entries(l.sources).map(([k, v]) => [k, [...v]])),
+      })),
+    })).sort((a, b) => a.customer_name.localeCompare(b.customer_name));
+
+    return res.json(out);
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -413,7 +456,11 @@ router.get('/:id', canReadLeadData, async (req, res) => {
     });
     if (!lead) return res.status(404).json({ message: 'Lead not found' });
     if (req.user.role === 'bd' && lead.owner_id !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
-    return res.json(lead);
+    const j = lead.toJSON();
+    const slaMap = await slaMapFor(j.business_unit);
+    const live = computeConfidence(j, slaMap, new Date());
+    if (live !== null) j.confidence_score = live;
+    return res.json(j);
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -428,7 +475,7 @@ router.post('/', requireModule('leads', 'full'), async (req, res) => {
     const body = { ...req.body };
     if (req.user.role === 'bd') body.owner_id = req.user.id; // BDs can only create leads for themselves
 
-    const { payload } = normalizePayload(body, { isCreate: true });
+    const { payload } = normalizePayload(body, { isCreate: true, role: req.user.role });
 
     // Validate the chain link (if any): the Global PO must exist and belong to the same business.
     if (payload.global_po_id) {
@@ -440,11 +487,13 @@ router.post('/', requireModule('leads', 'full'), async (req, res) => {
     }
 
     // Confidence scoring: stamp last-activity + hold fields, then compute the initial confidence.
-    applyHoldTransition(payload, null, true, body);
+    // A create is always a touchpoint, so phaseChanged=true.
+    applyHoldTransition(payload, null, true, body, new Date(), true);
     Object.assign(payload, await scoringFieldsForSave(payload, null));
 
     const maxSrNo = await Lead.max('sr_no') || 0;
-    const lead = await Lead.create({ ...payload, sr_no: maxSrNo + 1, created_by: req.user.id, updated_by: req.user.id }, { transaction: t });
+    const codes = await assignLeadCodes(payload.business_unit || req.user.business_unit, payload.customer_name, payload.city, payload.state, t);
+    const lead = await Lead.create({ ...payload, sr_no: maxSrNo + 1, ...codes, created_by: req.user.id, updated_by: req.user.id }, { transaction: t });
     await ensureSourceNameOptions(payload, t);
 
     // Contacts
@@ -471,6 +520,24 @@ router.post('/', requireModule('leads', 'full'), async (req, res) => {
 
     await t.commit();
     const full = await Lead.findByPk(lead.id, { include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] }] });
+
+    // Fire-and-forget notifications (never blocks the response).
+    const nCtx = { lead: { id: lead.id, sr_no: lead.sr_no, customer_name: lead.customer_name, owner_id: lead.owner_id }, actor: req.user, businessUnit: req.user.business_unit };
+    leadNotif.onLeadCreated(nCtx).catch(() => {});
+    if (payload.renewed_from_lead_id) {
+      renewalNotif.onRenewalCreated({ ...nCtx, originalLeadId: payload.renewed_from_lead_id }).catch(() => {});
+    }
+
+    if (payload.additional_notes) {
+      const { processMentions } = require('../services/mentions');
+      processMentions({
+        text: payload.additional_notes, oldText: null,
+        businessUnit: req.user.business_unit, actorId: req.user.id,
+        entityType: 'lead', entityLabel: `PO #${lead.sr_no} "${lead.customer_name}"`,
+        linkPath: `/leads?lead=${lead.id}`,
+      }).catch(() => {});
+    }
+
     return res.status(201).json(full);
   } catch (err) {
     await t.rollback();
@@ -499,7 +566,7 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
     if (req.user.role === 'bd') body.owner_id = existing.owner_id; // BDs cannot reassign leads
 
     const before = existing.toJSON();
-    const { payload, phaseChanged, fromPhase } = normalizePayload(body, { isCreate: false, existing: before });
+    const { payload, phaseChanged, fromPhase } = normalizePayload(body, { isCreate: false, existing: before, role: req.user.role });
 
     // Validate the chain link (if any): the Global PO must exist and belong to the same business.
     if (payload.global_po_id) {
@@ -510,10 +577,19 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
       }
     }
 
-    // Confidence scoring: apply the On-Hold freeze/resume transition + last-activity stamp, then
-    // recompute confidence (a save is a touchpoint → active leads reset to their stage base weight).
-    applyHoldTransition(payload, before, false, body);
+    // Confidence scoring: apply the On-Hold freeze/resume transition + last-activity stamp (only
+    // on a real phase transition — routine field edits inherit the previous last_activity_at so
+    // decayed leads stay decayed), then recompute confidence.
+    applyHoldTransition(payload, before, false, body, new Date(), phaseChanged);
     Object.assign(payload, await scoringFieldsForSave(payload, before));
+
+    // Keep the location_code + lead_ref in sync with the lead's current city/state. If the edit moved
+    // the lead to a different location bucket (e.g. a blank city filled in as "Patna"), re-issue both
+    // so Customer -> Location grouping stays correct. customer_code never changes here.
+    const nextCity = payload.city !== undefined ? payload.city : before.city;
+    const nextState = payload.state !== undefined ? payload.state : before.state;
+    const locPatch = await recomputeLocationOnEdit(before, nextCity, nextState, t);
+    if (locPatch) Object.assign(payload, locPatch);
 
     // Use a static UPDATE (not existing.update) so the write does NOT rely on Sequelize's
     // per-instance dirty-tracking. In the mounted (STB) process that dirty-tracking was flagging
@@ -549,6 +625,32 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
 
     await t.commit();
     const full = await Lead.findByPk(existing.id, { include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] }] });
+
+    // Fire-and-forget notifications.
+    const nLead = { id: existing.id, sr_no: existing.sr_no, customer_name: existing.customer_name, owner_id: payload.owner_id || before.owner_id, lost_reason: payload.lost_reason, hold_end_date: payload.hold_end_date };
+    const nCtx = { lead: nLead, actor: req.user, businessUnit: req.user.business_unit };
+    if (phaseChanged) {
+      leadNotif.onPhaseChange({ ...nCtx, fromPhase, toPhase: payload.phase }).catch(() => {});
+      if (payload.phase === 'Lost') leadNotif.onLeadMarkedLost(nCtx).catch(() => {});
+      if (payload.phase === 'On Hold') leadNotif.onLeadOnHold(nCtx).catch(() => {});
+    }
+    if (payload.owner_id && payload.owner_id !== before.owner_id) {
+      leadNotif.onOwnerChange({ ...nCtx, oldOwnerId: before.owner_id, newOwnerId: payload.owner_id }).catch(() => {});
+    }
+    if (payload.po_document_url && payload.po_document_url !== before.po_document_url) {
+      leadNotif.onPoDocumentUploaded(nCtx).catch(() => {});
+    }
+
+    if (payload.additional_notes !== undefined) {
+      const { processMentions } = require('../services/mentions');
+      processMentions({
+        text: payload.additional_notes, oldText: before.additional_notes,
+        businessUnit: req.user.business_unit, actorId: req.user.id,
+        entityType: 'lead', entityLabel: `PO #${existing.sr_no} "${existing.customer_name}"`,
+        linkPath: `/leads?lead=${existing.id}`,
+      }).catch(() => {});
+    }
+
     return res.json(full);
   } catch (err) {
     await t.rollback();
@@ -580,6 +682,9 @@ router.put('/bulk/update', adminOnly, requireModule('leads', 'edit'), async (req
     await Lead.update(updates, { where: { id: { [Op.in]: ids } } });
     // Refresh confidence for the affected leads immediately (recomputes all; cheap at this scale).
     if (phase) { try { await require('../services/scoringEngine').recomputeAll(); } catch (e) { /* non-fatal */ } }
+
+    if (owner_id) leadNotif.onBulkReassign({ ids, newOwnerId: owner_id, actor: req.user, businessUnit: req.user.business_unit }).catch(() => {});
+
     return res.json({ message: `Updated ${ids.length} lead(s)` });
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -617,6 +722,32 @@ const VALID_RENEWAL = ['New', 'Renewal', 'Expansion'];
 const VALID_LOST_REASONS = ['Pricing', 'Competition', 'No Budget', 'No Decision', 'Timing', 'Product Fit', 'Other'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// Build the Services Offered line list for one bulk row from the BU's catalog. Columns are keyed
+// svc:<slug>:rate / :qty (and :hw_rate/:hw_qty/:svc_rate/:svc_qty for Hardware + Software). Nature
+// comes from the catalog default; frequency defaults to monthly (editable later on the lead form).
+function buildServiceLinesFromRow(r, catalog) {
+  const lines = [];
+  const comp = (rate, qty, nature) => {
+    const rr = (rate !== undefined && rate !== '') ? Number(rate) : 0;
+    const qq = (qty !== undefined && qty !== '') ? parseInt(qty, 10) : 0;
+    if ((!rr || Number.isNaN(rr)) && (!qq || Number.isNaN(qq))) return null;
+    return { nature: nature === 'capex' ? 'capex' : 'opex', frequency: 'monthly', rate: Number.isNaN(rr) ? 0 : rr, qty: Number.isNaN(qq) ? 0 : qq };
+  };
+  for (const c of catalog) {
+    const cat = c.category || (c.hardware ? 'hardware' : 'software');
+    const base = `svc:${c.slug}:`;
+    if (cat === 'hardware_software') {
+      const hw = comp(r[`${base}hw_rate`], r[`${base}hw_qty`], c.nature);
+      const svc = comp(r[`${base}svc_rate`], r[`${base}svc_qty`], c.nature);
+      if (hw || svc) lines.push({ category: cat, label: c.label, hw, svc });
+    } else {
+      const one = comp(r[`${base}rate`], r[`${base}qty`], c.nature);
+      if (one) lines.push({ category: cat, label: c.label, hw: cat === 'hardware' ? one : null, svc: cat === 'software' ? one : null });
+    }
+  }
+  return lines;
+}
+
 router.post('/bulk', adminOnly, async (req, res) => {
   const { rows, dryRun = true, business_unit } = req.body;
   const bu = business_unit || req.user.business_unit;
@@ -629,8 +760,18 @@ router.post('/bulk', adminOnly, async (req, res) => {
   }
 
   const users = await User.findAll({ where: { business_unit: bu, active: true }, attributes: ['id', 'email', 'name'] });
-  const userByEmail = {};
-  users.forEach(u => { if (u.email) userByEmail[u.email.toLowerCase().trim()] = u; });
+  // Leads are assigned by owner NAME in the import. Names can repeat, so map each name to the list of
+  // matching users and disambiguate per row (a single match assigns; zero or many is a row error).
+  const usersByName = {};
+  users.forEach(u => { if (u.name) { const k = u.name.toLowerCase().trim(); (usersByName[k] = usersByName[k] || []).push(u); } });
+  // This business's service catalog — drives how the svc:* columns are parsed into services_json.
+  const catalog = await ServiceDefinition.findAll({ where: { business_unit: bu, active: true }, order: [['sort_order', 'ASC']] });
+  // Contacts are required on import only if the template marks a contact field mandatory (same rule
+  // as the lead form). Otherwise contacts are optional.
+  const buRow = await BusinessUnit.findOne({ where: { slug: bu }, attributes: ['config'] });
+  const contactsSec = (buRow?.config?.formSchema?.sections || []).find(s => s.key === 'contacts');
+  const contactFieldReq = (slug) => !!(contactsSec?.fields || []).find(f => f.slug === slug && f.mandatory);
+  const contactsRequired = contactFieldReq('contact_name') || contactFieldReq('contact_email');
 
   const valid = [];
   const errors = [];
@@ -641,18 +782,19 @@ router.post('/bulk', adminOnly, async (req, res) => {
     const errs = [];
 
     const customerName = (r.customer_name || '').trim();
-    const ownerEmail = (r.owner_email || '').trim();
+    const ownerName = (r.owner_name || '').trim();
     const phase = (r.phase || '').trim();
 
     if (!customerName) errs.push({ field: 'Customer Name', message: 'Required' });
-    if (!ownerEmail) errs.push({ field: 'Lead Owner Email', message: 'Required' });
+    if (!ownerName) errs.push({ field: 'Lead Owner', message: 'Required' });
     if (!phase) errs.push({ field: 'Phase', message: 'Required' });
 
     let ownerId = null;
-    if (ownerEmail) {
-      const owner = userByEmail[ownerEmail.toLowerCase()];
-      if (owner) ownerId = owner.id;
-      else errs.push({ field: 'Lead Owner Email', message: `No active user "${ownerEmail}" in this business` });
+    if (ownerName) {
+      const matches = usersByName[ownerName.toLowerCase()] || [];
+      if (matches.length === 1) ownerId = matches[0].id;
+      else if (matches.length === 0) errs.push({ field: 'Lead Owner', message: `No active user "${ownerName}" in this business` });
+      else errs.push({ field: 'Lead Owner', message: `Multiple active users named "${ownerName}" — cannot assign by name. Rename one or assign manually after import.` });
     }
 
     if (phase && !VALID_PHASES.includes(phase)) {
@@ -671,27 +813,22 @@ router.post('/bulk', adminOnly, async (req, res) => {
       errs.push({ field: 'New or Renewal', message: 'Must be New, Renewal, or Expansion' });
     }
 
-    const numericFields = [
-      'tcv_lakhs', 'contract_period_months', 'quantity',
-      'platform_rate', 'platform_qty', 'cms_rate', 'cms_qty',
-      'connectivity_rate', 'connectivity_qty', 'amc_rate', 'amc_qty',
-      'display_rate', 'display_qty', 'installation_rate', 'installation_qty',
-      'jhes_rate', 'jhes_qty', 'iptv_rate', 'iptv_qty',
-      'device_rate', 'device_qty', 'po_actual_value_lakhs',
-    ];
+    const numericFields = ['tcv_lakhs', 'contract_period_months', 'quantity', 'po_actual_value_lakhs'];
     for (const nf of numericFields) {
       if (r[nf] !== undefined && r[nf] !== '' && isNaN(Number(r[nf]))) {
         errs.push({ field: nf, message: 'Must be a number' });
       }
     }
-
-    const dateFields = ['next_followup_date', 'po_expected_date', 'hold_end_date', 'service_start_date', 'service_end_date', 'device_requested_date'];
-    for (const df of dateFields) {
-      if (r[df] && !DATE_RE.test(r[df])) errs.push({ field: df, message: 'Date must be YYYY-MM-DD' });
+    // Catalog service rate/qty columns (svc:<slug>:...) must be numeric when provided.
+    for (const [key, val] of Object.entries(r)) {
+      if (key.startsWith('svc:') && val !== undefined && val !== '' && isNaN(Number(val))) {
+        errs.push({ field: key, message: 'Must be a number' });
+      }
     }
 
-    if (r.device_cost_type && !['capex', 'opex'].includes(r.device_cost_type.toLowerCase())) {
-      errs.push({ field: 'Device Cost Type', message: 'Must be capex or opex' });
+    const dateFields = ['next_followup_date', 'po_expected_date', 'po_received_date', 'hold_end_date', 'service_start_date', 'service_end_date', 'device_requested_date'];
+    for (const df of dateFields) {
+      if (r[df] && !DATE_RE.test(r[df])) errs.push({ field: df, message: 'Date must be YYYY-MM-DD' });
     }
 
     const contacts = [];
@@ -704,7 +841,7 @@ router.post('/bulk', adminOnly, async (req, res) => {
         contacts.push({ name: cn, email: ce, phone: (r[`contact_${c}_phone`] || '').trim() || null, designation: (r[`contact_${c}_designation`] || '').trim() || null });
       }
     }
-    if (contacts.length === 0) errs.push({ field: 'Contact 1 Name', message: 'At least one contact with Name and Email required' });
+    if (contactsRequired && contacts.length === 0) errs.push({ field: 'Contact 1 Name', message: 'At least one contact with Name and Email required' });
 
     if (errs.length > 0) {
       errors.push({ row: rowNum, errors: errs });
@@ -737,6 +874,7 @@ router.post('/bulk', adminOnly, async (req, res) => {
         phase,
         next_followup_date: r.next_followup_date || null,
         po_expected_date: r.po_expected_date || null,
+        po_received_date: phase === 'PO Received' ? (r.po_received_date || null) : null,
         lost_reason: phase === 'Lost' ? optStr(r.lost_reason) : null,
         hold_end_date: phase === 'On Hold' ? (r.hold_end_date || null) : null,
         contract_period_months: optNum(r.contract_period_months),
@@ -745,25 +883,19 @@ router.post('/bulk', adminOnly, async (req, res) => {
         po_actual_value_lakhs: optNum(r.po_actual_value_lakhs),
         service_start_date: r.service_start_date || null,
         service_end_date: r.service_end_date || null,
+        billing_cycle: phase === 'PO Received' ? (optStr(r.billing_cycle) || null) : null,
+        payment_terms: phase === 'PO Received' ? (optStr(r.payment_terms) || null) : null,
         additional_notes: optStr(r.additional_notes),
-        jhes_product: optStr(r.jhes_product),
-        // Services
-        includes_platform: parseBool(r.includes_platform), platform_rate: optNum(r.platform_rate), platform_qty: optNum(r.platform_qty),
-        includes_cms: parseBool(r.includes_cms), cms_rate: optNum(r.cms_rate), cms_qty: optNum(r.cms_qty),
-        includes_connectivity: parseBool(r.includes_connectivity), connectivity_rate: optNum(r.connectivity_rate), connectivity_qty: optNum(r.connectivity_qty),
-        includes_amc: parseBool(r.includes_amc), amc_rate: optNum(r.amc_rate), amc_qty: optNum(r.amc_qty),
-        includes_display: parseBool(r.includes_display), display_rate: optNum(r.display_rate), display_qty: optNum(r.display_qty),
-        includes_installation: parseBool(r.includes_installation), installation_rate: optNum(r.installation_rate), installation_qty: optNum(r.installation_qty),
-        includes_jhes: parseBool(r.includes_jhes), jhes_rate: optNum(r.jhes_rate), jhes_qty: optNum(r.jhes_qty),
-        includes_iptv: parseBool(r.includes_iptv), iptv_rate: optNum(r.iptv_rate), iptv_qty: optNum(r.iptv_qty),
-        // Device
-        includes_device: parseBool(r.includes_device), device_sku: optStr(r.device_sku),
-        device_cost_type: r.device_cost_type ? r.device_cost_type.toLowerCase().trim() : null,
-        device_rate: optNum(r.device_rate), device_qty: optNum(r.device_qty),
         device_requested_date: r.device_requested_date || null,
         _contacts: contacts,
         _rowNum: i + 2,
       };
+
+      // Unified Services Offered — build the line list from the catalog columns, store as JSON, and
+      // set the hardware-unit total used by the Inventory Pipeline fallback.
+      const serviceLines = cleanServiceLines(buildServiceLinesFromRow(r, catalog));
+      leadData.services_json = JSON.stringify(serviceLines);
+      leadData.quantity = serviceLines.reduce((n, l) => n + (l.hw ? (parseInt(l.hw.qty, 10) || 0) : 0), 0);
 
       // Extract custom_xxx fields into a JSON object for storage in custom_fields column
       const customFields = {};
@@ -775,17 +907,16 @@ router.post('/bulk', adminOnly, async (req, res) => {
       if (Object.keys(customFields).length > 0) leadData.custom_fields = customFields;
 
       if (r.tcv_lakhs !== undefined && r.tcv_lakhs !== '') {
+        const months = optNum(r.contract_period_months);
+        const years = months ? months / 12 : null;
         leadData.potential_tcv_lakhs = Number(r.tcv_lakhs);
+        leadData.acv_lakhs = (leadData.potential_tcv_lakhs && years) ? +(leadData.potential_tcv_lakhs / years).toFixed(2) : 0;
         leadData.tcv_manual = true;
       } else {
-        const autoTcv = computeTcvLakhs(leadData);
-        if (autoTcv > 0) {
-          leadData.potential_tcv_lakhs = autoTcv;
-          leadData.tcv_manual = false;
-        } else {
-          leadData.potential_tcv_lakhs = null;
-          leadData.tcv_manual = true;
-        }
+        const totals = computeServicesTotals(serviceLines, optNum(r.contract_period_months));
+        leadData.potential_tcv_lakhs = totals.tcvLakhs || null;
+        leadData.acv_lakhs = totals.acvLakhs || 0;
+        leadData.tcv_manual = totals.tcvLakhs > 0 ? false : true;
       }
 
       valid.push(leadData);
@@ -807,18 +938,23 @@ router.post('/bulk', adminOnly, async (req, res) => {
       delete row._contacts;
       delete row._rowNum;
 
+      // For an imported PO Received lead with a real PO Received Date, anchor phase_changed_at to that
+      // historical date so weekly/monthly performance (which uses po_received_date, falling back to
+      // phase_changed_at) reflects when the PO actually landed — not the import date.
+      const historicalPhaseDate = (row.phase === 'PO Received' && row.po_received_date) ? new Date(row.po_received_date) : new Date();
       const payload = {
         ...row,
         sr_no: maxSr,
         po_type: 'individual',
-        phase_changed_at: new Date(),
+        phase_changed_at: historicalPhaseDate,
         last_activity_at: new Date(),
         created_by: req.user.id,
         updated_by: req.user.id,
       };
 
-      applyHoldTransition(payload, null, true, row);
+      applyHoldTransition(payload, null, true, row, new Date(), true);
       Object.assign(payload, await scoringFieldsForSave(payload, null));
+      Object.assign(payload, await assignLeadCodes(payload.business_unit || bu, payload.customer_name, payload.city, payload.state, t));
 
       const lead = await Lead.create(payload, { transaction: t });
       await ensureSourceNameOptions(payload, t);

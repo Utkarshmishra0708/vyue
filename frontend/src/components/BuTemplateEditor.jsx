@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getBusinessUnitConfig, getBuCatalog, updateBusinessUnit } from '../services/api';
-import { SectionCard, SelectAllRow, ov } from './BuWizard';
+import { SectionCard, SelectAllRow, ov, ServiceCategoryBuilder, SERVICE_CATEGORIES } from './BuWizard';
 
 // Edit an existing business unit's lead-intake TEMPLATE (its sectioned fields). Works for every
 // business: the three originals get a template generated from their current fields (so they're
@@ -8,11 +8,15 @@ import { SectionCard, SelectAllRow, ov } from './BuWizard';
 // PUT /business-units/:slug. Custom fields added here store their values in leads.custom_fields.
 const slugify = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
 
+// Modules that default to ON when a BU has no explicit config.modules — mirrors the backend's
+// OPT_IN_MODULES set. Keep the two in sync so the toggles reflect the true resolved state.
+const OPT_IN_MODULES = new Set(['activities']);
+
 export default function BuTemplateEditor({ bu, onClose, onSaved }) {
   const [catalog, setCatalog] = useState(null);
   const [sections, setSections] = useState(null);
-  const [services, setServices] = useState([]);   // [{ slug, label, nature, enabled, custom }]
-  const [svcDraft, setSvcDraft] = useState({ label: '', nature: 'opex' });
+  const [services, setServices] = useState([]);   // [{ slug, label, nature, category, enabled }]
+  const [modules, setModules] = useState([]);      // [{ slug, label, core, enabled }]
   const [isOriginal, setIsOriginal] = useState(false);
   const [newSection, setNewSection] = useState('');
   const [busy, setBusy] = useState(false);
@@ -23,28 +27,43 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
       .then(([cfg, cat]) => {
         setCatalog(cat);
         setIsOriginal(cfg.isOriginal);
-        setSections((cfg.formSchema.sections || []).map(s => ({ ...s, collapsed: true, fields: s.fields.map(f => ({ ...f })) })));
-        // Services: the union catalog with this unit's currently-enabled ones ticked, plus any of the
-        // unit's custom services that aren't in the union.
-        const current = new Map((cfg.services || []).map(s => [s.slug, s]));
-        const union = (cat.services || []).map(s => ({ slug: s.slug, label: s.label, nature: current.get(s.slug)?.nature || s.nature, hardware: !!current.get(s.slug)?.hardware, enabled: current.has(s.slug) }));
-        for (const s of (cfg.services || [])) if (!union.some(u => u.slug === s.slug)) union.push({ slug: s.slug, label: s.label, nature: s.nature, hardware: !!s.hardware, enabled: true, custom: true });
-        setServices(union);
+        // Load the saved schema, then MERGE any catalog sections it's missing (e.g. a section added
+        // to the product after this business was created, like Contacts (POC)) so nothing in the
+        // lead form is absent from the editor. New sections come in enabled with their catalog fields.
+        const saved = (cfg.formSchema.sections || []).map(s => ({ ...s, collapsed: true, fields: s.fields.map(f => ({ ...f })) }));
+        const savedKeys = new Set(saved.map(s => s.key));
+        for (const cs of (cat.fieldSections || [])) {
+          if (savedKeys.has(cs.key)) continue;
+          saved.push({ key: cs.key, label: cs.label, enabled: true, custom: false, collapsed: true,
+            fields: cs.fields.map(f => ({ ...f, enabled: true, mandatory: false })) });
+        }
+        setSections(saved);
+        // Services: load ONLY this business's own catalog (not the union of every business), grouped by
+        // category. The admin builds/edits it per category — add a device/service, remove one, set its
+        // default OPEX/CAPEX. All loaded items are enabled (they ARE this business's catalog).
+        const catOf = (s) => s?.category || (s?.hardware ? 'hardware' : 'software');
+        setServices((cfg.services || []).map(s => ({ slug: s.slug, label: s.label, nature: s.nature, category: catOf(s), enabled: true })));
+        // Modules: seed from the catalog with each unit's stored enablement applied on top. A module
+        // absent from stored modules follows the backend default (opt-in modules off, others on).
+        const storedMap = new Map((cfg.modules || []).map(m => [m.slug, !!m.enabled]));
+        setModules((cat.modules || []).map(m => ({
+          slug: m.slug, label: m.label, core: !!m.core,
+          enabled: storedMap.has(m.slug) ? storedMap.get(m.slug) : (m.core || !OPT_IN_MODULES.has(m.slug)),
+        })));
       })
       .catch(e => setErr(e.response?.data?.message || 'Could not load the template.'));
   }, [bu.slug]);
 
-  const toggleService = (slug) => setServices(ss => ss.map(s => s.slug === slug ? { ...s, enabled: !s.enabled } : s));
-  const setServiceNature = (slug, nature) => setServices(ss => ss.map(s => s.slug === slug ? { ...s, nature } : s));
-  const toggleHardware = (slug) => setServices(ss => ss.map(s => s.slug === slug ? { ...s, hardware: !s.hardware } : s));
-  const addCustomService = () => {
-    const label = svcDraft.label.trim();
-    if (!label) return;
-    const slug = slugify(label);
-    if (services.some(s => s.slug === slug)) { setSvcDraft({ label: '', nature: 'opex' }); return; }
-    setServices(ss => [...ss, { slug, label, nature: svcDraft.nature, enabled: true, custom: true }]);
-    setSvcDraft({ label: '', nature: 'opex' });
+  const toggleModule = (slug) => setModules(ms => ms.map(m => m.slug === slug ? { ...m, enabled: !m.enabled } : m));
+
+  const addService = (category, label, nature) => {
+    const name = String(label || '').trim();
+    if (!name) return;
+    const slug = slugify(name);
+    setServices(ss => ss.some(s => s.slug === slug) ? ss : [...ss, { slug, label: name, nature: nature || 'opex', category, enabled: true }]);
   };
+  const removeService = (slug) => setServices(ss => ss.filter(s => s.slug !== slug));
+  const setServiceNature = (slug, nature) => setServices(ss => ss.map(s => s.slug === slug ? { ...s, nature } : s));
 
   const patchSection = (key, fn) => setSections(secs => secs.map(s => s.key === key ? fn(s) : s));
   const toggleSection = (key) => patchSection(key, s => ({ ...s, enabled: !s.enabled }));
@@ -79,8 +98,9 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
         key: sec.key, label: sec.label, enabled: sec.enabled, custom: !!sec.custom,
         fields: sec.fields.map(f => ({ slug: f.slug, label: f.label, type: f.type, options: f.options || null, core: !!f.core, custom: !!f.custom, enabled: f.enabled, mandatory: f.mandatory })),
       })) };
-      const svc = services.map(s => ({ slug: s.slug, label: s.label, nature: s.nature, hardware: !!s.hardware, enabled: s.enabled }));
-      await updateBusinessUnit(bu.slug, { config: { formSchema, services: svc } });
+      const svc = services.map(s => ({ slug: s.slug, label: s.label, nature: s.nature, category: s.category || 'software', hardware: s.category === 'hardware' || s.category === 'hardware_software', enabled: s.enabled }));
+      const mods = modules.map(m => ({ slug: m.slug, enabled: !!m.enabled }));
+      await updateBusinessUnit(bu.slug, { config: { formSchema, services: svc, modules: mods } });
       onSaved();
     } catch (e) {
       setErr(e.response?.data?.message || 'Could not save the template.');
@@ -88,9 +108,11 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
     }
   };
 
+  // Deliberately NO close-on-backdrop-click: a stray click outside must not discard
+  // in-progress template edits. Use the × or Cancel button to close.
   return (
-    <div onClick={onClose} style={ov.backdrop}>
-      <div onClick={e => e.stopPropagation()} style={{ ...ov.modal, maxWidth: 580 }}>
+    <div style={ov.backdrop}>
+      <div style={{ ...ov.modal, maxWidth: 580 }}>
         <div style={{ padding: '18px 22px 12px', borderBottom: '1px solid #f1f5f9' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Edit Lead Template — {bu.name}</h2>
@@ -121,44 +143,34 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
           )}
 
           {sections && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>Services Offered</div>
+              <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 10px' }}>Build this business's catalog by category. Items appear on its New Lead form, grouped the same way; the default OPEX/CAPEX pre-fills the lead line. <b>Hardware</b> and <b>Hardware + Software</b> flow into the Inventory Pipeline — <b>Software / Service</b> does not.</p>
+              {SERVICE_CATEGORIES.map(cat => (
+                <ServiceCategoryBuilder key={cat.key}
+                  category={cat}
+                  items={services.filter(s => (s.category || 'software') === cat.key)}
+                  onAdd={(label, nature) => addService(cat.key, label, nature)}
+                  onRemove={removeService}
+                  onNature={setServiceNature} />
+              ))}
+            </div>
+          )}
+
+          {modules.length > 0 && (
             <div style={{ border: '1px solid #e5e9f0', borderRadius: 10, marginTop: 16 }}>
               <div style={{ padding: '9px 12px', background: '#f8fafc', borderRadius: '10px 10px 0 0', fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                Services Offered <span style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8' }}>({services.filter(s => s.enabled).length} selected)</span>
+                Modules <span style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8' }}>({modules.filter(m => m.enabled).length} of {modules.length} enabled)</span>
               </div>
               <div style={{ padding: '8px 12px' }}>
-                <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 8px' }}>Tick the services this business sells (with OPEX/CAPEX), or add your own. These appear on its New Lead form with rate/qty.</p>
-                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>!</span>
-                  <span style={{ fontSize: 12, color: '#92400e', fontWeight: 600 }}>Hardware / Inventory: Check the "HW" box only for services that are hardware or require inventory planning. Only those will flow into the Inventory Pipeline.</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 50px', gap: '4px 10px', alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Service</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textAlign: 'center' }}>Type</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textAlign: 'center' }}>HW</span>
-                </div>
-                {services.map(s => (
-                  <div key={s.slug} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 50px', gap: '4px 10px', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={s.enabled} onChange={() => toggleService(s.slug)} />
-                      <span style={{ fontSize: 13, color: s.enabled ? '#0f172a' : '#94a3b8' }}>{s.label}{s.custom && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, background: '#ecfdf5', color: '#047857', padding: '1px 6px', borderRadius: 999 }}>CUSTOM</span>}</span>
-                    </label>
-                    <select value={s.nature} disabled={!s.enabled} onChange={e => setServiceNature(s.slug, e.target.value)} style={{ ...ov.input, margin: 0, width: 100, padding: '5px 8px' }}>
-                      <option value="opex">OPEX</option><option value="capex">CAPEX</option>
-                    </select>
-                    <div style={{ textAlign: 'center' }}>
-                      <input type="checkbox" checked={!!s.hardware} disabled={!s.enabled} onChange={() => toggleHardware(s.slug)}
-                        title="Mark as hardware / inventory item" style={{ accentColor: '#f59e0b', width: 16, height: 16 }} />
-                    </div>
-                  </div>
+                <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 8px' }}>Turn modules on or off for this business. Core modules (Leads, Dashboard) can't be disabled — everyone needs them.</p>
+                {modules.map(m => (
+                  <label key={m.slug} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #f1f5f9', cursor: m.core ? 'not-allowed' : 'pointer' }}>
+                    <input type="checkbox" checked={m.enabled} disabled={m.core} onChange={() => toggleModule(m.slug)} />
+                    <span style={{ fontSize: 13, color: m.enabled ? '#0f172a' : '#94a3b8', flex: 1 }}>{m.label}</span>
+                    {m.core && <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', background: '#f1f5f9', padding: '1px 8px', borderRadius: 999 }}>CORE</span>}
+                  </label>
                 ))}
-                <div style={ov.addRow}>
-                  <input style={{ ...ov.input, margin: 0, flex: 1 }} value={svcDraft.label} onChange={e => setSvcDraft(d => ({ ...d, label: e.target.value }))}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomService(); } }} placeholder="Add a custom service…" />
-                  <select style={{ ...ov.input, margin: 0, width: 100 }} value={svcDraft.nature} onChange={e => setSvcDraft(d => ({ ...d, nature: e.target.value }))}>
-                    <option value="opex">OPEX</option><option value="capex">CAPEX</option>
-                  </select>
-                  <button type="button" className="btn btn-sm" style={ov.ghost} onClick={addCustomService}>+ Add</button>
-                </div>
               </div>
             </div>
           )}

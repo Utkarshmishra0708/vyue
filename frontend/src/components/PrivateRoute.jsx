@@ -36,14 +36,16 @@ function ModuleNoAccess({ module }) {
 
 // ModuleRoute — gates a page on a per-module access level, on top of the role checks below.
 // 'No Access' does NOT hide or redirect: the page shows an access message in place (see
-// ModuleNoAccess), and the module stays visible-but-greyed in the nav.
+// ModuleNoAccess), and the module stays visible-but-greyed in the nav. Also enforces the per-BU
+// enablement (config.modules) so a business that has switched a module off can't reach it by URL.
 export function ModuleRoute({ module, minLevel = 'read', children }) {
-  const { isAuthenticated, loading, permissions, isConsoleOnly } = useAuth();
+  const { isAuthenticated, loading, permissions, isConsoleOnly, buHasModule } = useAuth();
   const location = useLocation();
 
   if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   if (isConsoleOnly) return <Navigate to="/settings" replace />;
+  if (buHasModule && !buHasModule(module)) return <ModuleNoAccess module={module} />;
   if (meets(permissions, module, minLevel)) return children;
   return <ModuleNoAccess module={module} />;
 }
@@ -72,6 +74,17 @@ export function SuperAdminRoute({ children }) {
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   if (!isSuperAdmin) return <Navigate to="/leads" replace />;
   return children;
+}
+
+// Allows a Global Admin OR a Business Admin (their business_unit role) to reach the Business Units
+// management page. The page itself scopes what each role actually sees and can click.
+export function BusinessUnitRoute({ children }) {
+  const { isAuthenticated, isSuperAdmin, loading, user } = useAuth();
+  const location = useLocation();
+  if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
+  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (isSuperAdmin || user?.role === 'business_admin') return children;
+  return <Navigate to="/leads" replace />;
 }
 
 export function AdminRoute({ children }) {

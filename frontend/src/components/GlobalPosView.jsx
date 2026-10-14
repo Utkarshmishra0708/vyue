@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { getGlobalPos, getGlobalPo } from '../services/api';
+import { getGlobalPos, getGlobalPo, updateGlobalPo } from '../services/api';
 import { fmtDate } from '../utils/leadHelpers';
+import MentionTextarea from './MentionTextarea';
 
 // Chains (Global POs) browser: a list of chains with live device-pool status, and a per-chain detail
 // showing original/consumed/remaining-or-overage plus the contributing won Individual POs. All figures
@@ -12,9 +13,18 @@ export default function GlobalPosView({ onClose }) {
   useEffect(() => { getGlobalPos().then(setChains).catch(() => setChains([])); }, []);
   const openDetail = (id) => getGlobalPo(id).then(setDetail).catch(() => setDetail(null));
 
+  const handleStatusChange = async (e, chainId) => {
+    e.stopPropagation();
+    const newStatus = e.target.value;
+    try {
+      await updateGlobalPo(chainId, { status: newStatus });
+      setChains(prev => prev.map(c => c.id === chainId ? { ...c, status: newStatus } : c));
+    } catch { /* silent */ }
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 660 }} onClick={e => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 780 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span style={{ fontWeight: 700, fontSize: 15 }}>{detail ? `Chain — ${detail.chain_name}` : 'Global POs (Chains)'}</span>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -23,31 +33,43 @@ export default function GlobalPosView({ onClose }) {
           </div>
         </div>
         <div className="modal-body">
-          {detail ? <ChainDetail detail={detail} />
+          {detail ? <ChainDetail detail={detail} onBack={() => setDetail(null)} />
             : chains === null ? <p style={{ color: '#94a3b8' }}>Loading…</p>
             : chains.length === 0 ? <p style={{ color: '#94a3b8', fontSize: 13 }}>No chains yet. Create one via <b>New Lead → PO Type → Global PO</b>.</p>
             : (
               <table className="data-table" style={{ width: '100%' }}>
-                <thead><tr><th>Chain</th><th style={{ textAlign: 'right' }}>Total</th><th style={{ textAlign: 'right' }}>Consumed</th><th>Status</th></tr></thead>
+                <thead><tr><th>Chain</th><th>Status</th><th style={{ textAlign: 'right' }}>Total</th><th style={{ textAlign: 'right' }}>Consumed</th><th>Pool Status</th></tr></thead>
                 <tbody>
                   {chains.map(c => (
                     <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(c.id)}>
-                      <td style={{ fontWeight: 600 }}>{c.chain_name}<div style={{ fontSize: 11, color: '#94a3b8' }}>{c.linked_count} linked PO(s)</div></td>
+                      <td style={{ fontWeight: 600 }}>{c.chain_name}<div style={{ fontSize: 11, color: '#94a3b8' }}>{c.device_type && <span style={{ background: '#f1f5f9', borderRadius: 4, padding: '1px 5px', marginRight: 6, fontSize: 10, fontWeight: 600, color: '#475569' }}>{c.device_type}</span>}{c.linked_count} linked PO(s)</div></td>
+                      <td>
+                        <select
+                          value={c.status || 'New'}
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => handleStatusChange(e, c.id)}
+                          style={{ fontSize: 12, padding: '3px 6px', borderRadius: 4, border: '1px solid #cbd5e1', cursor: 'pointer' }}
+                        >
+                          <option value="New">New</option>
+                          <option value="Under Discussion">Under Discussion</option>
+                          <option value="Contract Received">Contract Received</option>
+                        </select>
+                      </td>
                       <td style={{ textAlign: 'right' }}>{c.device_total}</td>
-                      <td style={{ textAlign: 'right' }}>{c.status?.consumed ?? 0}</td>
-                      <td><StatusBadge s={c.status} total={c.device_total} /></td>
+                      <td style={{ textAlign: 'right' }}>{c.poolStatus?.consumed ?? 0}</td>
+                      <td><StatusBadge s={c.poolStatus} total={c.device_total} /></td>
                     </tr>
                   ))}
                 </tbody>
                 {(() => {
-                  // Totals across all chains in this business.
                   const totQty = chains.reduce((s, c) => s + (Number(c.device_total) || 0), 0);
-                  const totCon = chains.reduce((s, c) => s + (Number(c.status?.consumed) || 0), 0);
+                  const totCon = chains.reduce((s, c) => s + (Number(c.poolStatus?.consumed) || 0), 0);
                   const totRem = totQty - totCon;
                   return (
                     <tfoot>
                       <tr style={{ borderTop: '2px solid #cbd5e1', background: '#f8fafc' }}>
                         <td style={{ fontWeight: 700 }}>Total · {chains.length} chain{chains.length === 1 ? '' : 's'}</td>
+                        <td />
                         <td style={{ textAlign: 'right', fontWeight: 700 }}>{totQty}</td>
                         <td style={{ textAlign: 'right', fontWeight: 700 }}>{totCon}</td>
                         <td>{totRem < 0
@@ -80,8 +102,21 @@ function Stat({ label, value, color }) {
   );
 }
 
-function ChainDetail({ detail }) {
-  const s = detail.status || {};
+function ChainDetail({ detail, onBack }) {
+  const s = detail.poolStatus || {};
+  const [notes, setNotes] = useState(detail.notes || '');
+  const [saving, setSaving] = useState(false);
+  const dirty = notes !== (detail.notes || '');
+
+  const saveNotes = async () => {
+    setSaving(true);
+    try {
+      await updateGlobalPo(detail.id, { notes });
+      if (onBack) onBack();
+    } catch { /* silent */ }
+    setSaving(false);
+  };
+
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 14 }}>
@@ -97,7 +132,7 @@ function ChainDetail({ detail }) {
         </p>
       )}
       <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 4px' }}>
-        Price: {detail.price_lakhs ? `₹${detail.price_lakhs}L` : '—'} · Expected {detail.expected_start_date ? fmtDate(detail.expected_start_date) : '—'} → {detail.expected_end_date ? fmtDate(detail.expected_end_date) : '—'}
+        Type: <span style={{ color: '#334155', fontWeight: 600 }}>{detail.device_type || 'Hardware'}</span> · Price: {detail.price_lakhs ? `₹${detail.price_lakhs}L` : '—'} · Expected {detail.expected_start_date ? fmtDate(detail.expected_start_date) : '—'} → {detail.expected_end_date ? fmtDate(detail.expected_end_date) : '—'}
       </p>
       <p className="section-title" style={{ marginTop: 16 }}>Contributing Individual POs (won)</p>
       {(!detail.contributors || detail.contributors.length === 0) ? (
@@ -112,6 +147,28 @@ function ChainDetail({ detail }) {
           </tbody>
         </table>
       )}
+
+      <p className="section-title" style={{ marginTop: 20 }}>Notes</p>
+      <MentionTextarea
+        value={notes}
+        onChange={setNotes}
+        placeholder="Add notes about this chain… Use @Name to mention someone"
+        style={{
+          width: '100%', minHeight: 80, padding: '8px 10px', fontSize: 13, lineHeight: 1.5,
+          border: '1px solid #e2e8f0', borderRadius: 8, resize: 'vertical',
+          fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+        }}
+      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+        <button
+          className="btn btn-sm btn-primary"
+          onClick={saveNotes}
+          disabled={!dirty || saving}
+          style={{ opacity: !dirty ? 0.5 : 1 }}
+        >
+          {saving ? 'Saving...' : 'Save Notes'}
+        </button>
+      </div>
     </div>
   );
 }

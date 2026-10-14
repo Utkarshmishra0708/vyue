@@ -1,15 +1,25 @@
 const router = require('express').Router();
 const { DropdownOption } = require('../models');
 const { authenticate, authorize, requireModule } = require('../middleware/auth');
+const { isSuperAdmin } = require('../services/permissions');
 
 router.use(authenticate);
 
-// Super Admin / Business Admin / PMO may add or remove dropdown options (scoped to their own business
-// for non-super roles). This covers device SKUs, sources, partners, ratings, etc.
-const canManageDropdowns = authorize('super_admin', 'business_admin', 'pmo');
+// Global Admin (super_admin_scope) / Business Admin / PMO may add or remove dropdown options
+// (scoped to their own business for non-Global roles). This covers device SKUs, sources, partners,
+// ratings, etc. Uses the scope grant, not role='super_admin', so a Global Admin whose stored role
+// is business_admin still passes.
+function canManageDropdowns(req, res, next) {
+  if (!req.user) return res.status(401).json({ message: 'Unauthenticated' });
+  if (isSuperAdmin(req.user)) return next();
+  if (['business_admin', 'pmo'].includes(req.user.role)) return next();
+  return res.status(403).json({ message: 'Forbidden' });
+}
 
-// The business a dropdown action targets: super_admin may specify one; everyone else uses their own.
-const targetBu = (user, requested) => (user.role === 'super_admin' ? (requested || user.business_unit) : user.business_unit);
+// The business a dropdown action targets: a Global Admin (super_admin_scope) may specify one;
+// everyone else uses their own. Keyed on the scope grant, not user.role, for the same reason as
+// SLA — Global Admins usually carry role='business_admin' with the scope layered on top.
+const targetBu = (user, requested) => (isSuperAdmin(user) ? (requested || user.business_unit) : user.business_unit);
 
 // GET /api/dropdowns — options for the caller's business, grouped: { field_name: [values] }.
 router.get('/', async (req, res) => {

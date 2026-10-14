@@ -47,9 +47,10 @@ export default function PermissionsModal({ userId, userName, onClose, onSaved })
     }
   };
 
+  // No close-on-backdrop-click: permission toggles must not be discarded by a stray click.
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth: 620 }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <span style={{ fontWeight: 700, fontSize: 15 }}>Module Access — {userName}</span>
