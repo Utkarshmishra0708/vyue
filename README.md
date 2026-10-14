@@ -10,9 +10,9 @@
 
 ---
 
-## Why Geo Sales CRM?
+## Why Jio Sales CRM?
 
-Most CRMs are either too simple (spreadsheets with a login page) or too complex (6-month Salesforce implementations). Geo Sales CRM sits in the sweet spot:
+Most CRMs are either too simple (spreadsheets with a login page) or too complex (6-month Salesforce implementations). Jio Sales CRM sits in the sweet spot:
 
 - **Deploy in hours, not months** — self-hosted, no vendor lock-in, no per-seat pricing
 - **Multi-business from day one** — one instance serves unlimited business units, each with its own pipeline, team, and configuration
@@ -60,7 +60,7 @@ Most CRMs are either too simple (spreadsheets with a login page) or too complex 
 
 ## MVP Features (Minimum Viable Product)
 
-These are the core capabilities that make Geo Sales CRM a functional pipeline tool from day one:
+These are the core capabilities that make Jio Sales CRM a functional pipeline tool from day one:
 
 | # | Feature | Description |
 |---|---------|-------------|
@@ -77,7 +77,7 @@ These are the core capabilities that make Geo Sales CRM a functional pipeline to
 
 ## MSP Features (Minimum Sellable Product)
 
-These are the differentiators that make Geo Sales CRM worth paying for:
+These are the differentiators that make Jio Sales CRM worth paying for:
 
 | # | Feature | Business Value |
 |---|---------|---------------|
@@ -197,7 +197,7 @@ These are the differentiators that make Geo Sales CRM worth paying for:
 
 ### 1. Database
 ```sql
-CREATE DATABASE geo_sales_crm CHARACTER SET utf8mb4;
+CREATE DATABASE jio_sales_crm CHARACTER SET utf8mb4;
 ```
 
 ### 2. Backend
@@ -257,21 +257,21 @@ npm run build              # creates optimized static build in build/
 ```bash
 npm install -g pm2
 cd backend
-pm2 start server.js --name geo-sales-crm
+pm2 start server.js --name jio-sales-crm
 pm2 save && pm2 startup    # survives reboots
 ```
 
 Or as a **systemd** unit:
 ```ini
 [Unit]
-Description=Geo Sales CRM API
+Description=Jio Sales CRM API
 After=network.target mysql.service
 
 [Service]
-WorkingDirectory=/opt/geo-sales-crm/backend
+WorkingDirectory=/opt/jio-sales-crm/backend
 ExecStart=/usr/bin/node server.js
 Restart=always
-EnvironmentFile=/opt/geo-sales-crm/backend/.env
+EnvironmentFile=/opt/jio-sales-crm/backend/.env
 User=www-data
 
 [Install]
@@ -285,7 +285,7 @@ server {
     server_name crm.yourcompany.com;
 
     # React SPA (production build)
-    root /opt/geo-sales-crm/frontend/build;
+    root /opt/jio-sales-crm/frontend/build;
     index index.html;
 
     location / {
@@ -314,14 +314,14 @@ Add TLS: `certbot --nginx -d crm.yourcompany.com`
 ### Database Backups
 ```bash
 # Nightly backup (add to crontab)
-mysqldump -u root geo_sales_crm | gzip > /backups/geo_sales_crm_$(date +%Y%m%d).sql.gz
+mysqldump -u root jio_sales_crm | gzip > /backups/jio_sales_crm_$(date +%Y%m%d).sql.gz
 ```
 
 ---
 
 ## Adapting for Your Business
 
-Geo Sales CRM is designed to be business-agnostic. Here's how to make it yours:
+Jio Sales CRM is designed to be business-agnostic. Here's how to make it yours:
 
 ### 1. Create Your Business Unit
 Log in as Global Admin → Business Units → **+ New Business Unit**. The wizard lets you:
@@ -372,7 +372,7 @@ Leads → **Bulk Import** → download XLSX template → fill in → upload. Dry
 ## Project Structure
 
 ```
-Geo-Sales-CRM/
+Jio-Sales-CRM/
 ├── backend/
 │   ├── server.js                  # Express app entry point + route mounting
 │   ├── package.json               # 8 deps: express, sequelize, mysql2, jsonwebtoken, bcryptjs, cors, dotenv, multer
@@ -479,4 +479,4 @@ Geo-Sales-CRM/
 
 **Built for teams that sell. Deployed where you control it. Scales with your business.**
 
-*Geo Sales CRM — Enterprise Sales Intelligence Platform*
+*Jio Sales CRM — Enterprise Sales Intelligence Platform*
