@@ -12,6 +12,7 @@ const { assignLeadCodes, recomputeLocationOnEdit } = require('../services/leadCo
 const { Op } = require('sequelize');
 const leadNotif = require('../services/notifications/rules/leadRules');
 const renewalNotif = require('../services/notifications/rules/renewalRules');
+const { logChanges } = require('../services/auditTrail');
 
 router.use(authenticate);
 
@@ -625,6 +626,17 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
 
     await t.commit();
     const full = await Lead.findByPk(existing.id, { include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] }] });
+
+    // Audit trail — fire-and-forget (logChanges never throws)
+    logChanges({
+      entityType: 'lead',
+      entityId: existing.id,
+      oldData: before,
+      newData: full.toJSON(),
+      userId: req.user.id,
+      userName: req.user.name,
+      businessUnit: req.user.business_unit,
+    });
 
     // Fire-and-forget notifications.
     const nLead = { id: existing.id, sr_no: existing.sr_no, customer_name: existing.customer_name, owner_id: payload.owner_id || before.owner_id, lost_reason: payload.lost_reason, hold_end_date: payload.hold_end_date };

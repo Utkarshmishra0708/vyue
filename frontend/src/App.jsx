@@ -14,6 +14,7 @@ import SettingsPage from './pages/SettingsPage';
 import VocPage from './pages/VocPage';
 import ActivitiesPage from './pages/ActivitiesPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
+import CampaignsPage from './pages/CampaignsPage';
 import SsoSelectPage from './pages/SsoSelectPage';
 import { GLOBAL_CSS } from './globalStyles';
 import { BASE_PATH, IS_PROD } from './env';
@@ -73,17 +74,17 @@ export default function App() {
 
             {/* Authenticated — any role */}
             <Route path="/leads"            element={<PrivateRoute><ModuleRoute module="leads"><LeadsPage /></ModuleRoute></PrivateRoute>} />
-            {/* Customers hierarchy — read-only. Gated behind the Leads module since it reads leads. */}
-            <Route path="/customers"                 element={<PrivateRoute><ModuleRoute module="leads"><CustomersPage /></ModuleRoute></PrivateRoute>} />
-            <Route path="/customers/:code"           element={<PrivateRoute><ModuleRoute module="leads"><CustomersPage /></ModuleRoute></PrivateRoute>} />
-            <Route path="/customers/:code/:loc"      element={<PrivateRoute><ModuleRoute module="leads"><CustomersPage /></ModuleRoute></PrivateRoute>} />
+            {/* Customers hierarchy — its own module gate. */}
+            <Route path="/customers"                 element={<PrivateRoute><ModuleRoute module="customers"><CustomersPage /></ModuleRoute></PrivateRoute>} />
+            <Route path="/customers/:code"           element={<PrivateRoute><ModuleRoute module="customers"><CustomersPage /></ModuleRoute></PrivateRoute>} />
+            <Route path="/customers/:code/:loc"      element={<PrivateRoute><ModuleRoute module="customers"><CustomersPage /></ModuleRoute></PrivateRoute>} />
             <Route path="/dashboard"        element={<PrivateRoute><ModuleRoute module="dashboard"><DashboardPage /></ModuleRoute></PrivateRoute>} />
             {/* Global activity feed (J1). Not a per-module page — its own grant governs it
                 (Business Admin / Global Admin by role, Manager if granted, Team Member never), so the
                 page itself enforces that rather than the module guard. */}
             <Route path="/activity"         element={<PrivateRoute><ActivityPage /></PrivateRoute>} />
-            {/* VOC (Voice of Customer) — Surveillance only (gated inside the page + API). */}
-            <Route path="/voc"              element={<PrivateRoute><VocPage /></PrivateRoute>} />
+            {/* VOC (Voice of Customer) — module-gated per user and per BU. */}
+            <Route path="/voc"              element={<PrivateRoute><ModuleRoute module="voc"><VocPage /></ModuleRoute></PrivateRoute>} />
             {/* Activities kanban — opt-in per business (config.modules.activities). ModuleRoute
                 covers both the per-user permission and, via canView, the per-BU enablement. */}
             <Route path="/activities"       element={<PrivateRoute><ModuleRoute module="activities"><ActivitiesPage /></ModuleRoute></PrivateRoute>} />
@@ -92,6 +93,8 @@ export default function App() {
               <Route path="/change-password"  element={<PrivateRoute><ChangePasswordPage /></PrivateRoute>} />
             )}
 
+            {/* Campaigns — module-gated per user and per BU. */}
+            <Route path="/campaigns"        element={<PrivateRoute><ModuleRoute module="campaigns"><CampaignsPage /></ModuleRoute></PrivateRoute>} />
             {/* Reports — gated purely by the per-user module permission (like Leads/Dashboard), so a
                 BD granted Reports access can open it, for every business (current and future). */}
             <Route path="/reports"          element={<PrivateRoute><ModuleRoute module="reports"><ReportsPage /></ModuleRoute></PrivateRoute>} />

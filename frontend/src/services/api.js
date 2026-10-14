@@ -195,4 +195,28 @@ export const markAllRead            = ()           => api.post('/notifications/r
 export const getNotifPreferences    = ()           => api.get('/notifications/preferences').then(r => r.data);
 export const updateNotifPreferences = (prefs)      => api.put('/notifications/preferences', prefs).then(r => r.data);
 
+// Global Search
+export const globalSearch = (q) => api.get('/search', { params: { q } }).then(r => r.data);
+
+// Contacts
+export const getContacts       = (customerName) => api.get('/contacts', { params: customerName ? { customer_name: customerName } : {} }).then(r => r.data);
+export const createContact     = (data)         => api.post('/contacts', data).then(r => r.data);
+export const updateContact     = (id, data)     => api.put(`/contacts/${id}`, data).then(r => r.data);
+export const deleteContact     = (id)           => api.delete(`/contacts/${id}`).then(r => r.data);
+
+// Campaigns
+export const getCampaigns      = ()             => api.get('/campaigns').then(r => r.data);
+export const createCampaign    = (data)         => api.post('/campaigns', data).then(r => r.data);
+export const updateCampaign    = (id, data)     => api.put(`/campaigns/${id}`, data).then(r => r.data);
+export const deleteCampaign    = (id)           => api.delete(`/campaigns/${id}`).then(r => r.data);
+
+// Change Log (Audit Trail)
+export const getChangeLog      = (entityType, entityId) => api.get('/change-log', { params: { entity_type: entityType, entity_id: entityId } }).then(r => r.data);
+
+// Reports
+export const getReportBdPerformance = (params) => api.get('/reports/bd-performance', { params }).then(r => r.data);
+export const getReportSourceAnalysis = (params) => api.get('/reports/source-analysis', { params }).then(r => r.data);
+export const getReportMonthlyTrend  = (params) => api.get('/reports/monthly-trend', { params }).then(r => r.data);
+export const getReportCampaignRoi   = (params) => api.get('/reports/campaign-roi', { params }).then(r => r.data);
+
 export default api;

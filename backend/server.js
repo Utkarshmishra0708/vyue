@@ -40,6 +40,11 @@ app.use('/api/uploads',       require('./routes/uploads'));
 app.use('/api/forecast',      require('./routes/forecast')); // public, no auth
 app.use('/api/activities',    require('./routes/activities'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/contacts',      require('./routes/contacts'));
+app.use('/api/campaigns',     require('./routes/campaigns'));
+app.use('/api/search',        require('./routes/search'));
+app.use('/api/reports',       require('./routes/reports'));
+app.use('/api/change-log',    require('./routes/changeLog'));
 
 // Health
 app.get('/api/health', (req, res) => res.json({ status: 'ok', at: new Date().toISOString() }));

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { createLead, updateLead, uploadPoDocument, fileUrl, getBds, getDropdowns, getGlobalPos, createGlobalPo } from '../services/api';
+import { createLead, updateLead, uploadPoDocument, fileUrl, getBds, getDropdowns, getGlobalPos, createGlobalPo, getCampaigns } from '../services/api';
 import { LOST_REASONS, INDIAN_STATES, UNION_TERRITORIES, PROPERTY_TYPES, PROPERTY_CATEGORIES } from '../utils/constants';
 import { todayStr, addDaysStr, computeAcvLakhs, hasConfidence, confidenceTrend } from '../utils/leadHelpers';
 import DropdownManager from './DropdownManager';
@@ -8,6 +8,7 @@ import { FieldInput } from './CustomLeadForm';
 import MentionTextarea from './MentionTextarea';
 import ServicesOffered, { parseServiceLines } from './ServicesOffered';
 import { computeServicesTotals } from '../utils/pricing';
+import AuditTimeline from './AuditTimeline';
 
 
 const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
@@ -37,6 +38,7 @@ const emptyForm = {
   service_start_date: '', service_end_date: '',
   billing_cycle: '', payment_terms: '',
   hold_end_date: '', po_number: '',
+  campaign_id: '',
   additional_notes: '',
 };
 
@@ -172,12 +174,14 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
   const [poType, setPoType] = useState('individual');
   const [chains, setChains] = useState([]);                 // Global POs (chains) for linkage
   const [linkToChain, setLinkToChain] = useState(false);    // Individual: property belongs to a chain
+  const [campaigns, setCampaigns] = useState([]);            // Campaigns for linkage
   const emptyGlobal = { chain_name: '', device_total: '', device_type: '', price_lakhs: '', expected_start_date: '', expected_end_date: '' };
   const [globalForm, setGlobalForm] = useState(emptyGlobal);
   const setGlobal = (k, v) => setGlobalForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => { getBds(user.business_unit).then(setBds).catch(() => {}); }, [user.business_unit]);
   useEffect(() => { getGlobalPos().then(setChains).catch(() => setChains([])); }, [user.business_unit]);
+  useEffect(() => { getCampaigns().then(setCampaigns).catch(() => setCampaigns([])); }, []);
   const loadDropdowns = () => getDropdowns().then(setDropdowns).catch(() => {});
   useEffect(() => { loadDropdowns(); }, []);
   // If an existing lead's channel partner isn't in the managed list, treat it as an "Other" value.
@@ -219,6 +223,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
         billing_cycle: lead.billing_cycle || '', payment_terms: lead.payment_terms || '',
         hold_end_date: lead.hold_end_date || '', po_number: lead.po_number || '',
         global_po_id: lead.global_po_id || '',
+        campaign_id: lead.campaign_id || '',
         lost_reason: lead.lost_reason?.startsWith('Other: ') ? 'Other' : (lead.lost_reason || ''),
         po_actual_value_lakhs: lead.po_actual_value_lakhs || '', additional_notes: lead.additional_notes || '',
       });
@@ -720,6 +725,12 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
           {fieldOn('classification', 'competitor') && (
             <Field label="Competitor"><input className="input" value={form.competitor} onChange={e => set('competitor', e.target.value)} placeholder="Optional" /></Field>
           )}
+          <Field label="Campaign">
+            <select className="input" value={form.campaign_id || ''} onChange={e => set('campaign_id', e.target.value)}>
+              <option value="">— None —</option>
+              {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
           {renderExtras('classification')}
         </div>
       </section>
@@ -1022,6 +1033,14 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
         );
       })}
       </>)}
+
+      {/* History (Audit Trail) — only shown when editing an existing lead */}
+      {lead && lead.id && (
+        <section>
+          <p className="section-title">History</p>
+          <AuditTimeline entityType="lead" entityId={lead.id} />
+        </section>
+      )}
 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
         <button type="button" className="btn" onClick={onCancel}>Cancel</button>

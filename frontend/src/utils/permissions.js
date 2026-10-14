@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 // Settings is deliberately NOT a module: it stays role-gated to the admin tier.
-export const MODULES = ['leads', 'dashboard', 'forecast', 'reports', 'activities'];
+export const MODULES = ['leads', 'dashboard', 'forecast', 'reports', 'activities', 'voc', 'campaigns', 'customers'];
 
 export const MODULE_LABELS = {
   leads: 'Leads',
@@ -16,6 +16,9 @@ export const MODULE_LABELS = {
   forecast: 'Inventory Pipeline',
   reports: 'Reports',
   activities: 'Task Board',
+  voc: 'Voice of Customer',
+  campaigns: 'Campaigns',
+  customers: 'Customers',
 };
 
 export const LEVELS = ['none', 'read', 'edit', 'full'];
@@ -36,14 +39,15 @@ export const LEVEL_HINTS = {
 
 export const RANK = { none: 0, read: 1, edit: 2, full: 3 };
 
-// Route path → module, for guarding and nav. Paths absent here aren't module-gated
-// (Settings, VOC and the password page are governed by role instead).
 export const PATH_MODULE = {
   '/leads': 'leads',
   '/dashboard': 'dashboard',
   '/forecast': 'forecast',
   '/reports': 'reports',
   '/activities': 'activities',
+  '/voc': 'voc',
+  '/campaigns': 'campaigns',
+  '/customers': 'customers',
 };
 
 // Does this permission map meet at least `minLevel` for `module`? A module missing

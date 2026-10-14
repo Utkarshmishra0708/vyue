@@ -56,7 +56,7 @@ export default function BuWizard({ onClose, onCreated }) {
         })));
         // Services start EMPTY — the admin builds this business's catalog from scratch, by category.
         setServices([]);
-        setModules(cat.modules.map(m => ({ ...m, enabled: true })));
+        setModules(cat.modules.map(m => ({ ...m, enabled: m.core || !m.optIn })));
       })
       .catch(e => setLoadErr(e.response?.data?.message || 'Could not load the field/service catalog.'));
   }, []);

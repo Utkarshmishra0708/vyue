@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import MultiSelect from '../components/MultiSelect';
 import { useAuth } from '../context/AuthContext';
-import { getLeads, getBds, getDropdowns } from '../services/api';
+import { getLeads, getBds, getDropdowns, getContacts, createContact, updateContact as updateContactApi, deleteContact as deleteContactApi } from '../services/api';
 import { isOverdue, fmtDate, stripHtml, renewalStatus, renewalLabel, RENEWAL_BAND_STYLE, buildRenewedSet } from '../utils/leadHelpers';
 
 // Small renewal badge used in the Customers list and on PO cards.
@@ -86,6 +86,137 @@ function formatServices(l) {
     }
     return parts.length ? parts.join(', ') : null;
   } catch { return null; }
+}
+
+const CONTACT_ROLES = ['Decision Maker', 'Technical POC', 'Procurement', 'Finance', 'Operations', 'Other'];
+const emptyContact = { contact_name: '', role: '', designation: '', phone: '', email: '', notes: '' };
+
+function ContactsPanel({ customerName }) {
+  const [contacts, setContacts] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [editing, setEditing] = React.useState(null); // null | 'new' | contact id
+  const [form, setForm] = React.useState(emptyContact);
+
+  const load = React.useCallback(() => {
+    if (!customerName) return;
+    setLoading(true);
+    getContacts(customerName)
+      .then(data => { setContacts(Array.isArray(data) ? data : (data.contacts || [])); })
+      .catch(() => setContacts([]))
+      .finally(() => setLoading(false));
+  }, [customerName]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const startAdd = () => { setEditing('new'); setForm({ ...emptyContact, customer_name: customerName }); };
+  const startEdit = (c) => { setEditing(c.id); setForm({ contact_name: c.contact_name || c.name || '', role: c.role || '', designation: c.designation || '', phone: c.phone || '', email: c.email || '', notes: c.notes || '' }); };
+  const cancel = () => { setEditing(null); setForm(emptyContact); };
+
+  const save = async () => {
+    const data = { ...form, customer_name: customerName };
+    try {
+      if (editing === 'new') {
+        await createContact(data);
+      } else {
+        await updateContactApi(editing, data);
+      }
+      cancel();
+      load();
+    } catch (e) {
+      alert(e.response?.data?.message || 'Could not save contact.');
+    }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm('Delete this contact?')) return;
+    try {
+      await deleteContactApi(id);
+      load();
+    } catch (e) {
+      alert(e.response?.data?.message || 'Could not delete contact.');
+    }
+  };
+
+  const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  return (
+    <div style={{ marginTop: 12, padding: '12px 16px', background: '#fafbfc', border: '1px solid #e2e8f0', borderRadius: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>Contacts</div>
+        {editing === null && <button className="btn btn-sm btn-primary" onClick={startAdd}>+ Add Contact</button>}
+      </div>
+
+      {loading && <div style={{ color: '#94a3b8', fontSize: 12 }}>Loading contacts...</div>}
+
+      {editing !== null && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12, padding: 12, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+          <div>
+            <label className="field-label">Contact Name *</label>
+            <input className="input" value={form.contact_name} onChange={e => setF('contact_name', e.target.value)} placeholder="Name" />
+          </div>
+          <div>
+            <label className="field-label">Role</label>
+            <select className="input" value={form.role} onChange={e => setF('role', e.target.value)}>
+              <option value="">Select role</option>
+              {CONTACT_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="field-label">Designation</label>
+            <input className="input" value={form.designation} onChange={e => setF('designation', e.target.value)} placeholder="e.g. VP Engineering" />
+          </div>
+          <div>
+            <label className="field-label">Phone</label>
+            <input className="input" value={form.phone} onChange={e => setF('phone', e.target.value)} placeholder="Phone" />
+          </div>
+          <div>
+            <label className="field-label">Email</label>
+            <input className="input" type="email" value={form.email} onChange={e => setF('email', e.target.value)} placeholder="Email" />
+          </div>
+          <div>
+            <label className="field-label">Notes</label>
+            <input className="input" value={form.notes} onChange={e => setF('notes', e.target.value)} placeholder="Notes" />
+          </div>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+            <button className="btn btn-sm" onClick={cancel}>Cancel</button>
+            <button className="btn btn-sm btn-primary" onClick={save} disabled={!form.contact_name.trim()}>Save</button>
+          </div>
+        </div>
+      )}
+
+      {!loading && contacts.length === 0 && editing === null && (
+        <div style={{ color: '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>No contacts yet. Click "+ Add Contact" to add one.</div>
+      )}
+
+      {contacts.length > 0 && (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              {['Name', 'Role', 'Designation', 'Phone', 'Email', 'Notes', ''].map(h => (
+                <th key={h} style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 700, color: '#64748b', borderBottom: '1px solid #e2e8f0', fontSize: 11 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {contacts.map(c => (
+              <tr key={c.id}>
+                <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>{c.contact_name || c.name}</td>
+                <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>{c.role || '—'}</td>
+                <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>{c.designation || '—'}</td>
+                <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>{c.phone || '—'}</td>
+                <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>{c.email || '—'}</td>
+                <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>{c.notes || '—'}</td>
+                <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap' }}>
+                  <button className="btn btn-sm" style={{ marginRight: 4, fontSize: 11 }} onClick={() => startEdit(c)}>Edit</button>
+                  <button className="btn btn-sm btn-danger" style={{ fontSize: 11 }} onClick={() => remove(c.id)}>Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
 }
 
 export default function CustomersPage() {
@@ -441,6 +572,15 @@ export default function CustomersPage() {
                           ))}
                         </React.Fragment>
                       ))}
+                      {/* Contacts panel — shown when customer row is expanded */}
+                      {open && (
+                        <tr>
+                          <td style={bodyCell} />
+                          <td style={{ ...bodyCell, paddingLeft: 24 }} colSpan={6}>
+                            <ContactsPanel customerName={c.customer_name} />
+                          </td>
+                        </tr>
+                      )}
                     </React.Fragment>
                   );
                 })}

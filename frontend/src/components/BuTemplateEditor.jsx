@@ -10,7 +10,7 @@ const slugify = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9_-]
 
 // Modules that default to ON when a BU has no explicit config.modules — mirrors the backend's
 // OPT_IN_MODULES set. Keep the two in sync so the toggles reflect the true resolved state.
-const OPT_IN_MODULES = new Set(['activities']);
+const OPT_IN_MODULES = new Set(['activities', 'voc', 'campaigns', 'customers']);
 
 export default function BuTemplateEditor({ bu, onClose, onSaved }) {
   const [catalog, setCatalog] = useState(null);

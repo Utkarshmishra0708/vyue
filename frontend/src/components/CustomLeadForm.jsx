@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getBds, getDropdowns, getBusinessUnitConfig, createLead, updateLead, getGlobalPos, createGlobalPo } from '../services/api';
+import { getBds, getDropdowns, getBusinessUnitConfig, createLead, updateLead, getGlobalPos, createGlobalPo, getCampaigns } from '../services/api';
 import { STAGE_ORDER, INDIAN_STATES, UNION_TERRITORIES } from '../utils/constants';
 import { todayStr, addDaysStr } from '../utils/leadHelpers';
 import MentionTextarea from './MentionTextarea';
 import ServicesOffered, { parseServiceLines } from './ServicesOffered';
+import AuditTimeline from './AuditTimeline';
 
 // Schema-driven lead form for CUSTOM (wizard-built) business units. It renders exactly the sections
 // and fields configured for that business (business_units.config.formSchema): predefined ("core")
@@ -45,23 +46,25 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
   const [chains, setChains] = useState([]);
   const [globalForm, setGlobalForm] = useState({ chain_name: '', device_total: '', device_type: '', price_lakhs: '', expected_start_date: '', expected_end_date: '' });
   const [contacts, setContacts] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    Promise.all([getBusinessUnitConfig(user.business_unit), getBds(user.business_unit), getDropdowns(), getGlobalPos().catch(() => [])])
-      .then(([config, bdList, dd, chainList]) => {
+    Promise.all([getBusinessUnitConfig(user.business_unit), getBds(user.business_unit), getDropdowns(), getGlobalPos().catch(() => []), getCampaigns().catch(() => [])])
+      .then(([config, bdList, dd, chainList, campaignList]) => {
         setCfg(config);
         setBds(bdList || []);
         setDropdowns(dd || {});
         setChains(chainList || []);
+        setCampaigns(campaignList || []);
         // Seed the Services Offered lines from the lead's stored services_json (new v2 shape).
         // On a Renewal, carry over the source PO's services; a plain/additional new lead starts blank.
         const isRenewal = !lead && expansionFrom && expansionMode === 'renewal';
         setLines(lead ? parseServiceLines(lead.services_json) : (isRenewal ? parseServiceLines(expansionFrom.services_json) : []));
         // Seed form + custom values from an existing lead (edit) or blanks (create).
         if (lead) {
-          setForm({ owner_id: lead.owner_id || '', phase: lead.phase || 'New', contract_period_months: lead.contract_period_months || '', global_po_id: lead.global_po_id || '', next_followup_date: lead.next_followup_date || '', po_expected_date: lead.po_expected_date || '', device_requested_date: lead.device_requested_date || '', lost_reason: lead.lost_reason || '', ...pickCore(lead, config) });
+          setForm({ owner_id: lead.owner_id || '', phase: lead.phase || 'New', contract_period_months: lead.contract_period_months || '', global_po_id: lead.global_po_id || '', campaign_id: lead.campaign_id || '', next_followup_date: lead.next_followup_date || '', po_expected_date: lead.po_expected_date || '', device_requested_date: lead.device_requested_date || '', lost_reason: lead.lost_reason || '', ...pickCore(lead, config) });
           setCustom(lead.custom_fields || {});
           setContacts((lead.contacts || []).map(c => ({ name: c.name, phone: c.phone || '', email: c.email || '', designation: c.designation || '' })));
           if (lead.global_po_id) setLinkToChain(true);
@@ -361,6 +364,13 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
               {bds.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </div>
+          <div>
+            <label className="field-label">Campaign</label>
+            <select className="input" value={form.campaign_id || ''} onChange={e => setF('campaign_id', e.target.value)}>
+              <option value="">— None —</option>
+              {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -537,6 +547,14 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
           </div>
         );
       })}
+
+      {/* History (Audit Trail) — only shown when editing an existing lead */}
+      {lead && lead.id && (
+        <div>
+          <p className="section-title">HISTORY</p>
+          <AuditTimeline entityType="lead" entityId={lead.id} />
+        </div>
+      )}
 
       {err && <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '8px 12px', borderRadius: 8, fontSize: 13 }}>{err}</div>}
 

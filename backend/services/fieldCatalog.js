@@ -91,6 +91,8 @@ const MODULE_CATALOG = [
   { slug: 'reports',    label: 'Reports' },
   { slug: 'voc',        label: 'Voice of Customer (VOC)', optIn: true },
   { slug: 'activities', label: 'Task Board (kanban)' },
+  { slug: 'campaigns',  label: 'Campaigns', optIn: true },
+  { slug: 'customers',  label: 'Customers & Contacts', optIn: true },
 ];
 
 // Dashboard / report options offered by the wizard. Captured as the unit's settings for now; the

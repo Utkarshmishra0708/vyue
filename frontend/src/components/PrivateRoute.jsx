@@ -7,7 +7,7 @@ import Layout from './Layout';
 // The first module this user can actually see, as a landing spot. Used whenever we have to bounce
 // someone off a page: sending them to a module they also lack would just loop.
 export function firstAllowedPath(permissions) {
-  const order = ['/leads', '/dashboard', '/forecast', '/reports'];
+  const order = ['/leads', '/dashboard', '/forecast', '/reports', '/voc', '/campaigns', '/customers', '/activities'];
   const found = order.find(p => meets(permissions, PATH_MODULE[p], 'read'));
   return found || null;
 }

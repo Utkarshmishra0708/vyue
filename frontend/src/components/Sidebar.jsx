@@ -6,7 +6,7 @@ import { BU_CONFIG, ROLE_LABEL } from '../utils/constants';
 import { IS_PROD } from '../env';
 
 const NAV_ICONS = {
-  leads: '📋', dashboard: '📊', forecast: '🚚', reports: '📁', activity: '🕒', settings: '⚙️', 'change-password': '🔒', voc: '🗣️', 'business-units': '🏢', activities: '📌',
+  leads: '📋', dashboard: '📊', forecast: '🚚', reports: '📁', campaigns: '📢', customers: '👥', activity: '🕒', settings: '⚙️', 'change-password': '🔒', voc: '🗣️', 'business-units': '🏢', activities: '📌',
 };
 
 export default function Sidebar() {
@@ -55,9 +55,11 @@ export default function Sidebar() {
     : [
         { path: '/leads',     label: 'Leads',     disabled: !canView('leads') },
         { path: '/dashboard', label: 'Dashboard', disabled: !canView('dashboard') },
-        ...(buHasModule('voc') ? [{ path: '/voc', label: 'VOC' }] : []),
+        ...(buHasModule('voc') ? [{ path: '/voc', label: 'VOC', disabled: !canView('voc') }] : []),
+        ...(buHasModule('customers') ? [{ path: '/customers', label: 'Customers', disabled: !canView('customers') }] : []),
         { path: '/forecast',  label: 'Inventory Pipeline',  disabled: !canView('forecast') },
         { path: '/reports',   label: 'Reports',   disabled: !canView('reports') },
+        ...(buHasModule('campaigns') ? [{ path: '/campaigns', label: 'Campaigns', disabled: !canView('campaigns') }] : []),
         // Activities kanban — only shown when the BU has enabled it (Surveillance by default,
         // Signage/JHES only if a Global Admin turns it on via Edit Template). Suppressing the entry
         // when the BU disables it keeps other businesses' nav uncluttered.

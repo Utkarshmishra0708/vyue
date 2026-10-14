@@ -161,6 +161,7 @@ const Lead = sequelize.define('Lead', {
   po_number:               { type: DataTypes.STRING(64) },
   lost_reason:             { type: DataTypes.STRING(255) },
   po_actual_value_lakhs:   { type: DataTypes.DECIMAL(12, 2) },
+  campaign_id:             { type: DataTypes.INTEGER },
   created_by:              { type: DataTypes.INTEGER },
   updated_by:              { type: DataTypes.INTEGER },
 }, { tableName: 'leads', underscored: true });
@@ -459,6 +460,49 @@ User.hasMany(Notification, { foreignKey: 'user_id', onDelete: 'CASCADE' });
 NotificationPreference.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(NotificationPreference, { foreignKey: 'user_id', onDelete: 'CASCADE' });
 
+// --------------------------------------------------------------------------
+// ChangeLog — field-level audit trail for any entity
+// --------------------------------------------------------------------------
+const ChangeLog = sequelize.define('ChangeLog', {
+  entity_type: DataTypes.STRING(50),
+  entity_id: DataTypes.INTEGER,
+  field_name: DataTypes.STRING(100),
+  old_value: DataTypes.TEXT,
+  new_value: DataTypes.TEXT,
+  changed_by: DataTypes.INTEGER,
+  changed_by_name: DataTypes.STRING(255),
+  business_unit: DataTypes.STRING(50),
+}, { tableName: 'change_log', timestamps: true, updatedAt: false, createdAt: 'created_at' });
+
+// --------------------------------------------------------------------------
+// Contact — customer contact directory (per business unit)
+// --------------------------------------------------------------------------
+const Contact = sequelize.define('Contact', {
+  customer_name: DataTypes.STRING(255),
+  contact_name: DataTypes.STRING(255),
+  role: DataTypes.STRING(100),
+  designation: DataTypes.STRING(255),
+  phone: DataTypes.STRING(50),
+  email: DataTypes.STRING(255),
+  notes: DataTypes.TEXT,
+  business_unit: DataTypes.STRING(50),
+  created_by: DataTypes.INTEGER,
+}, { tableName: 'contacts', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+// --------------------------------------------------------------------------
+// Campaign — marketing campaigns (per business unit)
+// --------------------------------------------------------------------------
+const Campaign = sequelize.define('Campaign', {
+  name: DataTypes.STRING(255),
+  description: DataTypes.TEXT,
+  start_date: DataTypes.DATEONLY,
+  end_date: DataTypes.DATEONLY,
+  budget_lakhs: DataTypes.DECIMAL(12,2),
+  status: DataTypes.STRING(20),
+  business_unit: DataTypes.STRING(50),
+  created_by: DataTypes.INTEGER,
+}, { tableName: 'campaigns', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
 // status_changed_at for activity cards (migration 044)
 Activity.rawAttributes.status_changed_at = {
   type: DataTypes.DATE,
@@ -488,4 +532,7 @@ module.exports = {
   Notification,
   NotificationPreference,
   NotificationDigestRun,
+  ChangeLog,
+  Contact,
+  Campaign,
 };
