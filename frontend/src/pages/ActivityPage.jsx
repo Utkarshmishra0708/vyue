@@ -105,7 +105,7 @@ export default function ActivityPage() {
             <div style={{ fontSize: 32, marginBottom: 8 }}>🔒</div>
             <h1 style={{ fontSize: 18, margin: '0 0 8px' }}>No access to the activity feed</h1>
             <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
-              The platform-wide activity feed is available to Business Admins and Managers who have
+              The organization-wide activity feed is available to Business Admins and Managers who have
               been granted it. You can still see a lead's own history from its Activity tab.
             </p>
           </div>
@@ -124,7 +124,7 @@ export default function ActivityPage() {
     <Layout>
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Activity</h1>
+          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Activity Feed</h1>
           <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
             Recent changes across the tool — leads, chains, permissions and SLA config
           </p>

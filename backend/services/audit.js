@@ -33,7 +33,7 @@ async function record({
   entityType,       // 'lead' | 'chain' | 'permissions' | 'sla'
   entityId,         // id of the thing that changed
   subject,          // human label for it — lead/property name, chain name, user name
-  businessUnit,     // platform it belongs to; null = cross-platform (admin-only in the feed)
+  businessUnit,     // platform it belongs to; null = cross-business (admin-only in the feed)
   action,           // action_type, e.g. 'field_update', 'chain_created'
   field,            // which field changed, in human words
   from,             // old value

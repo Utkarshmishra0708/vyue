@@ -200,7 +200,7 @@ export default function DashboardPage() {
   const missingFollowup = filtered.filter(l => !l.next_followup_date && !['PO Received', 'Lost', 'On Hold'].includes(l.phase)).length;
   const missingQuantity = filtered.filter(l => !l.quantity || l.quantity === 0).length;
   const dataQualityIssues = [
-    { label: 'Missing TCV', count: missingTCV, badge: 'badge-red' },
+    { label: 'Missing Deal Value', count: missingTCV, badge: 'badge-red' },
     { label: 'No Follow-Up Date', count: missingFollowup, badge: 'badge-amber' },
     { label: 'Missing Quantity', count: missingQuantity, badge: 'badge-amber' },
   ].filter(d => d.count > 0);
@@ -236,7 +236,8 @@ export default function DashboardPage() {
   const pipelineLicenses = sigWonLeads.reduce((s, l) => s + (parseInt(l.quantity, 10) || 0), 0);
   const pipelineCustomers = new Set(sigWonLeads.map(l => l.customer_name).filter(Boolean)).size;
 
-  const phaseCounts = STAGE_ORDER.concat(['Lost', 'On Hold']).map(p => ({ phase: p, count: filtered.filter(l => l.phase === p).length }));
+  // STAGE_ORDER already ends with Lost and On Hold; adding them again showed duplicate chips.
+  const phaseCounts = STAGE_ORDER.map(p => ({ phase: p, count: filtered.filter(l => l.phase === p).length }));
   const funnelData = STAGE_ORDER.filter(s => s !== 'Lost' && s !== 'On Hold').map(p => ({ name: p, count: filtered.filter(l => l.phase === p).length }));
 
   const filteredLeadIds = new Set(filtered.map(l => l.id));
@@ -502,7 +503,7 @@ export default function DashboardPage() {
             )}
             {isAdmin && (
               <select className="input" style={{ width: 160 }} value={filterBD} onChange={e => setFilterBD(e.target.value)}>
-                <option value="">All BDs</option>
+                <option value="">All Sales Reps</option>
                 {bds.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
               </select>
             )}
@@ -565,7 +566,7 @@ export default function DashboardPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           <Kpi icon="💰" label="Open Pipeline" value={`₹${openTCV.toFixed(1)}L`} sub={`${active.length} active`} onClick={() => navigateWithFilter('active')} />
-          <Kpi icon="🏆" label="Won TCV" value={`₹${wonTCV.toFixed(1)}L`} sub={`${won.length} deals`} onClick={() => navigateWithFilter('won')} />
+          <Kpi icon="🏆" label="Won Deal Value" value={`₹${wonTCV.toFixed(1)}L`} sub={`${won.length} deals`} onClick={() => navigateWithFilter('won')} />
           <Kpi icon="🔥" label="Hot Leads" value={String(hot.length)} sub="Tap to view" onClick={() => navigateWithFilter('hot')} />
           <Kpi icon="⏰" label="Overdue Follow-Ups" value={String(overdue.length)} sub="Tap to view" onClick={() => navigateWithFilter('overdue')} />
         </div>
@@ -603,7 +604,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
             <div>
               <p className="section-title" style={{ margin: 0 }}>Pipeline Target</p>
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>POs {pipelineLabel.toLowerCase()} vs ₹{pipelineTarget.toFixed(1)}L target</p>
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>Orders {pipelineLabel.toLowerCase()} vs ₹{pipelineTarget.toFixed(1)}L target</p>
             </div>
             <div style={{ textAlign: 'right' }}>
               <p style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>₹{pipelineWon.toFixed(2)}L</p>
@@ -673,7 +674,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
             <div>
               <p className="section-title" style={{ margin: 0 }}>Target vs Expected vs Won</p>
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>Expected = deals with a PO Expected date this {attCfg.unit}; Won = POs received this {attCfg.unit}</p>
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>Expected = deals with a PO Expected date this {attCfg.unit}; Won = orders received this {attCfg.unit}</p>
             </div>
             <select className="input" style={{ width: 160 }} value={attPeriod} onChange={e => setAttPeriod(e.target.value)}>
               {INV_GRAN.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
@@ -689,7 +690,7 @@ export default function DashboardPage() {
             <div className={`card-sm ${attainment.expectedIds.length ? 'clickable' : ''}`} style={{ textAlign: 'center', cursor: attainment.expectedIds.length ? 'pointer' : 'default' }}
               onClick={() => navigateWithIds(attainment.expectedIds, `Expected · this ${attCfg.unit}`)}
               title={attainment.expectedIds.length ? `View the ${attainment.expCount} deal(s) with a PO Expected date this ${attCfg.unit}` : undefined}>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>Expected (PO due)</div>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>Expected (order due)</div>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#6366f1' }}>₹{attainment.expected.toFixed(1)}L</div>
               <div style={{ fontSize: 11, color: '#94a3b8' }}>{attainment.expCount} deal{attainment.expCount === 1 ? '' : 's'}</div>
             </div>
@@ -825,7 +826,7 @@ export default function DashboardPage() {
                     <th>Source</th>
                     <th style={{ textAlign: 'right' }}>Leads</th>
                     <th style={{ textAlign: 'right' }}>Win %</th>
-                    <th style={{ textAlign: 'right' }}>TCV (₹L)</th>
+                    <th style={{ textAlign: 'right' }}>Deal Value (₹L)</th>
                     <th style={{ textAlign: 'right' }}>Avg Score</th>
                   </tr>
                 </thead>
@@ -907,7 +908,7 @@ export default function DashboardPage() {
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                 <select className="input" style={{ width: 110, fontSize: 11, height: 28, padding: '2px 6px' }} value={poTrendMetric} onChange={e => setPoTrendMetric(e.target.value)}>
                   <option value="count">Count</option>
-                  <option value="tcv">TCV (₹L)</option>
+                  <option value="tcv">Deal Value (₹L)</option>
                   <option value="acv">ACV (₹L)</option>
                   {isSignage && <option value="licenses">Licenses</option>}
                 </select>
@@ -924,7 +925,7 @@ export default function DashboardPage() {
               </div>
             </div>
             {poTrendActiveYears.length === 0 ? (
-              <p style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>No won POs yet.</p>
+              <p style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>No won orders yet.</p>
             ) : (
               <>
                 <ResponsiveContainer width="100%" height={260}>
@@ -944,7 +945,7 @@ export default function DashboardPage() {
                   {poTrendActiveYears.map((yr, i) => (
                     <span key={yr}>
                       <span style={{ display: 'inline-block', width: 10, height: 10, background: PO_TREND_COLORS[i % PO_TREND_COLORS.length], borderRadius: 2, marginRight: 4 }} />
-                      {yr}: <strong>{poTrendTotals[yr]?.count || 0}</strong> POs · TCV <strong>₹{(poTrendTotals[yr]?.tcv || 0).toFixed(1)}L</strong> · ACV <strong>₹{(poTrendTotals[yr]?.acv || 0).toFixed(1)}L</strong>{isSignage && <> · <strong>{poTrendTotals[yr]?.licenses || 0}</strong> Lic</>}
+                      {yr}: <strong>{poTrendTotals[yr]?.count || 0}</strong> orders · Deal Value <strong>₹{(poTrendTotals[yr]?.tcv || 0).toFixed(1)}L</strong> · ACV <strong>₹{(poTrendTotals[yr]?.acv || 0).toFixed(1)}L</strong>{isSignage && <> · <strong>{poTrendTotals[yr]?.licenses || 0}</strong> Lic</>}
                     </span>
                   ))}
                 </div>
@@ -955,7 +956,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="card">
-          <p className="section-title">🏅 Annual BD Performance — {currentYear}</p>
+          <p className="section-title">🏅 Annual Sales Rep Performance — {currentYear}</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {annualBDPerf.map(bd => (
               <div key={bd.name} className="card-sm">

@@ -145,7 +145,7 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
           {sections && (
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>Services Offered</div>
-              <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 10px' }}>Build this business's catalog by category. Items appear on its New Lead form, grouped the same way; the default OPEX/CAPEX pre-fills the lead line. <b>Hardware</b> and <b>Hardware + Software</b> flow into the Inventory Pipeline — <b>Software / Service</b> does not.</p>
+              <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 10px' }}>Build this business's catalog by category. Items appear on its New Lead form, grouped the same way; the default Recurring/One-time pre-fills the lead line. <b>Hardware</b> and <b>Hardware + Software</b> flow into the Inventory Pipeline — <b>Software / Service</b> does not.</p>
               {SERVICE_CATEGORIES.map(cat => (
                 <ServiceCategoryBuilder key={cat.key}
                   category={cat}

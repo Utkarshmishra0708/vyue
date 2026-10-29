@@ -37,12 +37,12 @@ async function sweepRenewalDue(businessUnit) {
       let title;
       if (status.band === 'expired') {
         severity = 'critical';
-        title = `PO #${lead.sr_no} expired ${Math.abs(status.days)}d ago`;
+        title = `Order #${lead.sr_no} expired ${Math.abs(status.days)}d ago`;
       } else if (status.band === 'red') {
         severity = 'warning';
-        title = `PO #${lead.sr_no} due in ${status.days}d`;
+        title = `Order #${lead.sr_no} due in ${status.days}d`;
       } else {
-        title = `PO #${lead.sr_no} due in ${status.days}d`;
+        title = `Order #${lead.sr_no} due in ${status.days}d`;
       }
 
       const recipients = unique(ownerOf(lead), await managersInBu(businessUnit));

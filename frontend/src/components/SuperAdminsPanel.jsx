@@ -43,7 +43,7 @@ export default function SuperAdminsPanel({ reloadSignal }) {
       load();
       if (showAudit) getSuperAdminAudit().then(setAudit).catch(() => {});
     } catch (e) {
-      setMsg(e.response?.data?.message || 'Could not update Global Admin access');
+      setMsg(e.response?.data?.message || 'Could not update Owner access');
     } finally { setBusy(false); }
   };
 
@@ -63,9 +63,9 @@ export default function SuperAdminsPanel({ reloadSignal }) {
             GLOBAL ADMINS — ALL PLATFORMS
           </p>
           <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0', maxWidth: 620 }}>
-            Cross-platform access spanning Signage, JHES and Surveillance at once — and any platform
-            added later, automatically. The grant sits on top of the person's existing platform role
-            and doesn't replace it. Only a Global Admin can change this.
+            Cross-business access spanning every business at once — and any business
+            added later, automatically. The grant sits on top of the person's existing business role
+            and doesn't replace it. Only an Owner can change this.
           </p>
         </div>
         <button className="btn btn-sm" onClick={toggleAudit}>{showAudit ? 'Hide history' : 'View history'}</button>
@@ -79,7 +79,7 @@ export default function SuperAdminsPanel({ reloadSignal }) {
 
       <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {data.superAdmins.length === 0 && (
-          <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>No Global Admins yet.</p>
+          <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>No Owners yet.</p>
         )}
         {data.superAdmins.map(sa => {
           const st = SCOPE_STYLE[sa.scope] || SCOPE_STYLE.read;
@@ -90,7 +90,7 @@ export default function SuperAdminsPanel({ reloadSignal }) {
                 <span style={{ fontWeight: 600, fontSize: 13 }}>{sa.name}</span>
                 {isSelf && <span style={{ fontSize: 11, color: '#94a3b8' }}> · you</span>}
                 <div style={{ fontSize: 11, color: '#64748b' }}>
-                  {sa.email} · platform role: {sa.role} ({sa.business_unit})
+                  {sa.email} · business role: {sa.role} ({sa.business_unit})
                   {!sa.active && <span style={{ color: '#b91c1c' }}> · disabled</span>}
                 </div>
               </div>
@@ -107,7 +107,7 @@ export default function SuperAdminsPanel({ reloadSignal }) {
                     onClick={() => change(sa.id, null, sa.name)}>Revoke</button>
                 </>
               )}
-              {isSelf && <span style={{ fontSize: 11, color: '#94a3b8' }}>another Global Admin must change yours</span>}
+              {isSelf && <span style={{ fontSize: 11, color: '#94a3b8' }}>another Owner must change yours</span>}
             </div>
           );
         })}
@@ -116,7 +116,7 @@ export default function SuperAdminsPanel({ reloadSignal }) {
       {canAct && (
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f1f5f9', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 220 }}>
-            <label className="field-label">Grant Global Admin to</label>
+            <label className="field-label">Grant Owner to</label>
             <select className="input" value={addId} onChange={e => setAddId(e.target.value)}>
               <option value="">Select a user…</option>
               {data.candidates.map(c => (
@@ -125,7 +125,7 @@ export default function SuperAdminsPanel({ reloadSignal }) {
             </select>
           </div>
           <div style={{ minWidth: 170 }}>
-            <label className="field-label">Mode (all platforms)</label>
+            <label className="field-label">Mode (all businesses)</label>
             <select className="input" value={addScope} onChange={e => setAddScope(e.target.value)}>
               <option value="read">Read-only</option>
               <option value="write">Read + Write</option>
@@ -140,8 +140,8 @@ export default function SuperAdminsPanel({ reloadSignal }) {
 
       <p style={{ fontSize: 11, color: '#94a3b8', margin: '12px 0 0', lineHeight: 1.7 }}>
         <b>Read + Write</b> is unrestricted by design — Full Access to every module including Settings,
-        on every platform, with no per-module limits.{' '}
-        <b>Read-only</b> sees everything across all platforms and can change nothing anywhere.
+        on every business, with no per-module limits.{' '}
+        <b>Read-only</b> sees everything across all businesses and can change nothing anywhere.
       </p>
 
       {showAudit && (

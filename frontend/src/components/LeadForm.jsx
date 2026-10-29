@@ -157,8 +157,8 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
   const [dropdowns, setDropdowns] = useState({});              // per-business dropdown options
   const [cpOther, setCpOther] = useState(false);               // "Other — enter a new name" selected
   const [affOther, setAffOther] = useState(false);             // Lead Affiliate "Other" (JHES only)
-  const [ptOther, setPtOther] = useState(false);               // Property Type "Other" → manual entry
-  const [pcOther, setPcOther] = useState(false);               // Property Category "Other" → manual entry
+  const [ptOther, setPtOther] = useState(false);               // Customer Type "Other" → manual entry
+  const [pcOther, setPcOther] = useState(false);               // Customer Category "Other" → manual entry
   const channelPartners = dropdowns.channel_partner || [];
   const affiliates = dropdowns.lead_affiliate || [];
   const sourceOpts  = (dropdowns.lead_source && dropdowns.lead_source.length)         ? dropdowns.lead_source      : SOURCES;
@@ -172,7 +172,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
   const [lostOther, setLostOther] = useState('');
   // Global vs Individual PO. Only chosen at creation; an existing lead is always an Individual PO.
   const [poType, setPoType] = useState('individual');
-  const [chains, setChains] = useState([]);                 // Global POs (chains) for linkage
+  const [chains, setChains] = useState([]);                 // Master Orders (chains) for linkage
   const [linkToChain, setLinkToChain] = useState(false);    // Individual: property belongs to a chain
   const [campaigns, setCampaigns] = useState([]);            // Campaigns for linkage
   const emptyGlobal = { chain_name: '', device_total: '', device_type: '', price_lakhs: '', expected_start_date: '', expected_end_date: '' };
@@ -233,7 +233,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
       setExistingPoUrl(lead.po_document_url || null);
       setLines(parseServiceLines(lead.services_json));
       setPhaseChanged(false);
-      setPoType('individual');            // an existing lead is always an Individual PO
+      setPoType('individual');            // an existing lead is always an Individual Order
       setLinkToChain(!!lead.global_po_id);
       // A stored Account Mix value not in the fixed list is a manually-entered "Other" value.
       setPtOther(!!lead.property_type && !PROPERTY_TYPES.includes(lead.property_type));
@@ -332,7 +332,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
     try {
       // Global PO — a chain reference record only (no funnel, no POC, no scoring). Created in "new" mode.
       if (!lead && poType === 'global') {
-        if (!globalForm.chain_name.trim()) { setError('Chain name is required.'); return; }
+        if (!globalForm.chain_name.trim()) { setError('Parent account name is required.'); return; }
         const devices = parseInt(globalForm.device_total, 10);
         if (!Number.isFinite(devices) || devices < 0) { setError('Number of requirement must be a non-negative whole number.'); return; }
         if (!globalForm.device_type) { setError('Please select a type.'); return; }
@@ -368,12 +368,12 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
       }
       // A PO document is mandatory once a deal is marked PO Received.
       if (form.phase === 'PO Received' && !existingPoUrl && !poFile) {
-        setError('A PO document is required once the phase is PO Received.');
+        setError('An order document is required once the phase is PO Received.');
         return;
       }
       // Once the PO document is attached, its PO Number (identifier) is required.
       if (form.phase === 'PO Received' && (existingPoUrl || poFile) && !String(form.po_number || '').trim()) {
-        setError('Please enter the PO Number for the received PO.');
+        setError('Please enter the Order Number for the received order.');
         return;
       }
       const payload = {
@@ -451,11 +451,11 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
         <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#3730a3', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 16 }}>{expansionMode === 'renewal' ? '🔄' : '➕'}</span>
           <span>
-            <strong>{expansionMode === 'renewal' ? 'Renewal of' : 'Additional PO for'} {expansionFrom.customer_name}</strong>
+            <strong>{expansionMode === 'renewal' ? 'Renewal of' : 'Additional Order for'} {expansionFrom.customer_name}</strong>
             {expansionFrom.lead_ref && <span style={{ color: '#6366f1', fontFamily: 'monospace', marginLeft: 6 }}>· copied from {expansionFrom.lead_ref}</span>}
             <span style={{ color: '#64748b', marginLeft: 6, fontSize: 12 }}>
               {expansionMode === 'renewal'
-                ? 'Statics, services and deal size copied from the PO being renewed. Adjust the dates and price.'
+                ? 'Statics, services and deal size copied from the order being renewed. Adjust the dates and price.'
                 : 'Static details filled in. Fill the services, deal size and dates fresh.'}
             </span>
           </span>
@@ -465,14 +465,14 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
       {error && <div className="badge badge-red" style={{ padding: '8px 12px', fontSize: 13 }}>{error}</div>}
 
       {/* PO Type — chosen at creation. An existing lead is always an Individual PO. Hidden when the
-          business has disabled the PO Type field in Edit Template. */}
+          business has disabled the Order Type field in Edit Template. */}
       {!lead && poTypeEnabled && !expansionFrom && (
         <section>
-          <p className="section-title">PO Type</p>
+          <p className="section-title">Order Type</p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {[
-              { key: 'individual', title: 'Individual PO', desc: 'A property-level deal — enters the funnel and is scored.' },
-              { key: 'global', title: 'Global PO (chain)', desc: 'A chain/account reference record — not tracked in the funnel.' },
+              { key: 'individual', title: 'Individual Order', desc: 'A single-customer deal — enters the funnel and is scored.' },
+              { key: 'global', title: 'Master Order (parent account)', desc: 'A parent-account reference record — not tracked in the funnel.' },
             ].map(o => (
               <button key={o.key} type="button" onClick={() => setPoType(o.key)}
                 style={{ flex: 1, minWidth: 200, textAlign: 'left', cursor: 'pointer', borderRadius: 10, padding: '12px 14px',
@@ -488,12 +488,12 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
       {/* Global PO sub-form — reference record only (no funnel, no scoring). */}
       {!lead && poType === 'global' && (
         <section>
-          <p className="section-title">Global PO — Chain Reference</p>
+          <p className="section-title">Master Order — Parent Account Reference</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            <Field label="Chain Name" required>
+            <Field label="Parent Account Name" required>
               <input required className="input" value={globalForm.chain_name} onChange={e => setGlobal('chain_name', e.target.value)} placeholder="e.g. Sunrise Hotels" />
             </Field>
-            <Field label="Number of Requirement" required>
+            <Field label="Quantity Required" required>
               <input required type="number" min="0" className="input" value={globalForm.device_total} onChange={e => setGlobal('device_total', e.target.value)} placeholder="Total capacity across the chain" />
             </Field>
             <Field label="Type" required>
@@ -514,45 +514,45 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
               <input type="date" className="input" value={globalForm.expected_end_date} onChange={e => setGlobal('expected_end_date', e.target.value)} />
             </Field>
           </div>
-          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 10 }}>Saved for reference only — a Global PO does not enter the sales funnel and has no stage or confidence score. Devices consumed are tracked automatically as its Individual POs are won.</p>
+          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 10 }}>Saved for reference only — a Master Order does not enter the sales funnel and has no stage or confidence score. Devices consumed are tracked automatically as its Individual Orders are won.</p>
         </section>
       )}
 
       {poType === 'individual' && (<>
       {/* Chain Mapping — link this Individual PO to a chain, or leave it standalone. Hidden when PO
-          Type is disabled for this business (no Global POs → nothing to map to).
-          For Additional/Renewal flows, chain mapping is inherited from the source lead automatically. */}
+          Type is disabled for this business (no Master Orders → nothing to map to).
+          For Additional/Renewal flows, parent account mapping is inherited from the source lead automatically. */}
       {poTypeEnabled && !expansionFrom && (
       <section>
-        <p className="section-title">Chain Mapping</p>
+        <p className="section-title">Parent Account Mapping</p>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#334155' }}>
           <input type="checkbox" checked={linkToChain} onChange={e => { setLinkToChain(e.target.checked); if (!e.target.checked) set('global_po_id', ''); }} />
-          This property belongs to a chain
+          This customer belongs to a parent account
         </label>
         {linkToChain ? (
           <div style={{ marginTop: 10 }}>
-            <Field label="Chain (Global PO)" required>
+            <Field label="Parent Account (Master Order)" required>
               <select required className="input" value={form.global_po_id} onChange={e => set('global_po_id', e.target.value)}>
-                <option value="">Select a chain…</option>
+                <option value="">Select a parent account…</option>
                 {chains.map(c => {
                   const s = c.status || {};
                   return <option key={c.id} value={c.id}>{c.chain_name} ({c.device_type || 'Hardware'}) — {s.consumed ?? 0} of {c.device_total} won{s.exceeded ? ' · exceeded' : ` · ${s.remaining} left`}</option>;
                 })}
               </select>
             </Field>
-            {chains.length === 0 && <p style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>No chains yet — create one first via New Lead → PO Type → Global PO.</p>}
+            {chains.length === 0 && <p style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>No parent accounts yet — create one first via New Lead → Order Type → Master Order.</p>}
           </div>
         ) : (
-          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Standalone property — no chain mapping.</p>
+          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Standalone customer — no parent account mapping.</p>
         )}
       </section>
       )}
       {poTypeEnabled && expansionFrom && linkToChain && (
       <section>
-        <p className="section-title">Chain Mapping</p>
+        <p className="section-title">Parent Account Mapping</p>
         <p style={{ fontSize: 13, color: '#334155' }}>
           Linked to chain: <strong>{chains.find(c => String(c.id) === String(form.global_po_id))?.chain_name || '—'}</strong>
-          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 6 }}>(inherited from source PO)</span>
+          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 6 }}>(inherited from source order)</span>
         </p>
       </section>
       )}
@@ -565,7 +565,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
           <p className="section-title">Account Mix</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             {propertyTypeEnabled && (
-              <Field label="Property Type">
+              <Field label="Customer Type">
                 {ptOther ? (
                   <div style={{ display: 'flex', gap: 6 }}>
                     <input className="input" style={{ flex: 1 }} placeholder="Enter property type" value={form.property_type} onChange={e => set('property_type', e.target.value)} autoFocus />
@@ -583,7 +583,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
               </Field>
             )}
             {propertyCategoryEnabled && (
-              <Field label="Property Category">
+              <Field label="Customer Category">
                 {pcOther ? (
                   <div style={{ display: 'flex', gap: 6 }}>
                     <input className="input" style={{ flex: 1 }} placeholder="Enter property category" value={form.property_category} onChange={e => set('property_category', e.target.value)} autoFocus />
@@ -615,7 +615,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
           <Field label="Lead Owner" required>
             {isAdmin ? (
               <select required className="input" value={form.owner_id} onChange={e => set('owner_id', e.target.value)}>
-                <option value="">Select BD</option>
+                <option value="">Select Sales Rep</option>
                 {bds.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             ) : (
@@ -673,12 +673,12 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
             </Field>
           )}
           {form.lead_source === 'KAM' && (
-            <Field label="KAM Name" required>
+            <Field label="Account Manager" required>
               <input required className="input" value={form.kam_name} onChange={e => set('kam_name', e.target.value)} placeholder="Key Account Manager name" />
             </Field>
           )}
           {form.lead_source === 'Lead Affiliate' && (
-            <Field label="Affiliate Name" required>
+            <Field label="Referral Partner Name" required>
               {isJHES ? (
                 <>
                   {affOther ? (
@@ -709,7 +709,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
           )}
           {renderExtras('source')}
           {/* New / Renewal is no longer a manual field. A plain new lead is auto-tagged "New";
-              the "+ Additional PO" header flow tags leads "Expansion" (Additional) or "Renewal". */}
+              the "+ Additional Order" header flow tags leads "Expansion" (Additional) or "Renewal". */}
           {fieldOn('classification', 'lead_temperature') && (
             <Field label="Lead Rating" required={req('lead_temperature')}>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -736,8 +736,8 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
       </section>
 
       {/* Section 2: Services Offered — the shared, catalog-driven, three-category section (same for
-          every business). The Global Admin defines the catalog in Edit Template; the BD picks items
-          and sets OPEX/CAPEX, frequency, rate and qty here. */}
+          every business). The Owner defines the catalog in Edit Template; the Sales Rep picks items
+          and sets Recurring/One-time, frequency, rate and qty here. */}
       <ServicesOffered catalog={buConfig?.services || []} contractMonths={form.contract_period_months}
         value={lines} onChange={setLines} readOnly={leadsReadOnly} />
 
@@ -749,7 +749,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
             <Field label="Contract Period (Months)" required={req('contract_period_months')}><input required={req('contract_period_months')} type="number" min="1" className="input" value={form.contract_period_months} onChange={e => set('contract_period_months', e.target.value)} /></Field>
           )}
           {fieldOn('commercials', 'potential_tcv_lakhs') && (
-          <Field label="Potential TCV (Lakhs)" required={req('potential_tcv_lakhs')}>
+          <Field label="Potential Deal Value (Lakhs)" required={req('potential_tcv_lakhs')}>
             <input
               required={req('potential_tcv_lakhs')} type="number" step="0.01" min="0" className="input"
               value={effectiveTcv}
@@ -778,7 +778,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
           </Field>
           )}
           {fieldOn('commercials', 'po_validity_months') && (
-            <Field label="PO Validity (Months)">
+            <Field label="Order Validity (Months)">
               <input type="number" min="1" className="input" value={form.po_validity_months} onChange={e => set('po_validity_months', e.target.value)} />
             </Field>
           )}
@@ -788,7 +788,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
           <div className="badge badge-blue" style={{ marginTop: 10, padding: '6px 12px' }}>
             First-Year ACV: ₹{acv()} L/yr
             {!form.tcv_manual && lines.some(l => (l.hw && l.hw.nature === 'capex') || (l.svc && l.svc.nature === 'capex')) && (
-              <span style={{ marginLeft: 6, fontWeight: 500 }}>· incl. one-time CAPEX in year 1</span>
+              <span style={{ marginLeft: 6, fontWeight: 500 }}>· incl. one-time in year 1</span>
             )}
           </div>
         )}
@@ -857,12 +857,12 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
             </Field>
           )}
           {form.phase === 'PO Received' && fieldOn('dates', 'service_start_date') && (
-            <Field label="PO Start Date" required>
+            <Field label="Order Start Date" required>
               <input type="date" required className="input" value={form.service_start_date} onChange={e => set('service_start_date', e.target.value)} />
             </Field>
           )}
           {form.phase === 'PO Received' && fieldOn('dates', 'service_end_date') && (
-            <Field label="PO End Date" required>
+            <Field label="Order End Date" required>
               <input type="date" required min={form.service_start_date || undefined} className="input" value={form.service_end_date} onChange={e => set('service_end_date', e.target.value)} />
             </Field>
           )}
@@ -906,7 +906,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
               </Field>
             );
           })()}
-          <Field label="Hardware Requested Date">
+          <Field label="Delivery Requested Date">
             <input type="date" className="input" value={form.device_requested_date || ''} onChange={e => set('device_requested_date', e.target.value)} />
             <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>When the hardware for this deal is expected — used (and sorted by) in the Inventory Pipeline.</p>
           </Field>
@@ -957,10 +957,10 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
           when both built-in fields are off AND no custom fields were added into 'po'. */}
       {(fieldOn('po', 'po_document_url') || fieldOn('po', 'po_number') || customBySection.get('po')) && (
       <section>
-        <p className="section-title">PO Document{form.phase === 'PO Received' && fieldOn('po', 'po_document_url') ? ' *' : ''}</p>
+        <p className="section-title">Order Document{form.phase === 'PO Received' && fieldOn('po', 'po_document_url') ? ' *' : ''}</p>
         {fieldOn('po', 'po_document_url') && (<>
           {form.phase === 'PO Received' && !existingPoUrl && !poFile && (
-            <p style={{ fontSize: 12, color: '#dc2626', margin: '0 0 8px' }}>A PO document is required once the phase is PO Received.</p>
+            <p style={{ fontSize: 12, color: '#dc2626', margin: '0 0 8px' }}>An order document is required once the phase is PO Received.</p>
           )}
           {existingPoUrl && !poFile && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -968,7 +968,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
                 <a href={fileUrl(existingPoUrl)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>📄 View uploaded document</a>
               </div>
               <button type="button" className="btn btn-sm" style={{ color: '#dc2626', fontSize: 11 }}
-                onClick={() => { if (window.confirm('Remove the uploaded PO document?')) setExistingPoUrl(null); }}>
+                onClick={() => { if (window.confirm('Remove the uploaded order document?')) setExistingPoUrl(null); }}>
                 🗑 Remove
               </button>
             </div>
@@ -978,9 +978,9 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
         {/* PO Number is asked for ONLY after a PO document is attached (identifier for the received PO). */}
         {fieldOn('po', 'po_number') && form.phase === 'PO Received' && (poFile || existingPoUrl) && (
           <div style={{ marginTop: 12 }}>
-            <Field label="PO Number" required>
-              <input required className="input" value={form.po_number} onChange={e => set('po_number', e.target.value)} placeholder="Enter PO number (identifier)" />
-              <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>A unique identifier for the received PO — required once the document is attached.</p>
+            <Field label="Order Number" required>
+              <input required className="input" value={form.po_number} onChange={e => set('po_number', e.target.value)} placeholder="Enter order number (identifier)" />
+              <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>A unique identifier for the received order — required once the document is attached.</p>
             </Field>
           </div>
         )}
@@ -1044,7 +1044,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
         <button type="button" className="btn" onClick={onCancel}>Cancel</button>
-        <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : (lead ? 'Save Changes' : (poType === 'global' ? 'Create Global PO' : 'Create Lead'))}</button>
+        <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : (lead ? 'Save Changes' : (poType === 'global' ? 'Create Master Order' : 'Create Lead'))}</button>
       </div>
       </fieldset>
     </form>

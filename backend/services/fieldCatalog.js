@@ -30,11 +30,11 @@ const FIELD_SECTIONS = [
   ] },
   { key: 'commercials', label: 'Commercials', fields: [
     { slug: 'quantity',              label: 'Quantity',              type: 'number',  core: true },
-    { slug: 'potential_tcv_lakhs',   label: 'Potential TCV (Lakhs)', type: 'decimal', core: true },
+    { slug: 'potential_tcv_lakhs',   label: 'Potential Deal Value (Lakhs)', type: 'decimal', core: true },
     { slug: 'acv_lakhs',             label: 'ACV (Lakhs)',           type: 'decimal', core: true },
     { slug: 'contract_value_lakhs',  label: 'Contract Value (Lakhs)', type: 'decimal', core: true },
     { slug: 'contract_period_months', label: 'Contract Period (months)', type: 'number', core: true },
-    { slug: 'po_validity_months',    label: 'PO Validity (months)',  type: 'number',  core: true },
+    { slug: 'po_validity_months',    label: 'Order Validity (months)',  type: 'number',  core: true },
   ] },
   { key: 'pipeline', label: 'Pipeline', fields: [
     { slug: 'phase',              label: 'Sales Stage',        type: 'select', core: true, options: ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received'] },
@@ -50,16 +50,16 @@ const FIELD_SECTIONS = [
     { slug: 'contact_phone',       label: 'Phone',       type: 'text', core: true },
     { slug: 'contact_designation', label: 'Designation', type: 'text', core: true },
   ] },
-  { key: 'po', label: 'PO', fields: [
-    { slug: 'po_type',         label: 'PO Type',       type: 'select', core: true, options: ['Individual', 'Global'] },
-    { slug: 'po_number',       label: 'PO Number',     type: 'text',   core: true },
-    { slug: 'po_document_url', label: 'PO Document',   type: 'file',   core: true },
+  { key: 'po', label: 'Order', fields: [
+    { slug: 'po_type',         label: 'Order Type',       type: 'select', core: true, options: ['Individual', 'Global'] },
+    { slug: 'po_number',       label: 'Order Number',     type: 'text',   core: true },
+    { slug: 'po_document_url', label: 'Order Document',   type: 'file',   core: true },
     { slug: 'billing_cycle',   label: 'Billing Cycle',  type: 'select', core: true, options: ['Monthly', 'Quarterly', 'Semi-annually', 'Annually', 'Advance', 'Others'] },
     { slug: 'payment_terms',   label: 'Payment Terms',  type: 'select', core: true, options: ['100% Advance', '7 Days Credit', '15 Days Credit', '30 Days Credit', '45 Days Credit', 'Others'] },
   ] },
   { key: 'dates', label: 'Dates', fields: [
-    { slug: 'service_start_date', label: 'PO Start Date', type: 'date', core: true },
-    { slug: 'service_end_date',   label: 'PO End Date',   type: 'date', core: true },
+    { slug: 'service_start_date', label: 'Order Start Date', type: 'date', core: true },
+    { slug: 'service_end_date',   label: 'Order End Date',   type: 'date', core: true },
   ] },
   { key: 'other', label: 'Other', fields: [
     { slug: 'jhes_product',     label: 'Product (free text)', type: 'text',     core: true },
@@ -89,7 +89,7 @@ const MODULE_CATALOG = [
   { slug: 'dashboard',  label: 'Dashboard',       core: true },
   { slug: 'forecast',   label: 'Inventory Pipeline' },
   { slug: 'reports',    label: 'Reports' },
-  { slug: 'voc',        label: 'Voice of Customer (VOC)', optIn: true },
+  { slug: 'voc',        label: 'Customer Feedback', optIn: true },
   { slug: 'activities', label: 'Task Board (kanban)' },
   { slug: 'campaigns',  label: 'Campaigns', optIn: true },
   { slug: 'customers',  label: 'Customers & Contacts', optIn: true },

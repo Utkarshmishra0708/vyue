@@ -11,7 +11,7 @@ import { fmtDate } from '../utils/leadHelpers';
 import { writeFormattedSheet } from '../utils/excelExport';
 import MentionTextarea from '../components/MentionTextarea';
 
-const CAN_REVIEW = ['super_admin', 'business_admin', 'pmo'];   // PMO / Business Admin / Super Admin
+const CAN_REVIEW = ['super_admin', 'business_admin', 'pmo'];   // Manager / Business Admin / Super Admin
 const today = () => new Date().toISOString().slice(0, 10);
 const EMPTY = {
   date_of_entry: '', customer_name: '', total_account_value_lakhs: '', bd_owner_id: '', pmo_owner: '',
@@ -112,33 +112,33 @@ export default function VocPage() {
   const exportExcel = async () => {
     const XLSX = await import('xlsx');
     const rows = filtered.map(v => ({
-      'VOC No': v.voc_no, 'Date': v.date_of_entry || '', 'Customer': v.customer_name, 'Total Account Value (L)': v.total_account_value_lakhs || '',
-      'BD Owner': v.bdOwner?.name || '', 'PMO Owner': v.pmo_owner || '', 'Region/State': v.region_state || '',
-      'Segment': v.customer_segment || '', 'Product': v.product_solution || '', 'VOC Type': v.voc_type || '',
+      'Feedback No': v.voc_no, 'Date': v.date_of_entry || '', 'Customer': v.customer_name, 'Total Account Value (L)': v.total_account_value_lakhs || '',
+      'Sales Rep': v.bdOwner?.name || '', 'Manager': v.pmo_owner || '', 'Region/State': v.region_state || '',
+      'Segment': v.customer_segment || '', 'Product': v.product_solution || '', 'Feedback Type': v.voc_type || '',
       'Description': v.description || '', 'Business Impact': v.business_impact || '', 'Revenue Impact (L)': v.revenue_impact_lakhs || '',
       'Competitor': v.competitor || '', 'Priority': v.priority || '', 'Status': v.status,
       'Product Remarks': v.product_remarks || '', 'Target Release': v.target_release || '', 'Closure Date': v.closure_date || '',
     }));
-    writeFormattedSheet(XLSX, rows, 'VOC', `VOC_${user.business_unit}_${today()}.xlsx`);
+    writeFormattedSheet(XLSX, rows, 'Feedback', `VOC_${user.business_unit}_${today()}.xlsx`);
   };
 
   const bdNames = bds.map(b => b.name);
 
   if (!allowed) {
-    return <Layout><div style={{ padding: 40 }}><h1 style={{ fontSize: 18 }}>VOC</h1><p style={{ color: '#64748b' }}>The Voice of Customer module is not enabled for your business. Please contact your administrator.</p></div></Layout>;
+    return <Layout><div style={{ padding: 40 }}><h1 style={{ fontSize: 18 }}>Customer Feedback</h1><p style={{ color: '#64748b' }}>The Customer Feedback module is not enabled for your business. Please contact your administrator.</p></div></Layout>;
   }
 
   return (
     <Layout>
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>VOC — Voice of Customer</h1>
+          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Customer Feedback</h1>
           <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{stats.open} open · {stats.total} total</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => setShowDash(s => !s)}>{showDash ? 'Hide' : 'Show'} dashboard</button>
           <button className="btn" onClick={exportExcel}>Export Excel</button>
-          <button className="btn btn-primary" onClick={() => setModal({ mode: 'new' })}>+ New VOC</button>
+          <button className="btn btn-primary" onClick={() => setModal({ mode: 'new' })}>+ New Feedback</button>
         </div>
       </div>
 
@@ -146,7 +146,7 @@ export default function VocPage() {
         {showDash && (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-              {[['Total VOCs', stats.total, '#6366f1'], ['Open', stats.open, '#f59e0b'], ['Closed', stats.closed, '#16a34a']].map(([label, val, color]) => (
+              {[['Total Feedback', stats.total, '#6366f1'], ['Open', stats.open, '#f59e0b'], ['Closed', stats.closed, '#16a34a']].map(([label, val, color]) => (
                 <div key={label} className="card" style={{ padding: 16 }}>
                   <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{label}</div>
                   <div style={{ fontSize: 30, fontWeight: 800, color }}>{val}</div>
@@ -157,9 +157,9 @@ export default function VocPage() {
               <Breakdown title="By Priority" data={stats.byPriority} color="#dc2626" />
               <Breakdown title="By Status" data={stats.byStatus} color="#0ea5e9" />
               <Breakdown title="By Product" data={stats.byProduct} color="#7c3aed" />
-              <Breakdown title="By VOC Type" data={stats.byType} color="#0891b2" />
+              <Breakdown title="By Feedback Type" data={stats.byType} color="#0891b2" />
               <Breakdown title="By Region" data={stats.byRegion} color="#059669" />
-              <Breakdown title="By BD Owner" data={stats.byBd} color="#ea580c" />
+              <Breakdown title="By Sales Rep" data={stats.byBd} color="#ea580c" />
             </div>
           </>
         )}
@@ -172,7 +172,7 @@ export default function VocPage() {
           <MultiSelect label="Priority" options={VOC_PRIORITIES} selected={fPriority} onChange={setFPriority} />
           <MultiSelect label="Product" options={VOC_PRODUCTS} selected={fProduct} onChange={setFProduct} />
           <MultiSelect label="Type" options={VOC_TYPES} selected={fType} onChange={setFType} />
-          {canReview && <MultiSelect label="BD Owner" options={bdNames} selected={fBd} onChange={setFBd} />}
+          {canReview && <MultiSelect label="Sales Rep" options={bdNames} selected={fBd} onChange={setFBd} />}
           <label style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>From <input type="date" className="input" style={{ width: 140 }} value={fFrom} onChange={e => setFFrom(e.target.value)} /></label>
           <label style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>To <input type="date" className="input" style={{ width: 140 }} value={fTo} onChange={e => setFTo(e.target.value)} /></label>
         </div>
@@ -182,8 +182,8 @@ export default function VocPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>VOC</th><th>Date</th><th>Customer</th><th>Product</th><th>Type</th>
-                  <th>Priority</th><th>Impact</th><th>Status</th><th>BD Owner</th>
+                  <th>Feedback</th><th>Date</th><th>Customer</th><th>Product</th><th>Type</th>
+                  <th>Priority</th><th>Impact</th><th>Status</th><th>Sales Rep</th>
                 </tr>
               </thead>
               <tbody>
@@ -200,7 +200,7 @@ export default function VocPage() {
                     <td style={{ fontSize: 12 }}>{v.bdOwner?.name?.split(' ')[0] || '—'}</td>
                   </tr>
                 ))}
-                {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>No VOC entries match your filters.</td></tr>}
+                {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>No feedback entries match your filters.</td></tr>}
               </tbody>
             </table>
           )}
@@ -224,8 +224,8 @@ export default function VocPage() {
         <div className="modal-overlay" onClick={() => setDeleteId(null)}>
           <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
             <div className="modal-body">
-              <p style={{ fontWeight: 700, marginBottom: 8 }}>Delete this VOC?</p>
-              <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>This permanently removes the VOC and its history.</p>
+              <p style={{ fontWeight: 700, marginBottom: 8 }}>Delete this feedback?</p>
+              <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>This permanently removes the feedback and its history.</p>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="btn" onClick={() => setDeleteId(null)}>Cancel</button>
                 <button className="btn btn-danger" onClick={async () => { await deleteVoc(deleteId); setDeleteId(null); fetchAll(); }}>Delete</button>
@@ -279,7 +279,7 @@ function VocModal({ mode, voc, bds, canReview, user, onClose, onSaved, onDelete 
       else await createVoc(form);
       onSaved();
     } catch (er) {
-      setErr(er.response?.data?.message || 'Could not save VOC.');
+      setErr(er.response?.data?.message || 'Could not save feedback.');
     } finally { setBusy(false); }
   };
 
@@ -322,7 +322,7 @@ function VocModal({ mode, voc, bds, canReview, user, onClose, onSaved, onDelete 
       <div className="modal" style={{ maxWidth: 720 }}>
         <div className="modal-header">
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <span className={`tab ${tab === 'form' ? 'active' : ''}`} onClick={() => setTab('form')}>{isEdit ? `VOC #${voc.voc_no}` : 'New VOC'}</span>
+            <span className={`tab ${tab === 'form' ? 'active' : ''}`} onClick={() => setTab('form')}>{isEdit ? `Feedback #${voc.voc_no}` : 'New Feedback'}</span>
             {isEdit && <span className={`tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>Activity</span>}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -333,7 +333,7 @@ function VocModal({ mode, voc, bds, canReview, user, onClose, onSaved, onDelete 
         <div className="modal-body">
           {tab === 'form' ? (
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {!canEdit && <div className="badge badge-amber" style={{ padding: '8px 12px' }}>You can view this VOC but only its owner or a PMO/Admin can edit it.</div>}
+              {!canEdit && <div className="badge badge-amber" style={{ padding: '8px 12px' }}>You can view this feedback but only its owner or a Manager/Admin can edit it.</div>}
               <section>
                 <p className="section-title">Requirement</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -341,13 +341,13 @@ function VocModal({ mode, voc, bds, canReview, user, onClose, onSaved, onDelete 
                   <div><label className="field-label">Customer Name *</label><input className="input" value={form.customer_name} onChange={set('customer_name')} required disabled={!canEdit} /></div>
                   <div><label className="field-label">Total Account Value (₹ Lakhs)</label><input type="number" step="0.01" min="0" className="input" value={form.total_account_value_lakhs} onChange={set('total_account_value_lakhs')} disabled={!canEdit} /></div>
                   <div>
-                    <label className="field-label">BD Owner</label>
+                    <label className="field-label">Sales Rep</label>
                     <select className="input" value={form.bd_owner_id} onChange={set('bd_owner_id')} disabled={!canEdit || user.role === 'bd'}>
-                      <option value="">Select BD</option>
+                      <option value="">Select Sales Rep</option>
                       {bds.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </select>
                   </div>
-                  <div><label className="field-label">PMO Owner</label><input className="input" value={form.pmo_owner} onChange={set('pmo_owner')} disabled={!canEdit} /></div>
+                  <div><label className="field-label">Manager</label><input className="input" value={form.pmo_owner} onChange={set('pmo_owner')} disabled={!canEdit} /></div>
                   <div>
                     <label className="field-label">Region / State</label>
                     <select className="input" value={form.region_state} onChange={set('region_state')} disabled={!canEdit}>
@@ -365,7 +365,7 @@ function VocModal({ mode, voc, bds, canReview, user, onClose, onSaved, onDelete 
                       <input className="input" readOnly disabled value={(form.product_solution || []).join(', ')} />
                     )}
                   </div>
-                  <Sel label="VOC Type" k="voc_type" opts={VOC_TYPES} required />
+                  <Sel label="Feedback Type" k="voc_type" opts={VOC_TYPES} required />
                   <Sel label="Business Impact" k="business_impact" opts={VOC_IMPACTS} />
                   <Sel label="Priority" k="priority" opts={VOC_PRIORITIES} required />
                   <div><label className="field-label">Est. Revenue Impact (₹L)</label><input type="number" step="0.01" min="0" className="input" value={form.revenue_impact_lakhs} onChange={set('revenue_impact_lakhs')} disabled={!canEdit} /></div>
@@ -385,7 +385,7 @@ function VocModal({ mode, voc, bds, canReview, user, onClose, onSaved, onDelete 
               {err && <p style={{ fontSize: 12, color: '#dc2626', margin: 0 }}>{err}</p>}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
                 <button type="button" className="btn" onClick={onClose}>Cancel</button>
-                {canEdit && <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create VOC')}</button>}
+                {canEdit && <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create Feedback')}</button>}
               </div>
             </form>
           ) : (

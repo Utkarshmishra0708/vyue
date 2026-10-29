@@ -42,7 +42,7 @@ const lakhExcel = (v) => { const n = num(v); return n || ''; };
 //                 works on the underlying data rather than on display strings.
 export const FORECAST_COLUMNS = [
   // --- Identity (locked) ---
-  { key: 'customer_name', label: 'Customer / Property', locked: true, default: true,
+  { key: 'customer_name', label: 'Customer', locked: true, default: true,
     cell: (l) => dash(l.customer_name), excel: (l) => l.customer_name || '',
     filter: 'text', filterValue: (l) => l.customer_name || '' },
   { key: 'phase', label: 'Stage', locked: true, default: true,
@@ -59,7 +59,7 @@ export const FORECAST_COLUMNS = [
   { key: 'business_unit', label: 'BU', default: true,
     cell: (l) => (l.business_unit || '').toUpperCase() || '—', excel: (l) => (l.business_unit || '').toUpperCase(),
     filter: 'multi', filterValue: (l) => (l.business_unit || '').toUpperCase() },
-  { key: 'owner', label: 'BD', default: true,
+  { key: 'owner', label: 'Sales Rep', default: true,
     cell: (l) => l.owner?.name?.split(' ')[0] || '—', excel: (l) => l.owner?.name || '',
     filter: 'multi', filterValue: (l) => l.owner?.name || '' },
 
@@ -72,7 +72,7 @@ export const FORECAST_COLUMNS = [
     filter: 'number', filterValue: (l) => forecastUnits(l) },
 
   // --- Dates ---
-  { key: 'device_requested_date', label: 'Hardware Requested', default: true,
+  { key: 'device_requested_date', label: 'Delivery Requested', default: true,
     cell: (l) => l.device_requested_date ? fmtDate(l.device_requested_date) : '—',
     excel: (l) => l.device_requested_date ? fmtDate(l.device_requested_date) : '',
     filter: 'date', filterValue: (l) => isoDate(l.device_requested_date) },
@@ -85,7 +85,7 @@ export const FORECAST_COLUMNS = [
   { key: 'price_tcv_lakhs', label: 'Service Cost (₹L)', align: 'right',
     cell: (l) => lakhCell(l.price_tcv_lakhs), excel: (l) => lakhExcel(l.price_tcv_lakhs),
     filter: 'number', filterValue: (l) => num(l.price_tcv_lakhs) },
-  { key: 'potential_tcv_lakhs', label: 'Lead TCV (₹L)', align: 'right',
+  { key: 'potential_tcv_lakhs', label: 'Lead Deal Value (₹L)', align: 'right',
     cell: (l) => lakhCell(l.potential_tcv_lakhs), excel: (l) => lakhExcel(l.potential_tcv_lakhs),
     filter: 'number', filterValue: (l) => num(l.potential_tcv_lakhs) },
   { key: 'contract_period_months', label: 'Contract (months)', align: 'right',
@@ -96,13 +96,13 @@ export const FORECAST_COLUMNS = [
   // Rendered as an interactive checkbox in the detail table (see renderRow in ForecastPage);
   // `cell` here is the text form used by the PDF export. filterValue is the word shown in the
   // filter list, so a user can pick Sent, Pending, or leave it off for all.
-  { key: 'sent_to_scm', label: 'Sent to SCM', default: true, interactive: true,
+  { key: 'sent_to_scm', label: 'Sent to Supply Chain', default: true, interactive: true,
     cell: (l) => (l.sent_to_scm ? 'Yes' : 'No'),
     excel: (l) => (l.sent_to_scm ? 'Yes' : 'No'),
     filter: 'multi', filterValue: (l) => (l.sent_to_scm ? 'Sent' : 'Pending') },
 
   // --- Classification ---
-  { key: 'property_category', label: 'Property Category',
+  { key: 'property_category', label: 'Customer Category',
     cell: (l) => dash(l.property_category), excel: (l) => l.property_category || '',
     filter: 'multi', filterValue: (l) => l.property_category || '' },
   { key: 'new_or_renewal', label: 'Deal Type',

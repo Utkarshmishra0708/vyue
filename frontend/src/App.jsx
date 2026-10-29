@@ -80,7 +80,7 @@ export default function App() {
             <Route path="/customers/:code/:loc"      element={<PrivateRoute><ModuleRoute module="customers"><CustomersPage /></ModuleRoute></PrivateRoute>} />
             <Route path="/dashboard"        element={<PrivateRoute><ModuleRoute module="dashboard"><DashboardPage /></ModuleRoute></PrivateRoute>} />
             {/* Global activity feed (J1). Not a per-module page — its own grant governs it
-                (Business Admin / Global Admin by role, Manager if granted, Team Member never), so the
+                (Business Admin / Owner by role, Manager if granted, Team Member never), so the
                 page itself enforces that rather than the module guard. */}
             <Route path="/activity"         element={<PrivateRoute><ActivityPage /></PrivateRoute>} />
             {/* VOC (Voice of Customer) — module-gated per user and per BU. */}
@@ -96,7 +96,7 @@ export default function App() {
             {/* Campaigns — module-gated per user and per BU. */}
             <Route path="/campaigns"        element={<PrivateRoute><ModuleRoute module="campaigns"><CampaignsPage /></ModuleRoute></PrivateRoute>} />
             {/* Reports — gated purely by the per-user module permission (like Leads/Dashboard), so a
-                BD granted Reports access can open it, for every business (current and future). */}
+                Sales Rep granted Reports access can open it, for every business (current and future). */}
             <Route path="/reports"          element={<PrivateRoute><ModuleRoute module="reports"><ReportsPage /></ModuleRoute></PrivateRoute>} />
             {/* Admin/PMO only */}
             <Route path="/settings"         element={<AdminRoute><SettingsPage /></AdminRoute>} />

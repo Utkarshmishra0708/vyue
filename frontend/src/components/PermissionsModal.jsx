@@ -72,7 +72,7 @@ export default function PermissionsModal({ userId, userName, onClose, onSaved })
               <div style={{ height: 14 }} />
               <PermissionLegend />
               <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.7, marginTop: 8 }}>
-                Settings is not listed here: it stays restricted to Global Admin and PMO roles.
+                Settings is not listed here: it stays restricted to Owner and Manager roles.
                 These levels narrow what an account type already allows — they never widen it — and
                 apply to the user immediately, without signing out.
               </div>

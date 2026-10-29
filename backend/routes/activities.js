@@ -38,7 +38,7 @@ async function requireBuModule(req, res, next) {
     }
     const bu = await BusinessUnit.findOne({ where: { slug: req.user.business_unit }, attributes: ['config'] });
     if (!moduleEnabledForBu(bu?.config, 'activities')) {
-      return res.status(403).json({ message: 'Task Board is not enabled for this business unit.' });
+      return res.status(403).json({ message: 'Task Board is not enabled for this business.' });
     }
     next();
   } catch (err) {

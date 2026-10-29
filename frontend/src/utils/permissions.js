@@ -16,7 +16,7 @@ export const MODULE_LABELS = {
   forecast: 'Inventory Pipeline',
   reports: 'Reports',
   activities: 'Task Board',
-  voc: 'Voice of Customer',
+  voc: 'Customer Feedback',
   campaigns: 'Campaigns',
   customers: 'Customers',
 };

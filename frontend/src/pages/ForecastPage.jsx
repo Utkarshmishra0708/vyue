@@ -52,7 +52,7 @@ export default function ForecastPage() {
       patch({ sent_to_scm: saved.sent_to_scm, sent_to_scm_at: saved.sent_to_scm_at, sent_to_scm_by: saved.sent_to_scm_by });
     } catch {
       patch(prev);
-      window.alert('Could not update "Sent to SCM". Please try again.');
+      window.alert('Could not update "Sent to Supply Chain". Please try again.');
     } finally {
       setScmBusy(s => { const n = new Set(s); n.delete(rowId); return n; });
     }
@@ -140,7 +140,7 @@ export default function ForecastPage() {
         title={clickable ? 'Open this lead'
           : !canOpenLeadsModule ? 'You do not have access to the Leads module'
           : isForecastOnly ? 'Forecast accounts cannot open lead records'
-          : 'This lead belongs to another BD'}
+          : 'This lead belongs to another Sales Rep'}
         style={clickable ? { cursor: 'pointer' } : undefined}
         onMouseEnter={(e) => { if (clickable) e.currentTarget.style.background = '#f8fafc'; }}
         onMouseLeave={(e) => { if (clickable) e.currentTarget.style.background = ''; }}
@@ -152,8 +152,8 @@ export default function ForecastPage() {
               // that land on an input, so ticking this never navigates to the lead.
               <label
                 title={l.sent_to_scm
-                  ? `Sent to SCM${l.sent_to_scm_by ? ` by ${l.sent_to_scm_by}` : ''}${l.sent_to_scm_at ? ` on ${fmtDate(l.sent_to_scm_at)}` : ''}`
-                  : 'Not yet sent to SCM'}
+                  ? `Sent to Supply Chain${l.sent_to_scm_by ? ` by ${l.sent_to_scm_by}` : ''}${l.sent_to_scm_at ? ` on ${fmtDate(l.sent_to_scm_at)}` : ''}`
+                  : 'Not yet sent to Supply Chain'}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: !forecastCanEdit ? 'not-allowed' : scmBusy.has(l._row_id) ? 'wait' : 'pointer' }}
               >
                 <input
@@ -258,7 +258,7 @@ export default function ForecastPage() {
           <button className="btn btn-sm" onClick={() => isForecastOnly ? logout() : navigate('/leads')}>{isForecastOnly ? 'Sign out' : '← Back'}</button>
           <div>
             <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Inventory Pipeline</h1>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Hardware units expected — by month &amp; item · prioritized by stage, confidence, chain, then TCV</p>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Hardware units expected — by month &amp; item · prioritized by stage, confidence, parent account, then Deal Value</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

@@ -37,15 +37,15 @@ const PHASE_DATE_MAP = {
 // keeping them here produced a wall of "false → (empty)" noise entries on every save because
 // the new save path never writes those columns.
 const FIELD_LABELS = {
-  property_type: 'Property Type', property_category: 'Property Category',
+  property_type: 'Customer Type', property_category: 'Customer Category',
   customer_name: 'Customer Name', city: 'City', state: 'State', lead_source: 'Lead Source',
-  channel_partner_name: 'Channel Partner', kam_name: 'KAM Name', affiliate_name: 'Affiliate Name', new_or_renewal: 'New/Renewal',
+  channel_partner_name: 'Channel Partner', kam_name: 'Account Manager', affiliate_name: 'Referral Partner Name', new_or_renewal: 'New/Renewal',
   lead_temperature: 'Lead Rating', competitor: 'Competitor', quantity: 'Quantity',
-  potential_tcv_lakhs: 'Potential TCV (L)', contract_period_months: 'Contract Period (Mo)',
-  po_validity_months: 'PO Validity (Mo)', phase: 'Phase', next_followup_date: 'Next Follow-Up Date',
+  potential_tcv_lakhs: 'Potential Deal Value (L)', contract_period_months: 'Contract Period (Mo)',
+  po_validity_months: 'Order Validity (Mo)', phase: 'Phase', next_followup_date: 'Next Follow-Up Date',
   po_expected_date: 'PO Expected Date', service_start_date: 'Service Start Date', service_end_date: 'Service End Date',
-  po_number: 'PO Number', lost_reason: 'Lost Reason', po_actual_value_lakhs: 'Actual PO Value (L)',
-  device_requested_date: 'Hardware Requested Date',
+  po_number: 'Order Number', lost_reason: 'Lost Reason', po_actual_value_lakhs: 'Actual Order Value (L)',
+  device_requested_date: 'Delivery Requested Date',
   jhes_product: 'JHES Product', additional_notes: 'Additional Notes',
 };
 
@@ -474,7 +474,7 @@ router.post('/', requireModule('leads', 'full'), async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const body = { ...req.body };
-    if (req.user.role === 'bd') body.owner_id = req.user.id; // BDs can only create leads for themselves
+    if (req.user.role === 'bd') body.owner_id = req.user.id; // Sales Reps can only create leads for themselves
 
     const { payload } = normalizePayload(body, { isCreate: true, role: req.user.role });
 
@@ -483,7 +483,7 @@ router.post('/', requireModule('leads', 'full'), async (req, res) => {
       const chain = await GlobalPo.findByPk(payload.global_po_id, { transaction: t });
       if (!chain || chain.business_unit !== payload.business_unit) {
         await t.rollback();
-        return res.status(400).json({ message: 'Invalid chain (Global PO) selection.' });
+        return res.status(400).json({ message: 'Invalid parent account (Master Order) selection.' });
       }
     }
 
@@ -534,7 +534,7 @@ router.post('/', requireModule('leads', 'full'), async (req, res) => {
       processMentions({
         text: payload.additional_notes, oldText: null,
         businessUnit: req.user.business_unit, actorId: req.user.id,
-        entityType: 'lead', entityLabel: `PO #${lead.sr_no} "${lead.customer_name}"`,
+        entityType: 'lead', entityLabel: `Order #${lead.sr_no} "${lead.customer_name}"`,
         linkPath: `/leads?lead=${lead.id}`,
       }).catch(() => {});
     }
@@ -564,7 +564,7 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
     }
 
     const body = { ...req.body };
-    if (req.user.role === 'bd') body.owner_id = existing.owner_id; // BDs cannot reassign leads
+    if (req.user.role === 'bd') body.owner_id = existing.owner_id; // Sales Reps cannot reassign leads
 
     const before = existing.toJSON();
     const { payload, phaseChanged, fromPhase } = normalizePayload(body, { isCreate: false, existing: before, role: req.user.role });
@@ -574,7 +574,7 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
       const chain = await GlobalPo.findByPk(payload.global_po_id, { transaction: t });
       if (!chain || chain.business_unit !== payload.business_unit) {
         await t.rollback();
-        return res.status(400).json({ message: 'Invalid chain (Global PO) selection.' });
+        return res.status(400).json({ message: 'Invalid parent account (Master Order) selection.' });
       }
     }
 
@@ -658,7 +658,7 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
       processMentions({
         text: payload.additional_notes, oldText: before.additional_notes,
         businessUnit: req.user.business_unit, actorId: req.user.id,
-        entityType: 'lead', entityLabel: `PO #${existing.sr_no} "${existing.customer_name}"`,
+        entityType: 'lead', entityLabel: `Order #${existing.sr_no} "${existing.customer_name}"`,
         linkPath: `/leads?lead=${existing.id}`,
       }).catch(() => {});
     }

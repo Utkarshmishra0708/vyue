@@ -138,7 +138,7 @@ router.post('/login', passwordAuthDevOnly, async (req, res) => {
 router.post('/bd-login', passwordAuthDevOnly, async (req, res) => {
   try {
     const { userId, password } = req.body;
-    if (!userId || !password) return res.status(400).json({ message: 'BD id and password required' });
+    if (!userId || !password) return res.status(400).json({ message: 'Sales Rep id and password required' });
 
     const user = await User.findByPk(userId);
     if (!user)                return res.status(404).json({ message: 'User not found' });
@@ -242,7 +242,7 @@ router.post('/sso/select', async (req, res) => {
 
     // BU chosen -> issue a token for that specific account.
     const user = users.find(u => u.business_unit === business_unit);
-    if (!user) return res.status(404).json({ message: 'No Sales CRM account for that business unit.' });
+    if (!user) return res.status(404).json({ message: 'No Sales CRM account for that business.' });
 
     const token = signToken(user);
     return res.json({ token, user: await authUserPayload(user) });

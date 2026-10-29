@@ -48,14 +48,14 @@ export default function Sidebar() {
   // pages. Business logins get the full operational nav for their platform.
   const navItems = isConsoleOnly
     ? [
-        { path: '/settings', label: 'Admin Console' },
-        { path: '/business-units', label: 'Business Units' },
+        { path: '/settings', label: 'Organization Settings' },
+        { path: '/business-units', label: 'Businesses' },
         ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
       ]
     : [
         { path: '/leads',     label: 'Leads',     disabled: !canView('leads') },
         { path: '/dashboard', label: 'Dashboard', disabled: !canView('dashboard') },
-        ...(buHasModule('voc') ? [{ path: '/voc', label: 'VOC', disabled: !canView('voc') }] : []),
+        ...(buHasModule('voc') ? [{ path: '/voc', label: 'Customer Feedback', disabled: !canView('voc') }] : []),
         ...(buHasModule('customers') ? [{ path: '/customers', label: 'Customers', disabled: !canView('customers') }] : []),
         { path: '/forecast',  label: 'Inventory Pipeline',  disabled: !canView('forecast') },
         { path: '/reports',   label: 'Reports',   disabled: !canView('reports') },
@@ -64,14 +64,14 @@ export default function Sidebar() {
         // Signage/JHES only if a Global Admin turns it on via Edit Template). Suppressing the entry
         // when the BU disables it keeps other businesses' nav uncluttered.
         ...(buHasModule('activities') ? [{ path: '/activities', label: 'Task Board', disabled: !canView('activities') }] : []),
-        ...(canSeeActivityFeed ? [{ path: '/activity', label: 'Activity' }] : []),
-        ...(isAdmin ? [{ path: '/settings', label: isSuperAdmin ? 'Admin Console' : 'Settings' }] : []),
+        ...(canSeeActivityFeed ? [{ path: '/activity', label: 'Activity Feed' }] : []),
+        ...(isAdmin ? [{ path: '/settings', label: isSuperAdmin ? 'Organization Settings' : 'Settings' }] : []),
         // Global Admin (cross-platform) can manage every business unit. A Business Admin reaches the
         // same page but it's scoped server-side to only their OWN BU, so the nav label is singular.
         ...(isSuperAdmin
-          ? [{ path: '/business-units', label: 'Business Units' }]
+          ? [{ path: '/business-units', label: 'Businesses' }]
           : (user.role === 'business_admin'
-              ? [{ path: '/business-units', label: 'Business Unit' }]
+              ? [{ path: '/business-units', label: 'Business' }]
               : [])),
         ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
       ];
@@ -84,7 +84,7 @@ export default function Sidebar() {
       {/* Logo → the app's main entry page ("Select your business to continue"). That screen is the
           pre-login landing, so reaching it ends the current session (same as Sign out): in standalone
           dev it lands on the business-selection screen; in production it returns to the Jioautify
-          portal. Works for every role and both business units. */}
+          portal. Works for every role and both businesses. */}
       <button
         type="button"
         onClick={logout}
@@ -162,7 +162,7 @@ export default function Sidebar() {
         {!collapsed && (
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{user.name}</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>{isSuperAdmin ? 'Global Admin' : (ROLE_LABEL[user.role] || user.role)}{isConsoleOnly ? ' · All businesses' : ` · ${bu.label}`}</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>{isSuperAdmin ? 'Owner' : (ROLE_LABEL[user.role] || user.role)}{isConsoleOnly ? ' · All businesses' : ` · ${bu.label}`}</div>
           </div>
         )}
         {/* Returns to the main page (business selection). Reaching the pre-login landing ends the

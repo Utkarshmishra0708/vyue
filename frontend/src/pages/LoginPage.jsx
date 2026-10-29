@@ -20,7 +20,7 @@ export default function LoginPage() {
 
   // Steps: 'platform' → 'credentials' | 'ga-credentials'
   const [step, setStep]         = useState('platform');
-  const [bu, setBu]             = useState(null);     // selected business unit
+  const [bu, setBu]             = useState(null);     // selected business
   const [identifier, setIdent]  = useState('');        // email or name
   const [password, setPassword] = useState('');
   const [busy, setBusy]         = useState(false);
@@ -60,7 +60,7 @@ export default function LoginPage() {
         // Global Admin login — straight to Admin Console (Settings)
         const data = await apiLogin(identifier, password, null, 'super_admin');
         if (!data.user.is_super_admin) {
-          setError('This is not a Global Admin account.');
+          setError('This is not an Owner account.');
           return;
         }
         localStorage.setItem('salescrm_console', '1');
@@ -100,8 +100,8 @@ export default function LoginPage() {
       <div style={{ ...s.card, position: 'relative' }}>
         {/* Global Admin — small button in the top-right corner, separate from the business cards */}
         <button type="button" onClick={() => { setStep('ga-credentials'); setError(''); }}
-          title="Global Admin Login" style={s.adminLogin}>
-          <span style={{ fontSize: 13 }}>🛡️</span> Global Admin
+          title="Owner Login" style={s.adminLogin}>
+          <span style={{ fontSize: 13 }}>🛡️</span> Owner
         </button>
 
         <h1 style={s.title}>Sales CRM</h1>
@@ -131,8 +131,8 @@ export default function LoginPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
           <div style={{ ...s.buIcon, background: '#7c3aed', width: 48, height: 48, fontSize: 20 }}>🛡️</div>
           <div>
-            <h2 style={{ ...s.h2, margin: 0 }}>Global Admin</h2>
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>Cross-platform administration</div>
+            <h2 style={{ ...s.h2, margin: 0 }}>Owner</h2>
+            <div style={{ fontSize: 12, color: '#94a3b8' }}>Cross-business administration</div>
           </div>
         </div>
 

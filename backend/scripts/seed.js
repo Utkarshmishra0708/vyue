@@ -55,6 +55,7 @@ const DROPDOWNS = [
         email: adminEmail,
         password_hash: hash,
         role: 'super_admin',
+        super_admin_scope: 'write',
         business_unit: process.env.SEED_ADMIN_BU || 'signage',
         initials: 'PM',
         color: 'bg-slate-700',

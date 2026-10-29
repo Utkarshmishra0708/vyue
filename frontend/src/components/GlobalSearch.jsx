@@ -63,7 +63,7 @@ export default function GlobalSearch() {
         </span>
         <input
           className="input"
-          placeholder="Search leads, chains, VOC..."
+          placeholder="Search leads, parent accounts, feedback..."
           value={query}
           onChange={handleChange}
           onFocus={() => { if (results) setOpen(true); }}
@@ -113,7 +113,7 @@ export default function GlobalSearch() {
               {chains.length > 0 && (
                 <div>
                   <div style={{ padding: '8px 14px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                    Chains ({chains.length})
+                    Parent Accounts ({chains.length})
                   </div>
                   {chains.map((c) => (
                     <div key={c.id} onClick={() => go('/global-pos')}
@@ -129,7 +129,7 @@ export default function GlobalSearch() {
               {vocs.length > 0 && (
                 <div>
                   <div style={{ padding: '8px 14px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                    VOC ({vocs.length})
+                    Feedback ({vocs.length})
                   </div>
                   {vocs.map((v) => (
                     <div key={v.id} onClick={() => go('/voc')}

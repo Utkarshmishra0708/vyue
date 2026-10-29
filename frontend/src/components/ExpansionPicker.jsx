@@ -45,20 +45,20 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
     <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <span style={{ fontWeight: 700, fontSize: 15 }}>Add a PO for an existing customer</span>
+          <span style={{ fontWeight: 700, fontSize: 15 }}>Add an order for an existing customer</span>
           <button className="btn btn-sm" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Mode toggle */}
           <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', width: 'fit-content' }}>
-            {tab('additional', 'Additional PO')}
+            {tab('additional', 'Additional Order')}
             {tab('renewal', 'Renewal')}
           </div>
 
           <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
             {mode === 'additional'
-              ? 'Pick a customer. The new PO inherits their static details (owner, source, state/city, rating, account type, contacts). Services, deal size and dates you fill fresh.'
-              : 'Pick a customer, then the exact PO being renewed. The renewal copies everything from it — statics, services and deal size — so you just adjust dates and price.'}
+              ? 'Pick a customer. The new order inherits their static details (owner, source, state/city, rating, account type, contacts). Services, deal size and dates you fill fresh.'
+              : 'Pick a customer, then the exact order being renewed. The renewal copies everything from it — statics, services and deal size — so you just adjust dates and price.'}
           </p>
           <input className="input" placeholder="Search customer…" value={search} onChange={e => setSearch(e.target.value)} />
 
@@ -82,7 +82,7 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
                       <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>{c.customer_name}</div>
                       <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace' }}>{c.customer_code} · {sub}</div>
                     </div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>{c.pos.length} PO{c.pos.length === 1 ? '' : 's'} <span style={{ color: '#cbd5e1', marginLeft: 8, fontWeight: 700 }}>›</span></div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>{c.pos.length} order{c.pos.length === 1 ? '' : 's'} <span style={{ color: '#cbd5e1', marginLeft: 8, fontWeight: 700 }}>›</span></div>
                   </button>
                 );
               }
@@ -95,14 +95,14 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '12px 14px', background: open ? '#eef2ff' : '#fff', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
                     <div>
                       <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>{c.customer_name}</div>
-                      <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace' }}>{c.customer_code} · {c.renewable.length} renewable PO{c.renewable.length === 1 ? '' : 's'}</div>
+                      <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace' }}>{c.customer_code} · {c.renewable.length} renewable order{c.renewable.length === 1 ? '' : 's'}</div>
                     </div>
                     <span style={{ color: '#6366f1', fontWeight: 700 }}>{open ? '▼' : '▶'}</span>
                   </button>
                   {open && (
                     <div style={{ background: '#f8fafc' }}>
                       {c.renewable.length === 0 && (
-                        <div style={{ padding: '10px 18px', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No won POs to renew (a PO must be in "PO Received" to renew it).</div>
+                        <div style={{ padding: '10px 18px', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No won orders to renew (an order must be in "PO Received" to renew it).</div>
                       )}
                       {c.renewable.map(po => {
                         const st = renewalStatus(po, renewedIds);
@@ -112,7 +112,7 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
                             style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '10px 18px', background: 'transparent', border: 'none', borderTop: '1px solid #eef2f7', cursor: 'pointer', textAlign: 'left' }}>
                             <div>
                               <div style={{ fontSize: 12, fontWeight: 600 }}>{po.city || 'No city'} <span style={{ fontFamily: 'monospace', color: '#6366f1', marginLeft: 6 }}>{po.lead_ref}</span></div>
-                              <div style={{ fontSize: 11, color: '#64748b' }}>PO ends {po.service_end_date ? fmtDate(po.service_end_date) : '—'} · ₹{po.potential_tcv_lakhs || 0}L</div>
+                              <div style={{ fontSize: 11, color: '#64748b' }}>Order ends {po.service_end_date ? fmtDate(po.service_end_date) : '—'} · ₹{po.potential_tcv_lakhs || 0}L</div>
                             </div>
                             {st && st.band !== 'ok' && <span style={{ background: s.bg, color: s.fg, border: `1px solid ${s.border}`, borderRadius: 999, padding: '2px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{renewalLabel(st)}</span>}
                           </button>

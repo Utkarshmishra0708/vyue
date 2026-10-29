@@ -11,13 +11,13 @@ const LEAD_INFO_COLUMNS = [
   { header: 'New or Renewal', slug: 'new_or_renewal' },
   { header: 'Lead Temperature', slug: 'lead_temperature' },
   { header: 'Competitor', slug: 'competitor' },
-  { header: 'Property Type', slug: 'property_type' },
-  { header: 'Property Category', slug: 'property_category' },
+  { header: 'Customer Type', slug: 'property_type' },
+  { header: 'Customer Category', slug: 'property_category' },
 ];
 
 const DEAL_COLUMNS = [
   { header: 'Contract Period (Months)', slug: 'contract_period_months' },
-  { header: 'TCV (Lakhs)', slug: 'tcv_lakhs' },
+  { header: 'Deal Value (Lakhs)', slug: 'tcv_lakhs' },
 ];
 
 // Service columns are built from the business's own catalog (config.services), keyed by a stable
@@ -48,7 +48,7 @@ function serviceColumns(config) {
 }
 
 const HARDWARE_DATE_COLUMN = [
-  { header: 'Hardware Requested Date', slug: 'device_requested_date' },
+  { header: 'Delivery Requested Date', slug: 'device_requested_date' },
 ];
 
 const PHASE_COLUMNS = [
@@ -60,10 +60,10 @@ const PHASE_COLUMNS = [
 ];
 
 const PO_COLUMNS = [
-  { header: 'PO Number', slug: 'po_number' },
+  { header: 'Order Number', slug: 'po_number' },
   { header: 'PO Received Date', slug: 'po_received_date' },
-  { header: 'PO Start Date', slug: 'service_start_date' },
-  { header: 'PO End Date', slug: 'service_end_date' },
+  { header: 'Order Start Date', slug: 'service_start_date' },
+  { header: 'Order End Date', slug: 'service_end_date' },
   { header: 'Billing Cycle', slug: 'billing_cycle' },
   { header: 'Payment Terms', slug: 'payment_terms' },
 ];
@@ -240,7 +240,7 @@ export async function downloadTemplate(businessUnit, config, users) {
   const bu = (businessUnit || '').toLowerCase();
   const instrRows = [
     ['Bulk Lead Import — Instructions', ''],
-    [`Business Unit: ${businessUnit.toUpperCase()}`, ''],
+    [`Business: ${businessUnit.toUpperCase()}`, ''],
     [],
     ['Column', 'Valid Values / Format'],
     ['Customer Name *', 'Required. Text.'],
@@ -251,10 +251,10 @@ export async function downloadTemplate(businessUnit, config, users) {
     ['New or Renewal', 'New, Renewal, Expansion (dropdown)'],
     ['Lead Temperature', 'Hot, Warm, Cold (dropdown)'],
     ['Competitor', 'Text.'],
-    ['Property Type', PROPERTY_TYPES.join(', ') + ' (dropdown)'],
-    ['Property Category', PROPERTY_CATEGORIES.join(', ') + ' (dropdown)'],
-    ['Contract Period (Months)', 'Number. Required for auto TCV calculation.'],
-    ['TCV (Lakhs)', 'Number. If blank AND service rates are provided, TCV is auto-calculated.'],
+    ['Customer Type', PROPERTY_TYPES.join(', ') + ' (dropdown)'],
+    ['Customer Category', PROPERTY_CATEGORIES.join(', ') + ' (dropdown)'],
+    ['Contract Period (Months)', 'Number. Required for auto Deal Value calculation.'],
+    ['Deal Value (Lakhs)', 'Number. If blank AND service rates are provided, Deal Value is auto-calculated.'],
   ];
 
   const catSvcs = (config && Array.isArray(config.services)) ? config.services : [];
@@ -268,7 +268,7 @@ export async function downloadTemplate(businessUnit, config, users) {
         const cols = cat === 'hardware_software' ? 'HW Rate / HW Qty + SVC Rate / SVC Qty' : 'Rate / Qty';
         return [`${s.label}`, `${cat.replace('_', ' + ')}${flow}. Columns: ${cols}. Default ${s.nature ? s.nature.toUpperCase() : 'OPEX'} (monthly for OPEX).`];
       }),
-      ['Hardware Requested Date', 'YYYY-MM-DD. When the hardware is expected — for the Inventory Pipeline.'],
+      ['Delivery Requested Date', 'YYYY-MM-DD. When the hardware is expected — for the Inventory Pipeline.'],
     );
   }
 
@@ -281,14 +281,14 @@ export async function downloadTemplate(businessUnit, config, users) {
     ['Lost Reason', `Required if Phase is Lost (dropdown). ${LOST_REASONS.join(', ')}`],
     ['Hold End Date', 'YYYY-MM-DD. For On Hold leads — when to resume.'],
     [],
-    ['— PO RECEIVED FIELDS —', ''],
-    ['PO Number', 'Text.'],
-    ['PO Received Date', 'YYYY-MM-DD. The date the PO was actually received. IMPORTANT for PO Received leads — this is the date used for weekly/monthly/quarterly performance. If left blank, the lead is counted on the import date instead.'],
-    ['PO Start Date', 'YYYY-MM-DD. When the PO/service delivery begins.'],
-    ['PO End Date', 'YYYY-MM-DD. When the PO/service contract ends.'],
+    ['— ORDER WON FIELDS —', ''],
+    ['Order Number', 'Text.'],
+    ['PO Received Date', 'YYYY-MM-DD. The date the order was actually received. IMPORTANT for PO Received leads — this is the date used for weekly/monthly/quarterly performance. If left blank, the lead is counted on the import date instead.'],
+    ['Order Start Date', 'YYYY-MM-DD. When the order/service delivery begins.'],
+    ['Order End Date', 'YYYY-MM-DD. When the order/service contract ends.'],
     [],
     ['— OWNER & CONTACTS —', ''],
-    ['Lead Owner *', `Required (dropdown). The salesperson/BD who will OWN each lead — the import assigns the lead to that user. Pick from the list. Must match an active user in this business. Available: ${ownerNames.join(', ')}`],
+    ['Lead Owner *', `Required (dropdown). The salesperson/Sales Rep who will OWN each lead — the import assigns the lead to that user. Pick from the list. Must match an active user in this business. Available: ${ownerNames.join(', ')}`],
     (contactsMandatory
       ? ['Contact 1 Name / Email *', 'Required — at least one contact with both Name and Email.']
       : ['Contact 1 Name / Email', 'Optional. If you fill a contact Name you must also fill its Email (and vice-versa).']),
@@ -300,7 +300,7 @@ export async function downloadTemplate(businessUnit, config, users) {
     ['- Yes/No columns accept: Yes, No (case-insensitive).', ''],
     ['- Maximum 500 rows per upload.', ''],
     ['- Do not rename or reorder columns in the Lead Data sheet.', ''],
-    ['- TCV auto-calc: if you fill in service rates + qty + contract period, TCV is computed. Otherwise enter TCV manually.', ''],
+    ['- Deal Value auto-calc: if you fill in service rates + qty + contract period, Deal Value is computed. Otherwise enter Deal Value manually.', ''],
   );
 
   instrRows.forEach(row => {

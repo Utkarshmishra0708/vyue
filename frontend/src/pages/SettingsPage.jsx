@@ -9,7 +9,7 @@ import { getManagedUsers, addUser, updateUser, setUserActive, deleteUser, resetB
 import { BU_CONFIG } from '../utils/constants';
 import { IS_PROD } from '../env';
 
-const ROLE_LABEL = { super_admin: 'Global Admin', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Business Development' };
+const ROLE_LABEL = { super_admin: 'Owner', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Sales Rep' };
 const ROLE_COLOR = { super_admin: '#7c3aed', business_admin: '#4f46e5', pmo: '#0ea5e9', bd: '#0891b2' };
 const EMPTY_FORM = { name: '', email: '', mobile: '', role: 'bd' };
 
@@ -29,7 +29,7 @@ const ASSIGNABLE = {
 //   extra:   kept so existing capability isn't lost, tucked behind a disclosure
 const ACCOUNT_TYPES = {
   bd: {
-    label: 'Business Development',
+    label: 'Sales Rep',
     blurb: 'Sees only their own leads · own activity only',
     primary: true,
     perms: { leads: 'full', dashboard: 'read', forecast: 'none', reports: 'none' },
@@ -42,7 +42,7 @@ const ACCOUNT_TYPES = {
   },
   business_admin: {
     label: 'Business Admin',
-    blurb: 'Full access to every module on this platform · granted by a Global Admin',
+    blurb: 'Full access to every module on this business · granted by an Owner',
     perms: { leads: 'full', dashboard: 'full', forecast: 'full', reports: 'full' },
   },
 };
@@ -190,7 +190,7 @@ export default function SettingsPage() {
   const [modal, setModal] = useState(null); // null | { mode: 'add' } | { mode: 'edit', user }
   const [resetTarget, setResetTarget] = useState(null); // user id currently showing the reset form
   const [resetValue, setResetValue] = useState('');
-  const [transferFor, setTransferFor] = useState(null); // { user, leadCount } — BD delete needs lead transfer
+  const [transferFor, setTransferFor] = useState(null); // { user, leadCount } — Sales Rep delete needs lead transfer
   const [transferTo, setTransferTo] = useState('unassigned');
   // The Admin Console follows the sidebar Platform selection: a Global Admin in a business session
   // opens straight to the business they're currently in (user.business_unit) and the other tabs are
@@ -220,7 +220,7 @@ export default function SettingsPage() {
   const canEditTat = canAct && (isSuperAdmin || user.role === 'pmo' || user.role === 'business_admin');
 
   const refresh = () => {
-    setSaReload(x => x + 1);   // keep the Global Admins grant candidates in sync with the user list
+    setSaReload(x => x + 1);   // keep the Owners grant candidates in sync with the user list
     if (!manageBusiness) { setUsers([]); return; }
     getManagedUsers(manageBusiness).then(setUsers).catch(() => setUsers([]));
   };
@@ -294,8 +294,8 @@ export default function SettingsPage() {
   const handleToggleFeed = async (u) => {
     const next = !u.activity_feed_access;
     const verb = next ? 'Grant' : 'Revoke';
-    if (!window.confirm(`${verb} the platform-wide Activity feed for ${u.name}? ${next
-      ? 'They will see every user’s activity on this platform.'
+    if (!window.confirm(`${verb} the organization-wide Activity feed for ${u.name}? ${next
+      ? 'They will see every user’s activity on this business.'
       : 'They will see only their own per-lead activity.'}`)) return;
     setBusy(true); setMsg('');
     try {
@@ -361,7 +361,7 @@ export default function SettingsPage() {
   return (
     <Layout>
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px' }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{isSuper ? 'Admin Console' : 'Settings'}</h1>
+        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{isSuper ? 'Organization Settings' : 'Settings'}</h1>
         <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{isSuper ? 'Manage users and roles across all businesses' : 'Manage your team and account'}</p>
       </div>
 
@@ -391,7 +391,7 @@ export default function SettingsPage() {
                   return (
                     <button key={b.slug} type="button" disabled={locked}
                       onClick={isConsoleOnly ? () => setManageBusiness(b.slug) : undefined}
-                      title={locked ? 'Switch to this platform on the left to manage it' : undefined}
+                      title={locked ? 'Switch to this business on the left to manage it' : undefined}
                       style={{ border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: locked ? 'not-allowed' : (on ? 'default' : 'pointer'),
                         background: on ? '#fff' : 'transparent', color: on ? '#0f172a' : (locked ? '#cbd5e1' : '#64748b'), boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none', opacity: locked ? 0.7 : 1 }}>
                       {b.name}
@@ -406,8 +406,8 @@ export default function SettingsPage() {
             {canAct && <button className="btn btn-primary btn-sm" disabled={busy || !manageBusiness} onClick={() => setModal({ mode: 'add' })}>+ Add User</button>}
           </div>
           <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 14px' }}>
-            PMO users are admins; BD users are the sales team. Use Edit to change a user's details.
-            {!IS_PROD && ' If a BD forgets their password, use Reset Password to set a new one.'}
+            Manager users are admins; Sales Rep users are the sales team. Use Edit to change a user's details.
+            {!IS_PROD && ' If a Sales Rep forgets their password, use Reset Password to set a new one.'}
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -441,11 +441,11 @@ export default function SettingsPage() {
                         title="Set per-module access levels (Leads, Dashboard, Inventory Pipeline, Reports)">🔐 Access</button>
                     )}
                     {/* J1: per-Manager Activity-feed grant. Only for Managers, and only a Global Admin /
-                        Business Admin can set it. Business Admin / Global Admin get the feed by role, so
+                        Business Admin can set it. Business Admin / Owner get the feed by role, so
                         no toggle is shown for them; a Team Member never sees the feed, so none for them. */}
                     {u.role === 'pmo' && canGrantFeed && (
                       <button className="btn btn-sm" disabled={busy} onClick={() => handleToggleFeed(u)}
-                        title="Grant or revoke this Manager's access to the platform-wide Activity feed">
+                        title="Grant or revoke this Manager's access to the organization-wide Activity feed">
                         {u.activity_feed_access ? '🕒 Feed: On' : '🕒 Feed: Off'}
                       </button>
                     )}
@@ -472,7 +472,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Cross-platform Super Admins — its own section, outside any single platform's user list,
-            because the grant spans every platform at once. Visible only to Super Admins. */}
+            because the grant spans every business at once. Visible only to Super Admins. */}
         {isCrossPlatform && <SuperAdminsPanel reloadSignal={saReload} />}
 
         <div className="card">
@@ -480,7 +480,7 @@ export default function SettingsPage() {
             <div>
               <p className="section-title" style={{ margin: 0 }}>Lead Scoring — Stage TAT{buLabel ? ` — ${buLabel}` : ''}</p>
               <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 0' }}>
-                Turn-around days per stage that drive the win-confidence decay — {canEditTat ? 'editable independently per business.' : "managed by this business's PMO / Business Admin."}
+                Turn-around days per stage that drive the win-confidence decay — {canEditTat ? 'editable independently per business.' : "managed by this business's Manager / Business Admin."}
               </p>
             </div>
             {manageBusiness && (
@@ -494,7 +494,7 @@ export default function SettingsPage() {
 
         <div className="card" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: '#92400e', margin: '0 0 4px' }}>💡 Weekly targets</p>
-          <p style={{ fontSize: 12, color: '#92400e', margin: 0 }}>Global and per-BD weekly pipeline targets are editable directly on the Dashboard page.</p>
+          <p style={{ fontSize: 12, color: '#92400e', margin: 0 }}>Global and per-Sales Rep weekly pipeline targets are editable directly on the Dashboard page.</p>
         </div>
       </div>
 
@@ -525,7 +525,7 @@ export default function SettingsPage() {
               </p>
               {!canEditTat && (
                 <p style={{ fontSize: 12, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px', margin: '0 0 12px' }}>
-                  Stage TAT can only be changed by this business's <b>PMO</b> or <b>Business Admin</b>. You can view the values below.
+                  Stage TAT can only be changed by this business's <b>Manager</b> or <b>Business Admin</b>. You can view the values below.
                 </p>
               )}
               {tatStages.length === 0 ? <p style={{ fontSize: 13, color: '#94a3b8' }}>Loading…</p> : (

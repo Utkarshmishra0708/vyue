@@ -115,14 +115,14 @@ export default function ReportsPage() {
     const XLSX = await import('xlsx');
     const rows = view === 'customers'
       ? filtered.map(l => ({
-          Customer: l.customer_name, 'Business Unit': (l.business_unit || '').toUpperCase(),
+          Customer: l.customer_name, 'Business': (l.business_unit || '').toUpperCase(),
           City: l.city || '', State: l.state || '', Owner: l.owner?.name || '',
           'Contact Name': pc(l).name || '', Phone: pc(l).phone || '', Email: pc(l).email || '', Designation: pc(l).designation || '',
         }))
       : filtered.map(l => ({
-          'Sr No': l.sr_no, 'Business Unit': (l.business_unit || '').toUpperCase(), Customer: l.customer_name,
-          State: l.state || '', BD: l.owner?.name || '', 'Lead Source': l.lead_source, 'KAM Name': l.kam_name || '',
-          'New/Renewal': l.new_or_renewal, 'TCV (₹L)': l.potential_tcv_lakhs, 'PO Expected': l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '',
+          'Sr No': l.sr_no, 'Business': (l.business_unit || '').toUpperCase(), Customer: l.customer_name,
+          State: l.state || '', 'Sales Rep': l.owner?.name || '', 'Lead Source': l.lead_source, 'Account Manager': l.kam_name || '',
+          'New/Renewal': l.new_or_renewal, 'Deal Value (₹L)': l.potential_tcv_lakhs, 'PO Expected': l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '',
           Phase: l.phase, 'Created At': fmtDate(l.createdAt),
         }));
     writeFormattedSheet(XLSX, rows, view === 'customers' ? 'Customers' : 'Report', `CRM_${view === 'customers' ? 'Customers' : 'Report'}_${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -136,7 +136,7 @@ export default function ReportsPage() {
           rows: filtered.map(l => [l.customer_name, (l.business_unit || '').toUpperCase(), l.city || '—', l.state || '—', l.owner?.name || '', pc(l).name || '—', pc(l).phone || '—', pc(l).email || '—', pc(l).designation || '—']),
         }
       : {
-          columns: ['Sr', 'Customer', 'State', 'BD', 'Phase', 'New/Renewal', 'TCV (₹L)', 'PO Expected', 'Source', 'Created'],
+          columns: ['Sr', 'Customer', 'State', 'Sales Rep', 'Phase', 'New/Renewal', 'Deal Value (₹L)', 'PO Expected', 'Source', 'Created'],
           rows: filtered.map(l => [l.sr_no, l.customer_name, l.state || '—', l.owner?.name?.split(' ')[0] || '', l.phase, l.new_or_renewal, l.potential_tcv_lakhs, l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '—', l.lead_source, fmtDate(l.createdAt)]),
         };
     exportRowsToPdf({
@@ -166,7 +166,7 @@ export default function ReportsPage() {
           <div>
             <label className="field-label" style={{ marginBottom: 6 }}>Report View</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {[{ key: 'pipeline', label: 'Pipeline' }, { key: 'customers', label: 'Customer Details' }, { key: 'bd-performance', label: 'BD Performance' }, { key: 'source-analysis', label: 'Source Analysis' }, { key: 'monthly-trend', label: 'Monthly Trend' }, { key: 'campaign-roi', label: 'Campaign ROI' }].map(v => (
+              {[{ key: 'pipeline', label: 'Pipeline' }, { key: 'customers', label: 'Customer Details' }, { key: 'bd-performance', label: 'Sales Rep Performance' }, { key: 'source-analysis', label: 'Source Analysis' }, { key: 'monthly-trend', label: 'Monthly Trend' }, { key: 'campaign-roi', label: 'Campaign ROI' }].map(v => (
                 <button key={v.key} type="button" onClick={() => setView(v.key)}
                   style={{ border: view === v.key ? '1.5px solid #4f46e5' : '1.5px solid #e2e8f0', borderRadius: 8,
                     padding: '8px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
@@ -181,7 +181,7 @@ export default function ReportsPage() {
             <input type="date" className="input" style={{ marginBottom: 6 }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
             <input type="date" className="input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
-          <MultiSelect label="BD" options={bds.map(b => b.name)} selected={selBDs} onChange={setSelBDs} width={200} />
+          <MultiSelect label="Sales Rep" options={bds.map(b => b.name)} selected={selBDs} onChange={setSelBDs} width={200} />
           <MultiSelect label="Phase" options={PHASES} selected={selPhases} onChange={setSelPhases} width={200} />
           <MultiSelect label="Lead Source" options={sourceOpts} selected={selSources} onChange={setSelSources} width={200} />
           <MultiSelect label="New/Renewal" options={renewalOpts} selected={selRenewals} onChange={setSelRenewals} width={200} />
@@ -200,9 +200,9 @@ export default function ReportsPage() {
               {(view === 'pipeline' || view === 'customers') && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
                   <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{filtered.length}</p></div>
-                  <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total TCV</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{'₹'}{totalTCV.toFixed(1)}L</p></div>
+                  <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Deal Value</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{'₹'}{totalTCV.toFixed(1)}L</p></div>
                   <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{wonLeads.length}</p></div>
-                  <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won TCV</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{'₹'}{wonTCV.toFixed(1)}L</p></div>
+                  <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Deal Value</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{'₹'}{wonTCV.toFixed(1)}L</p></div>
                 </div>
               )}
 
@@ -214,7 +214,7 @@ export default function ReportsPage() {
                 const avgConv = totalLeads > 0 ? ((wonLeadsCount / totalLeads) * 100).toFixed(1) : '0';
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total BDs</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalBds}</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Sales Reps</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalBds}</p></div>
                     <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalLeads}</p></div>
                     <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{wonLeadsCount}</p></div>
                     <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Avg Conversion</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{avgConv}%</p></div>
@@ -249,8 +249,8 @@ export default function ReportsPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
                     <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total New</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalNew}</p></div>
                     <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Won</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{totalWon}</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>New TCV</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{'₹'}{totalNewTcv.toFixed(1)}L</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won TCV</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{'₹'}{totalWonTcv.toFixed(1)}L</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>New Deal Value</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{'₹'}{totalNewTcv.toFixed(1)}L</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Deal Value</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{'₹'}{totalWonTcv.toFixed(1)}L</p></div>
                   </div>
                 );
               })()}
@@ -276,7 +276,7 @@ export default function ReportsPage() {
               <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
                 {view === 'pipeline' ? (
                   <table className="data-table">
-                    <thead><tr><th>Sr</th><th>Customer</th><th>State</th><th>BD</th><th>Phase</th><th>New/Renewal</th><th style={{textAlign:'right'}}>TCV ({'₹'}L)</th><th>PO Expected</th><th>Source</th><th>Created</th></tr></thead>
+                    <thead><tr><th>Sr</th><th>Customer</th><th>State</th><th>Sales Rep</th><th>Phase</th><th>New/Renewal</th><th style={{textAlign:'right'}}>Deal Value ({'₹'}L)</th><th>PO Expected</th><th>Source</th><th>Created</th></tr></thead>
                     <tbody>
                       {filtered.map(l => (
                         <tr key={l.id}>
@@ -310,7 +310,7 @@ export default function ReportsPage() {
                   <>
                     {rows.length > 0 && (
                       <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-                        <p style={{ fontWeight: 700, fontSize: 14, margin: '0 0 12px', color: '#334155' }}>Won vs Total Leads per BD</p>
+                        <p style={{ fontWeight: 700, fontSize: 14, margin: '0 0 12px', color: '#334155' }}>Won vs Total Leads per Sales Rep</p>
                         <ResponsiveContainer width="100%" height={300}>
                           <BarChart data={rows}>
                             <XAxis dataKey="bd_name" tick={{ fontSize: 11 }} />
@@ -325,7 +325,7 @@ export default function ReportsPage() {
                     )}
                     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
                       <table className="data-table">
-                        <thead><tr><th>BD Name</th><th style={{textAlign:'right'}}>Total Leads</th><th style={{textAlign:'right'}}>Active</th><th style={{textAlign:'right'}}>Won</th><th style={{textAlign:'right'}}>Lost</th><th style={{textAlign:'right'}}>Total TCV ({'₹'}L)</th><th style={{textAlign:'right'}}>Won TCV ({'₹'}L)</th><th style={{textAlign:'right'}}>Conv Rate (%)</th></tr></thead>
+                        <thead><tr><th>Sales Rep Name</th><th style={{textAlign:'right'}}>Total Leads</th><th style={{textAlign:'right'}}>Active</th><th style={{textAlign:'right'}}>Won</th><th style={{textAlign:'right'}}>Lost</th><th style={{textAlign:'right'}}>Total Deal Value ({'₹'}L)</th><th style={{textAlign:'right'}}>Won Deal Value ({'₹'}L)</th><th style={{textAlign:'right'}}>Conv Rate (%)</th></tr></thead>
                         <tbody>
                           {rows.map((r, i) => {
                             const conv = (r.total_leads || 0) > 0 ? (((r.won || 0) / r.total_leads) * 100).toFixed(1) : '0';
@@ -371,7 +371,7 @@ export default function ReportsPage() {
                     )}
                     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
                       <table className="data-table">
-                        <thead><tr><th>Source</th><th style={{textAlign:'right'}}>Total Leads</th><th style={{textAlign:'right'}}>Won</th><th style={{textAlign:'right'}}>TCV ({'₹'}L)</th><th style={{textAlign:'right'}}>Won TCV ({'₹'}L)</th><th style={{textAlign:'right'}}>Conv Rate (%)</th></tr></thead>
+                        <thead><tr><th>Source</th><th style={{textAlign:'right'}}>Total Leads</th><th style={{textAlign:'right'}}>Won</th><th style={{textAlign:'right'}}>Deal Value ({'₹'}L)</th><th style={{textAlign:'right'}}>Won Deal Value ({'₹'}L)</th><th style={{textAlign:'right'}}>Conv Rate (%)</th></tr></thead>
                         <tbody>
                           {rows.map((r, i) => {
                             const conv = (r.total_leads || 0) > 0 ? (((r.won || 0) / r.total_leads) * 100).toFixed(1) : '0';
@@ -416,7 +416,7 @@ export default function ReportsPage() {
                     )}
                     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
                       <table className="data-table">
-                        <thead><tr><th>Month</th><th style={{textAlign:'right'}}>New</th><th style={{textAlign:'right'}}>Won</th><th style={{textAlign:'right'}}>Lost</th><th style={{textAlign:'right'}}>New TCV ({'₹'}L)</th><th style={{textAlign:'right'}}>Won TCV ({'₹'}L)</th></tr></thead>
+                        <thead><tr><th>Month</th><th style={{textAlign:'right'}}>New</th><th style={{textAlign:'right'}}>Won</th><th style={{textAlign:'right'}}>Lost</th><th style={{textAlign:'right'}}>New Deal Value ({'₹'}L)</th><th style={{textAlign:'right'}}>Won Deal Value ({'₹'}L)</th></tr></thead>
                         <tbody>
                           {rows.map((r, i) => (
                             <tr key={i}>

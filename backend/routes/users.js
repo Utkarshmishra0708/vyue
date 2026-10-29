@@ -14,11 +14,11 @@ const {
 function superAdminOnly(req, res, next) {
   if (!req.user) return res.status(401).json({ message: 'Unauthenticated' });
   if (isSuperAdmin(req.user)) return next();
-  return res.status(403).json({ message: 'Only a Super Admin can manage Super Admin access.' });
+  return res.status(403).json({ message: 'Only an Owner can manage Owner access.' });
 }
 
 const COLOR_ROTATION = ['bg-violet-500', 'bg-sky-500', 'bg-emerald-500', 'bg-amber-500', 'bg-orange-500', 'bg-teal-500', 'bg-rose-500', 'bg-indigo-500'];
-const DEFAULT_BD_PASSWORD = '123456'; // system default — the BD is expected to change it after first login
+const DEFAULT_BD_PASSWORD = '123456'; // system default — the Sales Rep is expected to change it after first login
 
 // === JIOAUTIFY INTEGRATION: provisioning a portal-facing Sales CRM user (one with an email — i.e.
 // an admin/pmo who signs in via the STB portal's SSO) must ALSO register that user in the central
@@ -158,7 +158,7 @@ function validateUserPayload({ name, email, mobile, role }) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Enter a valid email';
   if (!mobile || !mobile.trim()) return 'Mobile is required';
   if (!/^\d{10}$/.test(mobile.trim())) return 'Mobile must be exactly 10 digits';
-  if (!VALID_ROLES.includes(role)) return 'Role must be Business Admin, PMO, BD or Forecast';
+  if (!VALID_ROLES.includes(role)) return 'Role must be Business Admin, Manager, Sales Rep or Forecast';
   return null;
 }
 
@@ -211,7 +211,7 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
     // existing row this email already holds in the OTHER business unit, so creating a signage account
     // for someone who is already a jhes admin keeps their admin/access intact. ===
     if (process.env.NODE_ENV === 'production') {
-      const siblings = await rowsForEmail(email.trim()); // rows in the other business unit (same-BU clash already rejected)
+      const siblings = await rowsForEmail(email.trim()); // rows in the other business (same-BU clash already rejected)
       const projected = siblings.map(r => ({ active: r.active, role: r.role }))
         .concat([{ active: true, role }]); // the row about to be created
       const payload = aggregateModulePayload(email.trim(), mobile.trim(), projected);
@@ -330,7 +330,7 @@ router.put('/:id/reset-password', authenticate, adminOnly, async (req, res) => {
 
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
-    if (user.role !== 'bd') return res.status(400).json({ message: 'Only BD accounts can be reset here' });
+    if (user.role !== 'bd') return res.status(400).json({ message: 'Only Sales Rep accounts can be reset here' });
     if (!canActOn(req.user, user)) return res.status(403).json({ message: 'You are not allowed to manage this user.' });
 
     user.password_hash = await bcrypt.hash(newPassword, 10);
@@ -401,7 +401,7 @@ router.put('/:id/activity-feed-access', authenticate, adminOnly, async (req, res
     // Only a Global Admin with Read+Write, or a Business Admin, may set it. A Read-only Global Admin
     // makes no changes anywhere, and a Manager can never grant it (to self or another Manager).
     if (!(isSuperAdminWrite(req.user) || req.user.role === 'business_admin')) {
-      return res.status(403).json({ message: 'Only a Global Admin (Read+Write) or Business Admin can grant activity-feed access.' });
+      return res.status(403).json({ message: 'Only an Owner (Read+Write) or Business Admin can grant activity-feed access.' });
     }
     const activity_feed_access = !!req.body.activity_feed_access;
     const user = await User.findByPk(req.params.id);
@@ -540,11 +540,11 @@ router.put('/:id/super-admin', authenticate, superAdminOnly, async (req, res) =>
     // that, and downgrading yourself to Read-only would do the same — so another Super Admin has to
     // make the change. Mirrors how the app already blocks self-Disable and self-Delete.
     if (String(user.id) === String(req.user.id)) {
-      return res.status(400).json({ message: 'You cannot change your own Super Admin access — ask another Super Admin to do it.' });
+      return res.status(400).json({ message: 'You cannot change your own Owner access — ask another Owner to do it.' });
     }
 
     if (scope && !user.email) {
-      return res.status(400).json({ message: 'A Super Admin signs in by email, so this account needs an email address first.' });
+      return res.status(400).json({ message: 'An Owner signs in by email, so this account needs an email address first.' });
     }
     // Guard against removing the last write-capable Super Admin and locking everyone out.
     const before = superAdminScope(user);
@@ -554,7 +554,7 @@ router.put('/:id/super-admin', authenticate, superAdminOnly, async (req, res) =>
         col: 'email', distinct: true,
       });
       if (others === 0) {
-        return res.status(400).json({ message: 'This is the last Read+Write Super Admin — promote another one before changing this.' });
+        return res.status(400).json({ message: 'This is the last Read+Write Owner — promote another one before changing this.' });
       }
     }
 
@@ -569,14 +569,14 @@ router.put('/:id/super-admin', authenticate, superAdminOnly, async (req, res) =>
     const LABEL = { write: 'Read+Write', read: 'Read-only', null: 'None' };
     await audit.record({
       actor: req.user, entityType: 'permissions', entityId: user.id, subject: user.name,
-      businessUnit: null, action: 'super_admin_change', field: 'Super Admin access',
+      businessUnit: null, action: 'super_admin_change', field: 'Owner access',
       from: LABEL[before] || 'None', to: LABEL[scope] || 'None',
-      note: 'Cross-platform access',
+      note: 'Cross-business access',
     });
 
     const label = scope === 'write' ? 'Read+Write' : scope === 'read' ? 'Read-only' : 'revoked';
     return res.json({
-      message: scope ? `${user.name} is now a Super Admin (${label}).` : `Super Admin access revoked for ${user.name}.`,
+      message: scope ? `${user.name} is now an Owner (${label}).` : `Owner access revoked for ${user.name}.`,
       scope,
     });
   } catch (err) {

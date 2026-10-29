@@ -18,7 +18,7 @@ const RULE_LABELS = {
   lead_created: 'Lead Created',
   lead_lost: 'Lead Lost',
   lead_on_hold: 'Lead On Hold',
-  po_document_uploaded: 'PO Document',
+  po_document_uploaded: 'Order Document',
   renewal_due: 'Renewal Due',
   renewal_created: 'Renewal Created',
   stale_lead: 'Stale Lead',

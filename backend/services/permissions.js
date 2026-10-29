@@ -26,7 +26,7 @@ const MODULE_LABELS = {
   forecast: 'Inventory Pipeline',
   reports: 'Reports',
   activities: 'Task Board',
-  voc: 'Voice of Customer',
+  voc: 'Customer Feedback',
   campaigns: 'Campaigns',
   customers: 'Customers',
 };
@@ -81,7 +81,7 @@ function defaultPermissionsFor(user) {
 // Business Admin and Global Admin see the feed by role; a Manager only with the explicit grant;
 // a Team Member never. (The per-lead Activity tab is separate and unaffected.)
 function canSeeActivityFeed(user) {
-  if (isSuperAdmin(user)) return true;                   // Global Admin
+  if (isSuperAdmin(user)) return true;                   // Owner
   if (user?.role === 'business_admin') return true;      // Business Admin — automatic
   if (user?.role === 'pmo') return !!user.activity_feed_access; // Manager — only if granted
   return false;                                          // Team Member / others — never

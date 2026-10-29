@@ -42,7 +42,7 @@ export default function BusinessUnitsPage() {
     setError('');
     getBusinessUnitsManage()
       .then(setUnits)
-      .catch(err => setError(err.response?.data?.message || 'Could not load business units.'));
+      .catch(err => setError(err.response?.data?.message || 'Could not load businesses.'));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -58,7 +58,7 @@ export default function BusinessUnitsPage() {
       setConfirmDel(null);
       load();
     } catch (err) {
-      window.alert(err.response?.data?.message || 'Could not delete business unit.');
+      window.alert(err.response?.data?.message || 'Could not delete business.');
     }
   };
 
@@ -67,11 +67,11 @@ export default function BusinessUnitsPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '8px 4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#0f172a' }}>{isGa ? 'Business Units' : 'Business Unit'}</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#0f172a' }}>{isGa ? 'Businesses' : 'Business'}</h1>
             <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
               {isGa
                 ? 'Create and manage business platforms. A new unit appears in login and across the app immediately — no code changes.'
-                : 'Edit the presentation and template for your business. Only a Global Admin can create, clone, disable, archive or delete a business unit.'}
+                : 'Edit the presentation and template for your business. Only an Owner can create, clone, disable, archive or delete a business.'}
             </p>
           </div>
           {canCreate && (
@@ -108,7 +108,7 @@ export default function BusinessUnitsPage() {
                   <Stat label="Users" n={u.users} />
                   <Stat label="Leads" n={u.leads} />
                   <Stat label="Chains" n={u.chains} />
-                  <Stat label="VOCs" n={u.vocs} />
+                  <Stat label="Feedback" n={u.vocs} />
                 </div>
 
                 {canEditBu && (
@@ -184,7 +184,7 @@ function BuFormModal({ mode, bu, onClose, onSaved }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const onName = (v) => { set('name', v); if (!slugTouched && !isEdit) set('slug', slugify(v)); };
 
-  const title = isEdit ? `Edit ${bu.name}` : isClone ? `Clone ${bu.name}` : 'New Business Unit';
+  const title = isEdit ? `Edit ${bu.name}` : isClone ? `Clone ${bu.name}` : 'New Business';
 
   const submit = async (e) => {
     e.preventDefault();
@@ -257,13 +257,13 @@ function DeleteModal({ info, onClose, onArchive, onDelete }) {
   const [typed, setTyped] = useState('');
   const rows = [
     ['Users', usage.users], ['Leads', usage.leads], ['Chains', usage.chains],
-    ['VOCs', usage.vocs], ['Dropdown options', usage.dropdowns], ['SLA rows', usage.slas],
+    ['Feedback', usage.vocs], ['Dropdown options', usage.dropdowns], ['SLA rows', usage.slas],
   ];
   return (
     <Overlay onClose={onClose}>
       <div style={{ padding: 22 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 4px' }}>Delete “{bu.name}”?</h2>
-        <p style={{ fontSize: 12.5, color: '#64748b', margin: '0 0 14px' }}>Here is everything this business unit holds:</p>
+        <p style={{ fontSize: 12.5, color: '#64748b', margin: '0 0 14px' }}>Here is everything this business holds:</p>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 14 }}>
           {rows.map(([label, n]) => (
@@ -277,7 +277,7 @@ function DeleteModal({ info, onClose, onArchive, onDelete }) {
         {!deletable ? (
           <>
             <div style={{ ...s.warn }}>
-              This unit still holds users, leads, chains or VOCs, so it cannot be deleted — that would orphan real records. <b>Archive</b> it instead: existing data stays readable and no new records can be added.
+              This business still holds users, leads, parent accounts or feedback, so it cannot be deleted — that would orphan real records. <b>Archive</b> it instead: existing data stays readable and no new records can be added.
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn" style={s.ghost} onClick={onClose}>Cancel</button>

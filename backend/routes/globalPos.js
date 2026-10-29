@@ -10,7 +10,7 @@ const { chainStatus, leadDevices, WON_STAGE } = require('../services/chainPool')
 router.use(authenticate);
 // Forecast accounts have no lead/PO access (mirrors the leads router).
 router.use((req, res, next) => {
-  if (req.user.role === 'forecast') return res.status(403).json({ message: 'Forecast accounts have no PO access.' });
+  if (req.user.role === 'forecast') return res.status(403).json({ message: 'Forecast accounts have no order access.' });
   next();
 });
 
@@ -48,7 +48,7 @@ router.get('/', requireAnyModule(['leads', 'dashboard', 'reports'], 'read'), asy
 router.get('/:id', requireAnyModule(['leads', 'dashboard', 'reports'], 'read'), async (req, res) => {
   try {
     const c = await GlobalPo.findByPk(req.params.id);
-    if (!c) return res.status(404).json({ message: 'Global PO not found' });
+    if (!c) return res.status(404).json({ message: 'Master Order not found' });
     if (c.business_unit !== req.user.business_unit) return res.status(403).json({ message: 'Forbidden' });
     const pos = await linkedPos(c.id);
     const status = statusOf(c, pos);
@@ -69,7 +69,7 @@ router.get('/:id', requireAnyModule(['leads', 'dashboard', 'reports'], 'read'), 
 function parseChainBody(body) {
   const out = {}; const errs = [];
   if (body.chain_name !== undefined) {
-    if (!String(body.chain_name).trim()) errs.push('Chain name is required');
+    if (!String(body.chain_name).trim()) errs.push('Parent account name is required');
     else out.chain_name = String(body.chain_name).trim();
   }
   if (body.device_total !== undefined) {
@@ -98,7 +98,7 @@ function parseChainBody(body) {
 router.post('/', requireModule('leads', 'full'), async (req, res) => {
   try {
     const { out, errs } = parseChainBody(req.body);
-    if (!out.chain_name) errs.push('Chain name is required');
+    if (!out.chain_name) errs.push('Parent account name is required');
     if (out.device_total === undefined) errs.push('Number of devices is required');
     if (errs.length) return res.status(400).json({ message: errs[0] });
     const created = await GlobalPo.create({
@@ -119,14 +119,14 @@ router.post('/', requireModule('leads', 'full'), async (req, res) => {
 router.put('/:id', requireModule('leads', 'full'), async (req, res) => {
   try {
     const c = await GlobalPo.findByPk(req.params.id);
-    if (!c) return res.status(404).json({ message: 'Global PO not found' });
+    if (!c) return res.status(404).json({ message: 'Master Order not found' });
     if (c.business_unit !== req.user.business_unit) return res.status(403).json({ message: 'Forbidden' });
     const { out, errs } = parseChainBody(req.body);
     if (errs.length) return res.status(400).json({ message: errs[0] });
     const before = c.toJSON();
     await GlobalPo.update({ ...out, updated_by: req.user.id }, { where: { id: c.id } });
     const CHAIN_LABELS = {
-      chain_name: 'Chain Name', device_total: 'Device Total', device_type: 'Device Type', status: 'Status', notes: 'Notes', price_lakhs: 'Price (L)',
+      chain_name: 'Parent Account Name', device_total: 'Device Total', device_type: 'Device Type', status: 'Status', notes: 'Notes', price_lakhs: 'Price (L)',
       expected_start_date: 'Expected Start', expected_end_date: 'Expected End',
     };
     await audit.recordDiff(
@@ -155,7 +155,7 @@ router.put('/:id', requireModule('leads', 'full'), async (req, res) => {
 router.delete('/:id', adminOnly, requireModule('leads', 'full'), async (req, res) => {
   try {
     const c = await GlobalPo.findByPk(req.params.id);
-    if (!c) return res.status(404).json({ message: 'Global PO not found' });
+    if (!c) return res.status(404).json({ message: 'Master Order not found' });
     if (req.user.role !== 'super_admin' && c.business_unit !== req.user.business_unit) return res.status(403).json({ message: 'Forbidden' });
     await c.destroy();
     await audit.record({
@@ -163,7 +163,7 @@ router.delete('/:id', adminOnly, requireModule('leads', 'full'), async (req, res
       businessUnit: c.business_unit, action: 'chain_deleted',
       field: 'Chain', from: c.chain_name, to: null, note: 'Chain deleted',
     });
-    return res.json({ message: 'Global PO deleted' });
+    return res.json({ message: 'Master Order deleted' });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }

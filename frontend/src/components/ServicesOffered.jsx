@@ -9,7 +9,7 @@ import { FREQUENCIES, FREQUENCY_LABELS, componentTcv, computeServicesTotals } fr
 
 const CATS = [
   { key: 'hardware',          title: 'Hardware',             hint: 'Devices / SKUs — flow into the Inventory Pipeline.' },
-  { key: 'software',          title: 'Software / Services',  hint: 'Services & licences — OPEX or CAPEX.' },
+  { key: 'software',          title: 'Software / Services',  hint: 'Services & licences — recurring or one-time.' },
   { key: 'hardware_software', title: 'Hardware + Software',  hint: 'A device plus a licensing / service component — the hardware flows into the Inventory Pipeline.' },
 ];
 
@@ -32,8 +32,8 @@ function ComponentFields({ comp, onPatch, disabled }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '130px 140px 1fr 90px', gap: 8, alignItems: 'center' }}>
       <select className="input" style={inStyle} value={nature} disabled={disabled} onChange={e => onPatch({ nature: e.target.value })}>
-        <option value="capex">CAPEX (one-time)</option>
-        <option value="opex">OPEX (recurring)</option>
+        <option value="capex">One-time</option>
+        <option value="opex">Recurring</option>
       </select>
       {isOpex
         ? <FreqSelect value={comp.frequency} disabled={disabled} onChange={v => onPatch({ frequency: v })} />
@@ -91,8 +91,8 @@ export default function ServicesOffered({ catalog = [], contractMonths, value = 
     <section>
       <p className="section-title">Services Offered</p>
       <p style={{ fontSize: 11, color: '#94a3b8', margin: '-6px 0 12px' }}>
-        Pick the items on this deal and set OPEX/CAPEX, billing frequency (OPEX), unit rate and quantity.
-        TCV is auto-calculated from these × the contract period.
+        Pick the items on this deal and set Recurring/One-time, billing frequency (recurring), unit rate and quantity.
+        Deal Value is auto-calculated from these × the contract period.
       </p>
 
       {CATS.map(cat => {
@@ -105,7 +105,7 @@ export default function ServicesOffered({ catalog = [], contractMonths, value = 
             </div>
             <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {items.length === 0 && (
-                <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0' }}>No items in this catalog — a Global Admin can add them in Edit Template.</p>
+                <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0' }}>No items in this catalog — an Owner can add them in Edit Template.</p>
               )}
               {items.map(item => {
                 const line = lineByLabel.get(item.label);
@@ -147,7 +147,7 @@ export default function ServicesOffered({ catalog = [], contractMonths, value = 
       })}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 13, fontWeight: 700, color: '#0f172a', padding: '4px 2px' }}>
-        <span>TCV: ₹{totals.tcvLakhs.toFixed(2)} L</span>
+        <span>Deal Value: ₹{totals.tcvLakhs.toFixed(2)} L</span>
         <span style={{ color: '#64748b' }}>First-year ACV: ₹{totals.acvLakhs.toFixed(2)} L</span>
       </div>
     </section>

@@ -22,7 +22,7 @@ const STATUSES = ['active', 'disabled', 'archived'];
 function globalAdminOnly(req, res, next) {
   if (!req.user) return res.status(401).json({ message: 'Unauthenticated' });
   if (isSuperAdmin(req.user)) return next();
-  return res.status(403).json({ message: 'Only a Global Admin can manage business units.' });
+  return res.status(403).json({ message: 'Only an Owner can manage businesses.' });
 }
 
 // Looser gate for the management surface a Business Admin ALSO has access to — they can view/edit
@@ -32,7 +32,7 @@ function managerOfBusinessUnit(req, res, next) {
   if (!req.user) return res.status(401).json({ message: 'Unauthenticated' });
   if (isSuperAdmin(req.user)) return next();
   if (req.user.role === 'business_admin') return next();
-  return res.status(403).json({ message: 'Only a Global Admin or Business Admin can manage business units.' });
+  return res.status(403).json({ message: 'Only an Owner or Business Admin can manage businesses.' });
 }
 
 // Ensures a Business Admin acting on a specific :slug is only touching their OWN BU. A Global Admin
@@ -40,7 +40,7 @@ function managerOfBusinessUnit(req, res, next) {
 function ensureOwnBuForBa(req, res, next) {
   if (isSuperAdmin(req.user)) return next();
   if (req.user.role === 'business_admin' && req.user.business_unit === req.params.slug) return next();
-  return res.status(403).json({ message: 'You can only manage your own business unit.' });
+  return res.status(403).json({ message: 'You can only manage your own business.' });
 }
 
 // Emails that belong to a Global Admin — their per-business accounts are auto-provisioned convenience
@@ -238,7 +238,7 @@ router.post('/', globalAdminOnly, async (req, res) => {
     if (!name || !String(name).trim()) return res.status(400).json({ message: 'Name is required' });
 
     const existing = await BusinessUnit.findOne({ where: { slug: s } });
-    if (existing) return res.status(409).json({ message: `A business unit with slug "${s}" already exists.` });
+    if (existing) return res.status(409).json({ message: `A business with slug "${s}" already exists.` });
 
     const maxOrder = (await BusinessUnit.max('sort_order')) || 0;
     const created = await sequelize.transaction(async (t) => {
@@ -300,7 +300,7 @@ router.put('/:slug', ensureOwnBuForBa, async (req, res) => {
     }
     // Only a Global Admin can transition status (disable / archive / reactivate).
     if (status !== undefined && !isSuperAdmin(req.user)) {
-      return res.status(403).json({ message: 'Only a Global Admin can change the status of a business unit.' });
+      return res.status(403).json({ message: 'Only an Owner can change the status of a business.' });
     }
     if (name !== undefined && !String(name).trim()) return res.status(400).json({ message: 'Name cannot be empty' });
 
@@ -351,7 +351,7 @@ router.put('/:slug', ensureOwnBuForBa, async (req, res) => {
 router.delete('/:slug', globalAdminOnly, async (req, res) => {
   try {
     if (!isSuperAdminWrite(req.user)) {
-      return res.status(403).json({ message: 'Your Global Admin access is Read-only — you cannot delete a business unit.' });
+      return res.status(403).json({ message: 'Your Owner access is Read-only — you cannot delete a business.' });
     }
     const bu = await BusinessUnit.findOne({ where: { slug: req.params.slug } });
     if (!bu) return res.status(404).json({ message: 'Business unit not found' });
@@ -359,7 +359,7 @@ router.delete('/:slug', globalAdminOnly, async (req, res) => {
     const usage = await usageFor(bu.slug);
     if (hasTransactionalData(usage)) {
       return res.status(409).json({
-        message: 'This business unit still holds data and cannot be deleted. Archive it instead to keep the records read-only.',
+        message: 'This business still holds data and cannot be deleted. Archive it instead to keep the records read-only.',
         usage, deletable: false,
       });
     }
@@ -393,7 +393,7 @@ router.delete('/:slug', globalAdminOnly, async (req, res) => {
 router.post('/:slug/clone', globalAdminOnly, async (req, res) => {
   try {
     const source = await BusinessUnit.findOne({ where: { slug: req.params.slug } });
-    if (!source) return res.status(404).json({ message: 'Source business unit not found' });
+    if (!source) return res.status(404).json({ message: 'Source business not found' });
 
     const { slug, name } = req.body;
     const s = String(slug || '').trim().toLowerCase();
@@ -402,7 +402,7 @@ router.post('/:slug/clone', globalAdminOnly, async (req, res) => {
     }
     if (!name || !String(name).trim()) return res.status(400).json({ message: 'New name is required' });
     if (await BusinessUnit.findOne({ where: { slug: s } })) {
-      return res.status(409).json({ message: `A business unit with slug "${s}" already exists.` });
+      return res.status(409).json({ message: `A business with slug "${s}" already exists.` });
     }
 
     const maxOrder = (await BusinessUnit.max('sort_order')) || 0;

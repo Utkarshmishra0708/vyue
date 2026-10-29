@@ -377,7 +377,7 @@ export default function CustomersPage() {
           <div>
             <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{title}</h1>
             {!activeLocation && <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{customers.length} customer{customers.length === 1 ? '' : 's'}{anyFilterActive ? ' · filtered' : ''}</p>}
-            {activeLocation && <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{activeCustomer.customer_code}-{activeLocation.location_code} · {activeLocation.pos.length} PO{activeLocation.pos.length === 1 ? '' : 's'}</p>}
+            {activeLocation && <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{activeCustomer.customer_code}-{activeLocation.location_code} · {activeLocation.pos.length} order{activeLocation.pos.length === 1 ? '' : 's'}</p>}
           </div>
         </div>
       </div>
@@ -394,7 +394,7 @@ export default function CustomersPage() {
           <MultiSelect label="Source" options={sourceOpts} selected={filterSources} onChange={setFilterSources} />
           <MultiSelect label="Customer" options={customerNames} selected={filterCustomers} onChange={setFilterCustomers} />
           <MultiSelect label="Renewal Due" options={RENEWAL_FILTER_OPTS} selected={filterRenewal} onChange={setFilterRenewal} />
-          {isAdmin && <MultiSelect label="BD" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
+          {isAdmin && <MultiSelect label="Sales Rep" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#334155' }}>
             <input type="checkbox" checked={filterOverdue} onChange={e => setFilterOverdue(e.target.checked)} /> Followup overdue only
           </label>
@@ -431,7 +431,7 @@ export default function CustomersPage() {
                   <th style={{ ...headerCell, width: 32 }} />
                   <th style={headerCell}>Channel Partner</th>
                   <th style={headerCell}>Customers</th>
-                  <th style={{ ...headerCell, textAlign: 'right' }}>POs</th>
+                  <th style={{ ...headerCell, textAlign: 'right' }}>Orders</th>
                   <th style={{ ...headerCell, textAlign: 'right' }}>Won / Open</th>
                   <th style={{ ...headerCell, textAlign: 'right' }}>Total Qty</th>
                 </tr>
@@ -469,7 +469,7 @@ export default function CustomersPage() {
                                 <span style={{ color: '#6366f1', fontWeight: 700, marginRight: 8 }}>{copen ? '▼' : '▶'}</span>
                                 <strong style={{ color: '#0f172a' }}>{cust.customer_name}</strong>
                                 <span style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace', marginLeft: 8 }}>{cust.customer_code}</span>
-                                <span style={{ color: '#94a3b8', marginLeft: 8 }}>— {cust.pos.length} PO{cust.pos.length === 1 ? '' : 's'} · ₹{custVal.toFixed(1)}L</span>
+                                <span style={{ color: '#94a3b8', marginLeft: 8 }}>— {cust.pos.length} order{cust.pos.length === 1 ? '' : 's'} · ₹{custVal.toFixed(1)}L</span>
                               </td>
                             </tr>
                             {copen && (
@@ -524,7 +524,7 @@ export default function CustomersPage() {
                         <td style={{ ...bodyCell, textAlign: 'center', color: '#6366f1', fontWeight: 700 }}>{open ? '▼' : '▶'}</td>
                         <td style={bodyCell}>
                           <div style={{ fontWeight: 700, color: '#0f172a' }}>{c.customer_name}</div>
-                          <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace' }}>{c.customer_code} · {c.poCount} PO{c.poCount === 1 ? '' : 's'}</div>
+                          <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace' }}>{c.customer_code} · {c.poCount} order{c.poCount === 1 ? '' : 's'}</div>
                         </td>
                         <td style={bodyCell}>{statesSummary}</td>
                         <td style={{ ...bodyCell, textAlign: 'right', fontWeight: 700 }}>₹{c.clv.toFixed(1)}L</td>
@@ -547,7 +547,7 @@ export default function CustomersPage() {
                           <tr style={{ background: '#f8fafc' }}>
                             <td style={bodyCell} />
                             <td style={{ ...bodyCell, paddingLeft: 24, fontWeight: 700, color: '#334155' }} colSpan={6}>
-                              📍 {s.state} <span style={{ color: '#94a3b8', fontWeight: 500 }}>— {s.poCount} PO{s.poCount === 1 ? '' : 's'}</span>
+                              📍 {s.state} <span style={{ color: '#94a3b8', fontWeight: 500 }}>— {s.poCount} order{s.poCount === 1 ? '' : 's'}</span>
                             </td>
                           </tr>
                           {s.locations.map(loc => (
@@ -559,7 +559,7 @@ export default function CustomersPage() {
                                   <span>
                                     🏙 {loc.city || <span style={{ color: '#94a3b8' }}>No city</span>}
                                     <span style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace', marginLeft: 8 }}>{loc.location_code}</span>
-                                    <span style={{ color: '#94a3b8', marginLeft: 8 }}>— {loc.pos.length} PO{loc.pos.length === 1 ? '' : 's'}</span>
+                                    <span style={{ color: '#94a3b8', marginLeft: 8 }}>— {loc.pos.length} order{loc.pos.length === 1 ? '' : 's'}</span>
                                   </span>
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
                                     {/* Per-location renewal — this is the badge the user actually needs: which city/PO is due. */}
@@ -603,9 +603,9 @@ export default function CustomersPage() {
               const won = activeLocation.pos.filter(l => l.phase === 'PO Received').length;
               return (
                 <div className="card" style={{ display: 'flex', gap: 24, padding: '12px 16px', marginBottom: 16, flexWrap: 'wrap' }}>
-                  <div><div style={{ fontSize: 11, color: '#94a3b8' }}>POs</div><div style={{ fontSize: 18, fontWeight: 700 }}>{activeLocation.pos.length}</div></div>
+                  <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Orders</div><div style={{ fontSize: 18, fontWeight: 700 }}>{activeLocation.pos.length}</div></div>
                   <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Won</div><div style={{ fontSize: 18, fontWeight: 700, color: '#059669' }}>{won}</div></div>
-                  <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Total TCV</div><div style={{ fontSize: 18, fontWeight: 700 }}>₹{totalTcv.toFixed(1)}L</div></div>
+                  <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Total Deal Value</div><div style={{ fontSize: 18, fontWeight: 700 }}>₹{totalTcv.toFixed(1)}L</div></div>
                   <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Total ACV</div><div style={{ fontSize: 18, fontWeight: 700 }}>₹{totalAcv.toFixed(1)}L</div></div>
                 </div>
               );
@@ -631,10 +631,10 @@ function PoCard({ l, renewedIds }) {
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, padding: '14px 16px', background: '#eef2ff', borderBottom: '1px solid #c7d2fe' }}>
-        <Stat label="BD" value={l.owner?.name || '—'} />
-        <Stat label="PO Number" value={l.po_number || '—'} />
+        <Stat label="Sales Rep" value={l.owner?.name || '—'} />
+        <Stat label="Order Number" value={l.po_number || '—'} />
         <Stat label="Quantity" value={l.quantity || '—'} />
-        <Stat label="TCV" value={l.potential_tcv_lakhs ? `₹${l.potential_tcv_lakhs}L` : '—'} />
+        <Stat label="Deal Value" value={l.potential_tcv_lakhs ? `₹${l.potential_tcv_lakhs}L` : '—'} />
         <Stat label="ACV" value={l.acv_lakhs ? `₹${l.acv_lakhs}L/yr` : '—'} />
         <Stat label="Phase" value={l.phase} />
       </div>
@@ -644,8 +644,8 @@ function PoCard({ l, renewedIds }) {
         <Detail label="State" value={l.state || '—'} />
         <Detail label="City" value={l.city || '—'} />
         <Detail label="PO Received Date" value={l.po_received_date ? fmtDate(l.po_received_date) : '—'} />
-        <Detail label="Hardware Requested Date" value={l.device_requested_date ? fmtDate(l.device_requested_date) : '—'} />
-        <Detail label="PO Period" value={(l.service_start_date || l.service_end_date)
+        <Detail label="Delivery Requested Date" value={l.device_requested_date ? fmtDate(l.device_requested_date) : '—'} />
+        <Detail label="Order Period" value={(l.service_start_date || l.service_end_date)
           ? `${l.service_start_date ? fmtDate(l.service_start_date) : '—'} → ${l.service_end_date ? fmtDate(l.service_end_date) : '—'}`
           : '—'} full />
         {renewal && (

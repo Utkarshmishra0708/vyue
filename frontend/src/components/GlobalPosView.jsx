@@ -26,23 +26,23 @@ export default function GlobalPosView({ onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 780 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <span style={{ fontWeight: 700, fontSize: 15 }}>{detail ? `Chain — ${detail.chain_name}` : 'Global POs (Chains)'}</span>
+          <span style={{ fontWeight: 700, fontSize: 15 }}>{detail ? `Parent Account — ${detail.chain_name}` : 'Master Orders (Parent Accounts)'}</span>
           <div style={{ display: 'flex', gap: 8 }}>
-            {detail && <button className="btn btn-sm" onClick={() => setDetail(null)}>← All chains</button>}
+            {detail && <button className="btn btn-sm" onClick={() => setDetail(null)}>← All parent accounts</button>}
             <button className="btn btn-sm" onClick={onClose}>✕</button>
           </div>
         </div>
         <div className="modal-body">
           {detail ? <ChainDetail detail={detail} onBack={() => setDetail(null)} />
             : chains === null ? <p style={{ color: '#94a3b8' }}>Loading…</p>
-            : chains.length === 0 ? <p style={{ color: '#94a3b8', fontSize: 13 }}>No chains yet. Create one via <b>New Lead → PO Type → Global PO</b>.</p>
+            : chains.length === 0 ? <p style={{ color: '#94a3b8', fontSize: 13 }}>No parent accounts yet. Create one via <b>New Lead → Order Type → Master Order</b>.</p>
             : (
               <table className="data-table" style={{ width: '100%' }}>
-                <thead><tr><th>Chain</th><th>Status</th><th style={{ textAlign: 'right' }}>Total</th><th style={{ textAlign: 'right' }}>Consumed</th><th>Pool Status</th></tr></thead>
+                <thead><tr><th>Parent Account</th><th>Status</th><th style={{ textAlign: 'right' }}>Total</th><th style={{ textAlign: 'right' }}>Consumed</th><th>Pool Status</th></tr></thead>
                 <tbody>
                   {chains.map(c => (
                     <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(c.id)}>
-                      <td style={{ fontWeight: 600 }}>{c.chain_name}<div style={{ fontSize: 11, color: '#94a3b8' }}>{c.device_type && <span style={{ background: '#f1f5f9', borderRadius: 4, padding: '1px 5px', marginRight: 6, fontSize: 10, fontWeight: 600, color: '#475569' }}>{c.device_type}</span>}{c.linked_count} linked PO(s)</div></td>
+                      <td style={{ fontWeight: 600 }}>{c.chain_name}<div style={{ fontSize: 11, color: '#94a3b8' }}>{c.device_type && <span style={{ background: '#f1f5f9', borderRadius: 4, padding: '1px 5px', marginRight: 6, fontSize: 10, fontWeight: 600, color: '#475569' }}>{c.device_type}</span>}{c.linked_count} linked order(s)</div></td>
                       <td>
                         <select
                           value={c.status || 'New'}
@@ -128,18 +128,18 @@ function ChainDetail({ detail, onBack }) {
       </div>
       {s.exceeded && (
         <p style={{ fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 10px', marginBottom: 14 }}>
-          ⚠ Cumulative wins exceed the original chain total of {detail.device_total} devices. Wins are never blocked — the overage is shown for visibility only.
+          ⚠ Cumulative wins exceed the original parent account total of {detail.device_total} devices. Wins are never blocked — the overage is shown for visibility only.
         </p>
       )}
       <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 4px' }}>
         Type: <span style={{ color: '#334155', fontWeight: 600 }}>{detail.device_type || 'Hardware'}</span> · Price: {detail.price_lakhs ? `₹${detail.price_lakhs}L` : '—'} · Expected {detail.expected_start_date ? fmtDate(detail.expected_start_date) : '—'} → {detail.expected_end_date ? fmtDate(detail.expected_end_date) : '—'}
       </p>
-      <p className="section-title" style={{ marginTop: 16 }}>Contributing Individual POs (won)</p>
+      <p className="section-title" style={{ marginTop: 16 }}>Contributing Individual Orders (won)</p>
       {(!detail.contributors || detail.contributors.length === 0) ? (
-        <p style={{ fontSize: 13, color: '#94a3b8' }}>No properties won yet — the pool updates automatically the moment a linked Individual PO reaches PO Received.</p>
+        <p style={{ fontSize: 13, color: '#94a3b8' }}>No customers won yet — the pool updates automatically the moment a linked Individual Order reaches PO Received.</p>
       ) : (
         <table className="data-table" style={{ width: '100%' }}>
-          <thead><tr><th>Property</th><th style={{ textAlign: 'right' }}>Devices Won</th><th>Date Won</th></tr></thead>
+          <thead><tr><th>Customer</th><th style={{ textAlign: 'right' }}>Devices Won</th><th>Date Won</th></tr></thead>
           <tbody>
             {detail.contributors.map(c => (
               <tr key={c.id}><td>{c.customer_name}</td><td style={{ textAlign: 'right' }}>{c.devices}</td><td>{c.won_date ? fmtDate(c.won_date) : '—'}</td></tr>
@@ -152,7 +152,7 @@ function ChainDetail({ detail, onBack }) {
       <MentionTextarea
         value={notes}
         onChange={setNotes}
-        placeholder="Add notes about this chain… Use @Name to mention someone"
+        placeholder="Add notes about this parent account… Use @Name to mention someone"
         style={{
           width: '100%', minHeight: 80, padding: '8px 10px', fontSize: 13, lineHeight: 1.5,
           border: '1px solid #e2e8f0', borderRadius: 8, resize: 'vertical',

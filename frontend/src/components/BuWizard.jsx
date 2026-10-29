@@ -19,12 +19,12 @@ const fieldSlugify = (s) => slugify(s).replace(/-/g, '_').slice(0, 64);
 const APPROVER_ROLES = [
   { value: 'business_admin', label: 'Business Admin' },
   { value: 'pmo', label: 'Manager' },
-  { value: 'bd', label: 'Business Development' },
+  { value: 'bd', label: 'Sales Rep' },
 ];
 // The three service catalog categories the Global Admin builds per business.
 export const SERVICE_CATEGORIES = [
   { key: 'hardware',          title: 'Hardware',             hint: 'Devices / SKUs — flow into the Inventory Pipeline.' },
-  { key: 'software',          title: 'Software / Services',  hint: 'Services & licences (OPEX recurring or CAPEX one-time). Do not flow to the Inventory Pipeline.' },
+  { key: 'software',          title: 'Software / Services',  hint: 'Services & licences (recurring or one-time). Do not flow to the Inventory Pipeline.' },
   { key: 'hardware_software', title: 'Hardware + Software',  hint: 'A device plus a licensing / service component — the hardware flows into the Inventory Pipeline.' },
 ];
 
@@ -136,7 +136,7 @@ export default function BuWizard({ onClose, onCreated }) {
       });
       onCreated();
     } catch (e) {
-      setErr(e.response?.data?.message || 'Could not create the business unit.');
+      setErr(e.response?.data?.message || 'Could not create the business.');
       setBusy(false);
       setStep(0);
     }
@@ -151,7 +151,7 @@ export default function BuWizard({ onClose, onCreated }) {
       <div style={ov.modal}>
         <div style={{ padding: '18px 22px 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>New Business Unit — Guided Setup</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>New Business — Guided Setup</h2>
             <button onClick={onClose} style={ov.x}>×</button>
           </div>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 12 }}>
@@ -215,7 +215,7 @@ export default function BuWizard({ onClose, onCreated }) {
 
           {catalog && step === 2 && (
             <div>
-              <Intro>Build the services {basics.name || 'this business'} offers. Add each item under its category and set a default OPEX/CAPEX. <b>Hardware</b> and <b>Hardware + Software</b> items flow into the Inventory Pipeline. BDs later pick these on the lead form — they cannot add new ones.</Intro>
+              <Intro>Build the services {basics.name || 'this business'} offers. Add each item under its category and set a default Recurring/One-time. <b>Hardware</b> and <b>Hardware + Software</b> items flow into the Inventory Pipeline. Sales Reps later pick these on the lead form — they cannot add new ones.</Intro>
               {SERVICE_CATEGORIES.map(cat => (
                 <ServiceCategoryBuilder key={cat.key}
                   category={cat}
@@ -292,7 +292,7 @@ export default function BuWizard({ onClose, onCreated }) {
           <button className="btn" style={ov.ghost} onClick={step === 0 ? onClose : () => setStep(s => s - 1)}>{step === 0 ? 'Cancel' : '← Back'}</button>
           {step < STEPS.length - 1
             ? <button className="btn" style={{ ...ov.primary, opacity: canNext() ? 1 : 0.5 }} disabled={!canNext() || !catalog} onClick={() => setStep(s => s + 1)}>Next →</button>
-            : <button className="btn" style={ov.primary} disabled={busy} onClick={submit}>{busy ? 'Creating…' : 'Create Business Unit'}</button>}
+            : <button className="btn" style={ov.primary} disabled={busy} onClick={submit}>{busy ? 'Creating…' : 'Create Business'}</button>}
         </div>
       </div>
     </div>
@@ -400,7 +400,7 @@ export function ServiceCategoryBuilder({ category, items, onAdd, onRemove, onNat
           <div key={s.slug} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid #f1f5f9' }}>
             <span style={{ fontSize: 13, flex: 1, color: '#0f172a' }}>{s.label}</span>
             <select value={s.nature} onChange={e => onNature(s.slug, e.target.value)} style={{ ...ov.input, margin: 0, width: 90, padding: '4px 6px' }}>
-              <option value="opex">OPEX</option><option value="capex">CAPEX</option>
+              <option value="opex">Recurring</option><option value="capex">One-time</option>
             </select>
             <button type="button" style={ov.x} title="Remove" onClick={() => onRemove(s.slug)}>×</button>
           </div>
@@ -410,7 +410,7 @@ export function ServiceCategoryBuilder({ category, items, onAdd, onRemove, onNat
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
             placeholder={category.key === 'hardware' ? 'Add a device / SKU name…' : category.key === 'hardware_software' ? 'Add a hardware + software item…' : 'Add a service…'} />
           <select style={{ ...ov.input, margin: 0, width: 90 }} value={draft.nature} onChange={e => setDraft(d => ({ ...d, nature: e.target.value }))}>
-            <option value="opex">OPEX</option><option value="capex">CAPEX</option>
+            <option value="opex">Recurring</option><option value="capex">One-time</option>
           </select>
           <button type="button" className="btn btn-sm" style={ov.ghost} onClick={add}>+ Add</button>
         </div>

@@ -10,7 +10,7 @@ const RULE_GROUPS = [
       { key: 'lead_created', label: 'New leads created' },
       { key: 'lead_lost', label: 'Leads marked Lost' },
       { key: 'lead_on_hold', label: 'Leads put On Hold' },
-      { key: 'po_document_uploaded', label: 'PO document uploaded' },
+      { key: 'po_document_uploaded', label: 'Order document uploaded' },
     ],
   },
   {

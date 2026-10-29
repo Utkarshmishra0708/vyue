@@ -173,9 +173,9 @@ router.patch('/devices/:id/sent-to-scm', authenticate, requireModule('forecast',
     await ActivityLog.create({
       lead_id: lead.id, lead_sr_no: lead.sr_no, customer_name: lead.customer_name,
       user_name: req.user.name, user_id: req.user.id, user_email: req.user.email,
-      action_type: 'field_update', field_changed: `Sent to SCM (${line_slug})`,
+      action_type: 'field_update', field_changed: `Sent to Supply Chain (${line_slug})`,
       old_value: prevLine.sent ? 'Yes' : 'No', new_value: sent_to_scm ? 'Yes' : 'No',
-      note: sent_to_scm ? `Marked "${line_slug}" as sent to SCM` : `Unmarked "${line_slug}" as sent to SCM`,
+      note: sent_to_scm ? `Marked "${line_slug}" as sent to Supply Chain` : `Unmarked "${line_slug}" as sent to Supply Chain`,
     });
 
     const nextLine = resolveLineScm(lead, line_slug);

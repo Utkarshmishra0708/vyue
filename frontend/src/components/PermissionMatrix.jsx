@@ -66,7 +66,7 @@ export function PermissionLegend() {
     <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.7, background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: 8, padding: '10px 12px' }}>
       <div><b>No Access</b> — hidden from the sidebar entirely</div>
       <div><b>Read-only</b> — can view, cannot change anything</div>
-      <div><b>Edit</b> — can change existing records, but not module configuration (Chains, dropdown lists)</div>
+      <div><b>Edit</b> — can change existing records, but not module configuration (Parent Accounts, dropdown lists)</div>
       <div><b>Full Access</b> — can also create and delete</div>
     </div>
   );

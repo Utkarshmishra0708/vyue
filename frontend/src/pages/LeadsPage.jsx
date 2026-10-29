@@ -354,24 +354,24 @@ export default function LeadsPage() {
       const poc = primaryContact(l);
       const row = {
         'Sr No': l.sr_no, 'Lead Ref': l.lead_ref || '', 'Customer Code': l.customer_code || '',
-        'Business Unit': (l.business_unit || '').toUpperCase(), 'Customer': l.customer_name,
+        'Business': (l.business_unit || '').toUpperCase(), 'Customer': l.customer_name,
         'City': l.city || '', 'State': l.state || '', 'Lead Owner': l.owner?.name || '',
         // Contact / POC details (primary contact; any additional POCs listed in "Other Contacts").
         'Contact Name': poc.name, 'Contact Phone': poc.phone, 'Contact Email': poc.email, 'Contact Designation': poc.designation,
         'Other Contacts': formatOtherContacts(l),
-        'Lead Source': l.lead_source, 'Channel Partner': l.channel_partner_name || '', 'KAM Name': l.kam_name || '', 'Affiliate Name': l.affiliate_name || '',
+        'Lead Source': l.lead_source, 'Channel Partner': l.channel_partner_name || '', 'Account Manager': l.kam_name || '', 'Referral Partner Name': l.affiliate_name || '',
         'New/Renewal': l.new_or_renewal, 'Lead Rating': l.lead_temperature, 'Competitor': l.competitor || '',
-        'Quantity (Total)': l.quantity, 'Potential TCV (L)': l.potential_tcv_lakhs, 'Contract Period (Mo)': l.contract_period_months,
-        'PO Validity (Mo)': l.po_validity_months || '', 'ACV (L/yr)': l.acv_lakhs, 'Contract Value (L)': l.contract_value_lakhs || '',
+        'Quantity (Total)': l.quantity, 'Potential Deal Value (L)': l.potential_tcv_lakhs, 'Contract Period (Mo)': l.contract_period_months,
+        'Order Validity (Mo)': l.po_validity_months || '', 'ACV (L/yr)': l.acv_lakhs, 'Contract Value (L)': l.contract_value_lakhs || '',
         'Phase': l.phase, 'Confidence %': l.confidence_score ?? '', 'Next Follow-Up': l.next_followup_date || '', 'PO Expected Date': l.po_expected_date || '',
-        'PO Start': l.service_start_date || '', 'PO End': l.service_end_date || '',
+        'Order Start': l.service_start_date || '', 'Order End': l.service_end_date || '',
         'Billing Cycle': l.billing_cycle || '', 'Payment Terms': l.payment_terms || '',
       };
 
       // Unified Services Offered summary + the hardware-expected date.
       row['Services Offered'] = formatServiceLines(l);
-      row['Hardware Requested Date'] = l.device_requested_date || '';
-      row['Actual PO Value (L)'] = l.po_actual_value_lakhs || '';
+      row['Delivery Requested Date'] = l.device_requested_date || '';
+      row['Actual Order Value (L)'] = l.po_actual_value_lakhs || '';
       row['Lost Reason'] = l.lost_reason || '';
       row['Additional Notes'] = stripHtml(l.additional_notes);
       row['Created At'] = l.createdAt ? fmtDate(l.createdAt) : '';
@@ -389,7 +389,7 @@ export default function LeadsPage() {
       title: 'Sales CRM — Leads',
       subtitle: `${toExport.length} lead${toExport.length > 1 ? 's' : ''} · generated ${fmtDate(new Date())}`,
       tables: [{
-        columns: ['Sr', 'Customer', 'BD', 'Phase', 'Rating', 'TCV (₹L)', 'Conf %', 'Source', 'Next Follow-Up'],
+        columns: ['Sr', 'Customer', 'Sales Rep', 'Phase', 'Rating', 'Deal Value (₹L)', 'Conf %', 'Source', 'Next Follow-Up'],
         rows: toExport.map(l => [
           l.sr_no, l.customer_name, l.owner?.name?.split(' ')[0] || '', l.phase, l.lead_temperature,
           l.potential_tcv_lakhs, hasConfidence(l) ? `${Math.round(Number(l.confidence_score))}%` : '—', l.lead_source,
@@ -426,10 +426,10 @@ export default function LeadsPage() {
             <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, fontSize: 11, padding: '8px 12px', background: view === 'table' ? '#eef2ff' : '#fff' }} onClick={() => setView('table')}>Table</button>
             <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, fontSize: 11, padding: '8px 12px', background: view === 'kanban' ? '#eef2ff' : '#fff' }} onClick={() => setView('kanban')}>Kanban</button>
           </div>
-          <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} title="View customers and their POs by city" onClick={() => navigate('/customers')}>👥 Customers</button>
+          <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} title="View customers and their orders by city" onClick={() => navigate('/customers')}>👥 Customers</button>
           {isAdmin && <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} onClick={() => setShowBulkUpload(true)}>⬆ Bulk Import</button>}
           {leadsCanFull && <button className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '8px 14px' }} onClick={openNew}>+ New Lead</button>}
-          {leadsCanFull && <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 14px', background: '#f1f5f9', color: '#4338ca', borderColor: '#c7d2fe' }} onClick={() => setShowExpansionPicker(true)}>+ Additional PO</button>}
+          {leadsCanFull && <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 14px', background: '#f1f5f9', color: '#4338ca', borderColor: '#c7d2fe' }} onClick={() => setShowExpansionPicker(true)}>+ Additional Order</button>}
         </div>
       </div>
 
@@ -447,7 +447,7 @@ export default function LeadsPage() {
           <MultiSelect label="Scoring" options={SCORE_BANDS} selected={filterScores} onChange={setFilterScores} />
           <MultiSelect label="Source" options={sourceOpts} selected={filterSources} onChange={setFilterSources} />
           <MultiSelect label="Customer" options={customerNames} selected={filterCustomers} onChange={setFilterCustomers} />
-          {isAdmin && <MultiSelect label="BD" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
+          {isAdmin && <MultiSelect label="Sales Rep" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
           {/* Follow-up date range — single button with dropdown */}
           <FollowUpDatePicker from={filterFollowFrom} to={filterFollowTo}
             onFromChange={setFilterFollowFrom} onToChange={setFilterFollowTo} />
@@ -509,10 +509,10 @@ export default function LeadsPage() {
                         title={allSelected ? 'Deselect all' : `Select all ${filtered.length}`} />
                     </th>
                   )}
-                  <th>Sr</th><th>Customer</th>{isAdmin && <th>BD</th>}<th>Phase</th>
+                  <th>Sr</th><th>Customer</th>{isAdmin && <th>Sales Rep</th>}<th>Phase</th>
                   <th title="Days in current stage (coloured vs this stage's TAT target)">Aging</th>
                   <th>Location</th>
-                  <th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>TCV (₹L)</th><th>Scoring</th><th>Next Follow-Up</th>
+                  <th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Deal Value (₹L)</th><th>Scoring</th><th>Next Follow-Up</th>
                 </tr>
               </thead>
               <tbody>
@@ -604,7 +604,7 @@ export default function LeadsPage() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div style={{ display: 'flex', gap: 4 }}>
-                <span className={`tab ${tab === 'form' ? 'active' : ''}`} onClick={() => setTab('form')}>{editLead ? `Edit Lead${editLead.lead_ref ? ` · ${editLead.lead_ref}` : ''}` : (expansionFrom ? `${expansionMode === 'renewal' ? 'Renewal' : 'Additional PO'} · ${expansionFrom.customer_name}` : 'New Lead')}</span>
+                <span className={`tab ${tab === 'form' ? 'active' : ''}`} onClick={() => setTab('form')}>{editLead ? `Edit Lead${editLead.lead_ref ? ` · ${editLead.lead_ref}` : ''}` : (expansionFrom ? `${expansionMode === 'renewal' ? 'Renewal' : 'Additional Order'} · ${expansionFrom.customer_name}` : 'New Lead')}</span>
                 {editLead && <span className={`tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>Activity</span>}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>

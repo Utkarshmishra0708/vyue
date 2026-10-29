@@ -17,8 +17,8 @@ const SOURCE_KINDS = ['Channel Partner', 'KAM', 'Lead Affiliate'];
 // Source kind -> { the lead column, the dropdown field it's stored under, the label }.
 const SOURCE_META = {
   'Channel Partner': { field: 'channel_partner_name', dd: 'channel_partner', label: 'Channel Partner Name' },
-  'KAM': { field: 'kam_name', dd: 'kam', label: 'KAM Name' },
-  'Lead Affiliate': { field: 'affiliate_name', dd: 'lead_affiliate', label: 'Affiliate Name' },
+  'KAM': { field: 'kam_name', dd: 'kam', label: 'Account Manager' },
+  'Lead Affiliate': { field: 'affiliate_name', dd: 'lead_affiliate', label: 'Referral Partner Name' },
 };
 // Fields rendered by dedicated controls (not the generic section loop): stage, PO type (shown as
 // cards), PO document, and the three lead-source name fields (shown inline under Lead Source).
@@ -169,7 +169,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
 
     // Global PO (chain) path: create a chain reference record, not a funnel lead.
     if (!lead && poType === 'global') {
-      if (!globalForm.chain_name.trim()) { setErr('Chain Name is required.'); return; }
+      if (!globalForm.chain_name.trim()) { setErr('Parent Account Name is required.'); return; }
       setBusy(true);
       try {
         await createGlobalPo({
@@ -181,7 +181,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
           expected_end_date: globalForm.expected_end_date || null,
         });
         onSave();
-      } catch (e2) { setErr(e2.response?.data?.message || 'Could not create the chain.'); setBusy(false); }
+      } catch (e2) { setErr(e2.response?.data?.message || 'Could not create the parent account.'); setBusy(false); }
       return;
     }
 
@@ -198,8 +198,8 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
     if (!form.owner_id) { setErr('Lead Owner is required.'); return; }
     if (!form.customer_name || !String(form.customer_name).trim()) { setErr('Customer / Account Name is required.'); return; }
     if (form.lead_source === 'Channel Partner' && !String(form.channel_partner_name || '').trim()) { setErr('Channel Partner Name is required.'); return; }
-    if (form.lead_source === 'KAM' && !String(form.kam_name || '').trim()) { setErr('KAM Name is required.'); return; }
-    if (form.lead_source === 'Lead Affiliate' && !String(form.affiliate_name || '').trim()) { setErr('Affiliate Name is required.'); return; }
+    if (form.lead_source === 'KAM' && !String(form.kam_name || '').trim()) { setErr('Account Manager is required.'); return; }
+    if (form.lead_source === 'Lead Affiliate' && !String(form.affiliate_name || '').trim()) { setErr('Referral Partner Name is required.'); return; }
     // Contacts (POC) — enforce only what the template marks mandatory; drop empty rows.
     const nonEmptyContacts = contacts.filter(c => [c.name, c.email, c.phone, c.designation].some(v => String(v || '').trim()));
     const anyContactReq = contactCfg.nameReq || contactCfg.emailReq || contactCfg.phoneReq || contactCfg.desigReq;
@@ -250,15 +250,15 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
   // reference record. Shown in both branches so the user can switch back.
   const poCards = poEnabled && !lead && !expansionFrom && (
     <div>
-      <p className="section-title">PO TYPE</p>
+      <p className="section-title">ORDER TYPE</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <button type="button" onClick={() => setPoType('individual')} style={poCardStyle(poType === 'individual')}>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>Individual PO</div>
-          <div style={{ fontSize: 12, color: '#64748b' }}>A property-level deal — enters the funnel and is scored.</div>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>Individual Order</div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>A single-customer deal — enters the funnel and is scored.</div>
         </button>
         <button type="button" onClick={() => setPoType('global')} style={poCardStyle(poType === 'global')}>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>Global PO (chain)</div>
-          <div style={{ fontSize: 12, color: '#64748b' }}>A chain/account reference record — not tracked in the funnel.</div>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>Master Order (parent account)</div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>A parent-account reference record — not tracked in the funnel.</div>
         </button>
       </div>
     </div>
@@ -276,10 +276,10 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         {poCards}
         <div>
-          <p className="section-title">GLOBAL PO — CHAIN REFERENCE</p>
+          <p className="section-title">MASTER ORDER — PARENT ACCOUNT REFERENCE</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div><label className="field-label">Chain Name *</label><input className="input" value={globalForm.chain_name} onChange={e => setGlobal('chain_name', e.target.value)} placeholder="e.g. Sunrise Hotels" /></div>
-            <div><label className="field-label">Number of Requirement *</label><input className="input" type="number" min="0" value={globalForm.device_total} onChange={e => setGlobal('device_total', e.target.value)} /></div>
+            <div><label className="field-label">Parent Account Name *</label><input className="input" value={globalForm.chain_name} onChange={e => setGlobal('chain_name', e.target.value)} placeholder="e.g. Sunrise Hotels" /></div>
+            <div><label className="field-label">Quantity Required *</label><input className="input" type="number" min="0" value={globalForm.device_total} onChange={e => setGlobal('device_total', e.target.value)} /></div>
             <div>
               <label className="field-label">Type *</label>
               <select className="input" value={globalForm.device_type} onChange={e => setGlobal('device_type', e.target.value)}>
@@ -293,12 +293,12 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
             <div><label className="field-label">Expected Start Date</label><input className="input" type="date" value={globalForm.expected_start_date} onChange={e => setGlobal('expected_start_date', e.target.value)} /></div>
             <div><label className="field-label">Expected End Date</label><input className="input" type="date" value={globalForm.expected_end_date} onChange={e => setGlobal('expected_end_date', e.target.value)} /></div>
           </div>
-          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 10 }}>Saved for reference only — a Global PO does not enter the sales funnel and has no stage or confidence score.</p>
+          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 10 }}>Saved for reference only — a Master Order does not enter the sales funnel and has no stage or confidence score.</p>
         </div>
         {err && <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '8px 12px', borderRadius: 8, fontSize: 13 }}>{err}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
           <button type="button" className="btn" onClick={onCancel}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Create Chain'}</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Create Parent Account'}</button>
         </div>
       </form>
     );
@@ -310,11 +310,11 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
         <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#3730a3', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 16 }}>{expansionMode === 'renewal' ? '🔄' : '➕'}</span>
           <span>
-            <strong>{expansionMode === 'renewal' ? 'Renewal of' : 'Additional PO for'} {expansionFrom.customer_name}</strong>
+            <strong>{expansionMode === 'renewal' ? 'Renewal of' : 'Additional Order for'} {expansionFrom.customer_name}</strong>
             {expansionFrom.lead_ref && <span style={{ color: '#6366f1', fontFamily: 'monospace', marginLeft: 6 }}>· copied from {expansionFrom.lead_ref}</span>}
             <span style={{ color: '#64748b', marginLeft: 6, fontSize: 12 }}>
               {expansionMode === 'renewal'
-                ? 'Statics, services and deal size copied from the PO being renewed. Adjust the dates and price.'
+                ? 'Statics, services and deal size copied from the order being renewed. Adjust the dates and price.'
                 : 'Static details filled in. Fill the services, deal size and dates fresh.'}
             </span>
           </span>
@@ -323,24 +323,24 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
       {poCards}
 
       {/* Chain mapping — only when the PO Type is enabled in this business's template.
-          For Additional/Renewal flows, chain mapping is inherited from the source lead. */}
+          For Additional/Renewal flows, parent account mapping is inherited from the source lead. */}
       {poEnabled && !expansionFrom && (
       <div>
         <p className="section-title">CHAIN MAPPING</p>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#334155' }}>
           <input type="checkbox" checked={linkToChain} onChange={e => { setLinkToChain(e.target.checked); if (!e.target.checked) setF('global_po_id', ''); }} />
-          This property belongs to a chain
+          This customer belongs to a parent account
         </label>
         {linkToChain ? (
           <div style={{ marginTop: 10 }}>
-            <label className="field-label">Chain (Global PO)</label>
+            <label className="field-label">Parent Account (Master Order)</label>
             <select className="input" value={form.global_po_id || ''} onChange={e => setF('global_po_id', e.target.value)}>
-              <option value="">Select a chain…</option>
+              <option value="">Select a parent account…</option>
               {chains.map(c => <option key={c.id} value={c.id}>{c.chain_name} ({c.device_type || 'Hardware'})</option>)}
             </select>
-            {chains.length === 0 && <p style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>No chains yet — create one via New Lead → PO Type → Global PO.</p>}
+            {chains.length === 0 && <p style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>No parent accounts yet — create one via New Lead → Order Type → Master Order.</p>}
           </div>
-        ) : <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Standalone property — no chain mapping.</p>}
+        ) : <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Standalone customer — no parent account mapping.</p>}
       </div>
       )}
       {poEnabled && expansionFrom && linkToChain && (
@@ -348,7 +348,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
         <p className="section-title">CHAIN MAPPING</p>
         <p style={{ fontSize: 13, color: '#334155' }}>
           Linked to chain: <strong>{chains.find(c => String(c.id) === String(form.global_po_id))?.chain_name || '—'}</strong>
-          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 6 }}>(inherited from source PO)</span>
+          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 6 }}>(inherited from source order)</span>
         </p>
       </div>
       )}
@@ -450,7 +450,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
                 </div>
               )}
               <div>
-                <label className="field-label">Hardware Requested Date</label>
+                <label className="field-label">Delivery Requested Date</label>
                 <input type="date" className="input" value={form.device_requested_date || ''} onChange={e => setF('device_requested_date', e.target.value)} />
                 <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>When the hardware for this deal is expected — used (and sorted by) in the Inventory Pipeline.</p>
               </div>
