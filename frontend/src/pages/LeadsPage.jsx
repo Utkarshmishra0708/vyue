@@ -18,6 +18,7 @@ import { fmtDate, isTATBreached, isOverdue, hasConfidence, confidenceTrend, buil
 import { sortWithWonLast } from '../utils/leadPriority';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import { writeFormattedSheet } from '../utils/excelExport';
+import { APP_NAME } from '../config/brand';
 
 // Compact date-range picker for the Follow-up filter. Single button opens a small popover
 // with From + To date inputs. Shows the selected range as a short label on the button.
@@ -393,7 +394,7 @@ export default function LeadsPage() {
     const toExport = selectedIds.size > 0 ? filtered.filter(l => selectedIds.has(l.id)) : filtered;
     if (!toExport.length) return;
     exportRowsToPdf({
-      title: 'Sales CRM — Leads',
+      title: `${APP_NAME} — Leads`,
       subtitle: `${toExport.length} lead${toExport.length > 1 ? 's' : ''} · generated ${fmtDate(new Date())}`,
       tables: [{
         columns: ['Sr', 'Customer', 'Sales Rep', 'Phase', 'Rating', 'Deal Value (₹L)', 'Conf %', 'Source', 'Next Follow-Up'],

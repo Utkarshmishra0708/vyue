@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { switchPlatform } from '../services/api';
 import { BU_CONFIG, ROLE_LABEL } from '../utils/constants';
 import { IS_PROD } from '../env';
+import { APP_NAME, APP_LOGO } from '../config/brand';
 
 const NAV_ICONS = {
   leads: '📋', dashboard: '📊', forecast: '🚚', reports: '📁', campaigns: '📢', customers: '👥', activity: '🕒', settings: '⚙️', 'change-password': '🔒', voc: '🗣️', 'business-units': '🏢', activities: '📌',
@@ -100,15 +101,15 @@ export default function Sidebar() {
           width: 34, height: 34, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          {/* Jio logo from public/jio-logo.svg. Falls back to the BU colour tile if the asset is missing. */}
+          {/* Product logo (see config/brand.js). Falls back to the business colour tile if the file is missing. */}
           <img
-            src={`${process.env.PUBLIC_URL}/jio-logo.svg`}
-            alt="Jio"
+            src={APP_LOGO}
+            alt={APP_NAME}
             style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
             onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentNode.style.background = bu.color; }}
           />
         </div>
-        {!collapsed && <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>Sales CRM</div>}
+        {!collapsed && <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>{APP_NAME}</div>}
       </button>
 
       <nav style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
@@ -144,7 +145,7 @@ export default function Sidebar() {
             to exist on another platform under a different role. */}
         {!collapsed && !isConsoleOnly && isCrossPlatform && Array.isArray(user.platforms) && user.platforms.length > 1 && (
           <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: '#64748b', marginBottom: 4 }}>PLATFORM</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: '#64748b', marginBottom: 4 }}>BUSINESS</div>
             <select
               value={user.business_unit}
               disabled={switching}

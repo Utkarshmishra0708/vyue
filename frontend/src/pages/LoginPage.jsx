@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { login as apiLogin, getBusinessUnits } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { IS_PROD } from '../env';
+import { APP_NAME } from '../config/brand';
 
 // Fallback presentation for the three original business units — used only if the live list from
 // GET /api/business-units fails to load (e.g. the API is briefly unreachable). The API is the
@@ -86,8 +87,8 @@ export default function LoginPage() {
   if (IS_PROD) return (
     <div style={s.wrap}>
       <div style={s.card}>
-        <h1 style={s.title}>Sales CRM</h1>
-        <p style={s.sub}>Please open Sales CRM from the portal to sign in.</p>
+        <h1 style={s.title}>{APP_NAME}</h1>
+        <p style={s.sub}>Please open {APP_NAME} from the portal to sign in.</p>
       </div>
     </div>
   );
@@ -104,7 +105,7 @@ export default function LoginPage() {
           <span style={{ fontSize: 13 }}>🛡️</span> Owner
         </button>
 
-        <h1 style={s.title}>Sales CRM</h1>
+        <h1 style={s.title}>{APP_NAME}</h1>
         <p style={s.sub}>Select your business to continue</p>
 
         {buList.map(b => (

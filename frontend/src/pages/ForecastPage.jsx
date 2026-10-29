@@ -9,6 +9,7 @@ import ColumnFilter from '../components/ColumnFilter';
 import usePersistedState from '../utils/usePersistedState';
 import { sortWithWonLast, partitionByPriority } from '../utils/leadPriority';
 import { rollupByState, rollupTotal, deviceOnlyQty, INSTALL_STAGES } from '../utils/geographyRollup';
+import { APP_NAME } from '../config/brand';
 import {
   FORECAST_COLUMNS, DEFAULT_FORECAST_KEYS, resolveColumns, forecastUnits,
   matchesFilters, activeFilterKeys, emptyFilterFor,
@@ -229,7 +230,7 @@ export default function ForecastPage() {
   const exportPdf = () => {
     if (!deviceLeads.length) return;
     exportRowsToPdf({
-      title: 'Sales CRM — Inventory Pipeline',
+      title: `${APP_NAME} — Inventory Pipeline`,
       subtitle: `${buName} · ${grandTotal} total units · generated ${fmtDate(new Date())}`,
       tables: [
         {

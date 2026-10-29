@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ssoSelect, getBusinessUnits } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { APP_NAME } from '../config/brand';
 
 // === JIOAUTIFY INTEGRATION: SSO account chooser. Reached only in production, when the STB portal
 // hands off an email that has more than one Sales CRM account: the portal opens
@@ -36,7 +37,7 @@ export default function SsoSelectPage() {
         if (list.length === 1) return handlePick(list[0].business_unit);
         setAccounts(list);
       })
-      .catch((err) => setError(err.response?.data?.message || 'SSO session expired. Open Sales CRM from the portal again.'));
+      .catch((err) => setError(err.response?.data?.message || `SSO session expired. Open ${APP_NAME} from the portal again.`));
   }, []); // run once on mount; ticket/login/navigate are stable for this flow
 
   // Load business-unit presentation so the account cards show the right name/colour/description.
@@ -66,7 +67,7 @@ export default function SsoSelectPage() {
   return (
     <div style={s.wrap}>
       <div style={s.card}>
-        <h1 style={s.title}>Sales CRM</h1>
+        <h1 style={s.title}>{APP_NAME}</h1>
         <p style={s.sub}>Your email has more than one account — choose which to open</p>
 
         {error && <div style={s.error}>{error}</div>}

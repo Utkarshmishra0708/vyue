@@ -77,7 +77,10 @@ export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap }) {
             style={{
               minWidth: 230, flexShrink: 0,
               background: isOver ? '#e0e7ff' : cs.bg,
-              border: isOver ? '2px dashed #6366f1' : '1px solid #e2e8f0',
+              // Separate sides (not the `border` shorthand) so React doesn't warn about mixing it with borderTop.
+              borderLeft: isOver ? '2px dashed #6366f1' : '1px solid #e2e8f0',
+              borderRight: isOver ? '2px dashed #6366f1' : '1px solid #e2e8f0',
+              borderBottom: isOver ? '2px dashed #6366f1' : '1px solid #e2e8f0',
               borderTop: `3px solid ${cs.accent}`,
               borderRadius: 12, padding: 10,
             }}>
@@ -97,7 +100,7 @@ export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap }) {
                     onDragStart={() => setDragId(l.id)}
                     onClick={() => onOpen(l)}
                     style={{
-                      cursor: 'grab', background: '#fff', border: '1px solid #e2e8f0', borderLeft: `3px solid ${leftEdge}`, borderRadius: 10,
+                      cursor: 'grab', background: '#fff', borderTop: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', borderLeft: `3px solid ${leftEdge}`, borderRadius: 10,
                       padding: 10, boxShadow: '0 1px 2px rgba(15,23,42,.06)',
                     }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>

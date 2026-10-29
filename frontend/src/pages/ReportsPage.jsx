@@ -7,6 +7,7 @@ import { getLeads, getBds, getDropdowns, getBusinessUnitConfig, getReportBdPerfo
 import { fmtDate, fmtMonthYear } from '../utils/leadHelpers';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import { writeFormattedSheet } from '../utils/excelExport';
+import { APP_NAME } from '../config/brand';
 
 const CHART_COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
@@ -143,7 +144,7 @@ export default function ReportsPage() {
           rows: filtered.map(l => [l.sr_no, l.customer_name, l.state || '—', l.owner?.name?.split(' ')[0] || '', l.phase, l.new_or_renewal, l.potential_tcv_lakhs, l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '—', l.lead_source, fmtDate(l.createdAt)]),
         };
     exportRowsToPdf({
-      title: view === 'customers' ? 'Sales CRM — Customer Details' : 'Sales CRM — Custom Report',
+      title: view === 'customers' ? `${APP_NAME} — Customer Details` : `${APP_NAME} — Custom Report`,
       subtitle: `${filtered.length} record${filtered.length > 1 ? 's' : ''} · generated ${fmtDate(new Date())}`,
       tables: [table],
       filename: `CRM_${view === 'customers' ? 'Customers' : 'Report'}_${new Date().toISOString().slice(0,10)}.pdf`,

@@ -198,7 +198,10 @@ export default function DashboardPage() {
   // Data quality — only mandatory fields (State/City are optional, so excluded)
   const missingTCV = filtered.filter(l => !l.potential_tcv_lakhs || parseFloat(l.potential_tcv_lakhs) === 0).length;
   const missingFollowup = filtered.filter(l => !l.next_followup_date && !['Won', 'Lost', 'On Hold'].includes(l.phase)).length;
-  const missingQuantity = filtered.filter(l => !l.quantity || l.quantity === 0).length;
+  // Quantity counts hardware units, so it is only "missing" on a lead that has a hardware service but no
+  // units. A software-only lead correctly has a quantity of 0.
+  const hasHardwareLine = (l) => { try { return (JSON.parse(l.services_json || '[]') || []).some(x => x && x.hw); } catch { return false; } };
+  const missingQuantity = filtered.filter(l => hasHardwareLine(l) && !(Number(l.quantity) > 0)).length;
   const dataQualityIssues = [
     { label: 'Missing Deal Value', count: missingTCV, badge: 'badge-red' },
     { label: 'No Follow-Up Date', count: missingFollowup, badge: 'badge-amber' },
@@ -582,7 +585,7 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {dataQualityIssues.map(d => (
                 <span key={d.label} className={`badge ${d.badge}`} style={{ padding: '6px 12px' }}>
-                  {d.label}: <strong style={{ marginLeft: 4 }}>{d.count}</strong> lead{d.count > 1 ? 's' : ''}
+                  {d.label}: <strong style={{ marginLeft: 4, marginRight: 4 }}>{d.count}</strong>lead{d.count > 1 ? 's' : ''}
                 </span>
               ))}
             </div>

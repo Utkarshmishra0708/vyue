@@ -95,13 +95,13 @@ async function syncCentralAccess(payload, req, res, phase) {
   try {
     const response = await callModuleAccessAPI(payload, req, res);
     if (!response || response.statusCode !== 200) {
-      res.status(400).json({ message: (response && response.message) || 'Jio STB module access API failed' });
+      res.status(400).json({ message: (response && response.message) || 'The external module-access service failed' });
       return false;
     }
     return true;
   } catch (apiError) {
     console.error(`STB MODULE ACCESS ERROR (${phase}):`, apiError.message);
-    res.status(400).json({ message: 'Jio STB module access API failed' });
+    res.status(400).json({ message: 'The external module-access service failed' });
     return false;
   }
 }
