@@ -117,8 +117,24 @@ router.get('/', async (req, res) => {
 
 // The effective form schema for a unit: its stored schema, or a default generated from the field
 // catalog so the three originals (which predate the wizard) are still renderable and editable.
+// Built-in (non-custom) sections and fields always show the CURRENT label from the field catalog. A
+// saved template keeps a copy of each label from the day it was saved, so without this a renamed
+// label (for example "PO Expected Date" -> "Order Expected Date") would keep showing the old wording.
+const CATALOG_FIELDS = new Map(FIELD_SECTIONS.flatMap(sec => sec.fields.map(f => [f.slug, f])));
+const CATALOG_SECTIONS = new Map(FIELD_SECTIONS.map(sec => [sec.key, sec]));
+function withCurrentLabels(schema) {
+  return {
+    ...schema,
+    sections: schema.sections.map(sec => ({
+      ...sec,
+      label: !sec.custom && CATALOG_SECTIONS.has(sec.key) ? CATALOG_SECTIONS.get(sec.key).label : sec.label,
+      fields: (sec.fields || []).map(f => (!f.custom && CATALOG_FIELDS.has(f.slug)) ? { ...f, label: CATALOG_FIELDS.get(f.slug).label } : f),
+    })),
+  };
+}
+
 function resolveFormSchema(bu) {
-  if (bu.config && bu.config.formSchema && Array.isArray(bu.config.formSchema.sections)) return bu.config.formSchema;
+  if (bu.config && bu.config.formSchema && Array.isArray(bu.config.formSchema.sections)) return withCurrentLabels(bu.config.formSchema);
   return {
     sections: FIELD_SECTIONS.map(sec => ({
       key: sec.key, label: sec.label, enabled: true, custom: false,

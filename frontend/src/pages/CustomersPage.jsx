@@ -43,8 +43,8 @@ function nearestRenewal(pos, renewedIds) {
 // Its own filter bar (not shared with Leads). PO cards are purely read-only.
 // ---------------------------------------------------------------------------
 
-const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
-const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales', 'Lead Affiliate'];
+const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won', 'Lost', 'On Hold'];
+const SOURCES = ['Channel Partner', 'Account Manager', 'Direct Sales', 'Referral Partner'];
 const SCORE_BANDS = ['0–25%', '25–50%', '50–75%', '75–100%'];
 const scoreBandOf = (l) => {
   const n = Number(l.confidence_score);
@@ -345,8 +345,8 @@ export default function CustomersPage() {
       name: p.name,
       poCount: p.pos.length,
       customers: [...p.custs.values()].sort((a, b) => a.customer_name.localeCompare(b.customer_name)),
-      wonVal: p.pos.filter(l => l.phase === 'PO Received').reduce((s, l) => s + poValue(l), 0),
-      openVal: p.pos.filter(l => !['PO Received', 'Lost'].includes(l.phase)).reduce((s, l) => s + (parseFloat(l.potential_tcv_lakhs) || 0), 0),
+      wonVal: p.pos.filter(l => l.phase === 'Won').reduce((s, l) => s + poValue(l), 0),
+      openVal: p.pos.filter(l => !['Won', 'Lost'].includes(l.phase)).reduce((s, l) => s + (parseFloat(l.potential_tcv_lakhs) || 0), 0),
       totalQty: p.pos.reduce((s, l) => s + (parseInt(l.quantity, 10) || 0), 0),
     })).sort((a, b) => a.name.localeCompare(b.name));
   }, [filtered]);
@@ -600,13 +600,13 @@ export default function CustomersPage() {
             {(() => {
               const totalTcv = activeLocation.pos.reduce((s, l) => s + (parseFloat(l.potential_tcv_lakhs) || 0), 0);
               const totalAcv = activeLocation.pos.reduce((s, l) => s + (parseFloat(l.acv_lakhs) || 0), 0);
-              const won = activeLocation.pos.filter(l => l.phase === 'PO Received').length;
+              const won = activeLocation.pos.filter(l => l.phase === 'Won').length;
               return (
                 <div className="card" style={{ display: 'flex', gap: 24, padding: '12px 16px', marginBottom: 16, flexWrap: 'wrap' }}>
                   <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Orders</div><div style={{ fontSize: 18, fontWeight: 700 }}>{activeLocation.pos.length}</div></div>
                   <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Won</div><div style={{ fontSize: 18, fontWeight: 700, color: '#059669' }}>{won}</div></div>
                   <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Total Deal Value</div><div style={{ fontSize: 18, fontWeight: 700 }}>₹{totalTcv.toFixed(1)}L</div></div>
-                  <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Total ACV</div><div style={{ fontSize: 18, fontWeight: 700 }}>₹{totalAcv.toFixed(1)}L</div></div>
+                  <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Total Annual Value</div><div style={{ fontSize: 18, fontWeight: 700 }}>₹{totalAcv.toFixed(1)}L</div></div>
                 </div>
               );
             })()}
@@ -635,7 +635,7 @@ function PoCard({ l, renewedIds }) {
         <Stat label="Order Number" value={l.po_number || '—'} />
         <Stat label="Quantity" value={l.quantity || '—'} />
         <Stat label="Deal Value" value={l.potential_tcv_lakhs ? `₹${l.potential_tcv_lakhs}L` : '—'} />
-        <Stat label="ACV" value={l.acv_lakhs ? `₹${l.acv_lakhs}L/yr` : '—'} />
+        <Stat label="Annual Value" value={l.acv_lakhs ? `₹${l.acv_lakhs}L/yr` : '—'} />
         <Stat label="Phase" value={l.phase} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 24, rowGap: 8, padding: '14px 16px' }}>
@@ -643,7 +643,7 @@ function PoCard({ l, renewedIds }) {
         <Detail label="Lead Source" value={sourceLine} />
         <Detail label="State" value={l.state || '—'} />
         <Detail label="City" value={l.city || '—'} />
-        <Detail label="PO Received Date" value={l.po_received_date ? fmtDate(l.po_received_date) : '—'} />
+        <Detail label="Won Date" value={l.po_received_date ? fmtDate(l.po_received_date) : '—'} />
         <Detail label="Delivery Requested Date" value={l.device_requested_date ? fmtDate(l.device_requested_date) : '—'} />
         <Detail label="Order Period" value={(l.service_start_date || l.service_end_date)
           ? `${l.service_start_date ? fmtDate(l.service_start_date) : '—'} → ${l.service_end_date ? fmtDate(l.service_end_date) : '—'}`

@@ -50,20 +50,20 @@ const CHAINS = [
 const SCENARIOS = [
   ['New',         'Cold', 'Direct Sales',    'New',       3.5,  4,  {}],
   ['Qualified',   'Warm', 'Channel Partner', 'New',       6.0,  8,  {}],
-  ['Demo',        'Warm', 'KAM',             'New',       9.5,  10, { device: true }],
+  ['Demo',        'Warm', 'Account Manager',             'New',       9.5,  10, { device: true }],
   ['Proposal',    'Hot',  'Direct Sales',    'New',       14.0, 20, { device: true }],
-  ['Negotiation', 'Hot',  'Lead Affiliate',  'New',       22.0, 25, { device: true }],
-  ['PO Expected', 'Hot',  'Channel Partner', 'New',       18.0, 15, { device: true }],
-  ['PO Received', 'Hot',  'KAM',             'New',       12.0, 12, { device: true, sent: true }],
-  ['PO Received', 'Hot',  'Direct Sales',    'New',       7.5,  6,  { device: true }],
+  ['Negotiation', 'Hot',  'Referral Partner',  'New',       22.0, 25, { device: true }],
+  ['Order Expected', 'Hot',  'Channel Partner', 'New',       18.0, 15, { device: true }],
+  ['Won', 'Hot',  'Account Manager',             'New',       12.0, 12, { device: true, sent: true }],
+  ['Won', 'Hot',  'Direct Sales',    'New',       7.5,  6,  { device: true }],
   ['Lost',        'Cold', 'Channel Partner', 'New',       5.0,  5,  { lost: 'Price too high' }],
   ['On Hold',     'Warm', 'Direct Sales',    'New',       8.0,  7,  { hold: 'Demo' }],
-  ['PO Received', 'Hot',  'Channel Partner', 'New',       30.0, 30, { device: true, renewalSource: true }],
-  ['Negotiation', 'Warm', 'KAM',             'Renewal',   11.0, 9,  { renewalOfSource: true }],
+  ['Won', 'Hot',  'Channel Partner', 'New',       30.0, 30, { device: true, renewalSource: true }],
+  ['Negotiation', 'Warm', 'Account Manager',             'Renewal',   11.0, 9,  { renewalOfSource: true }],
   ['Qualified',   'Warm', 'Direct Sales',    'Expansion', 4.5,  5,  {}],
   ['Proposal',    'Warm', 'Channel Partner', 'New',       16.0, 14, { device: true }],
 ];
-const STAGE_ORDER = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received'];
+const STAGE_ORDER = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won'];
 const DEVICE_SKUS = ['MCM3000', 'JSB210', 'J100', 'C2Av2', 'M2S'];
 
 async function clearSample(t) {
@@ -213,9 +213,10 @@ async function main() {
         global_po_id: cu.type === 'Chain' ? chainRows[cu.chain].id : null,
         city: cu.city, state: cu.state, lead_source: source,
         channel_partner_name: source === 'Channel Partner' ? 'Sample Partner Co' : null,
-        kam_name: source === 'KAM' ? 'Sample Account Manager' : null,
-        affiliate_name: source === 'Lead Affiliate' ? 'Sample Referral Partner' : null,
-        new_or_renewal: nor, lead_temperature: temp, quantity: qty,
+        kam_name: source === 'Account Manager' ? 'Sample Account Manager' : null,
+        affiliate_name: source === 'Referral Partner' ? 'Sample Referral Partner' : null,
+        // quantity = total hardware units (the app recalculates it this way on every save)
+        new_or_renewal: nor, lead_temperature: temp, quantity: lines.reduce((n, l) => n + (l.hw ? l.hw.qty : 0), 0),
         potential_tcv_lakhs: lines.length ? totals.tcvLakhs : null, acv_lakhs: lines.length ? totals.acvLakhs : null, tcv_manual: false,
         services_json: JSON.stringify(lines), contract_period_months: 12, po_validity_months: 12,
         phase, phase_changed_at: daysAgo(Math.max(1, age - 8)), last_activity_at: daysAgo(Math.max(1, i % 5 + 1)),
@@ -224,11 +225,11 @@ async function main() {
         demo_date: reached('Demo') ? dateOnly(age + 9) : null,
         proposal_date: reached('Proposal') ? dateOnly(age + 5) : null,
         negotiation_date: reached('Negotiation') ? dateOnly(age + 2) : null,
-        po_expected_date: reached('PO Expected') ? addDays(10 + i) : null,
-        next_followup_date: ['Lost', 'PO Received'].includes(phase) ? null : addDays(2 + (i % 6)),
+        po_expected_date: reached('Order Expected') ? addDays(10 + i) : null,
+        next_followup_date: ['Lost', 'Won'].includes(phase) ? null : addDays(2 + (i % 6)),
         additional_notes: `${TAG} Test lead.`, campaign_id: campaigns[i % 2].id, created_by: rep.id, updated_by: rep.id,
       };
-      if (phase === 'PO Received') {
+      if (phase === 'Won') {
         Object.assign(row, {
           po_received_date: dateOnly(age), po_number: `SAMPLE-ORD-${1000 + i}`, po_actual_value_lakhs: totals.tcvLakhs || value,
           service_start_date: dateOnly(Math.max(0, age - 5)), service_end_date: addDays(360 - age),

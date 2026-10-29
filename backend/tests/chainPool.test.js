@@ -10,7 +10,7 @@ test('standalone Individual PO (no chain) — chainStatus only sums linked POs',
   assert.deepEqual(s, { original: 8000, consumed: 0, remaining: 8000, exceeded: false, wonCount: 0 });
 });
 
-test('an Individual PO short of PO Received has ZERO pool impact at every stage', () => {
+test('an Individual PO short of Won has ZERO pool impact at every stage', () => {
   for (const phase of ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'On Hold', 'Lost']) {
     const s = chainStatus(8000, [{ phase, devices: 100 }]);
     assert.equal(s.consumed, 0, `stage ${phase} must not consume`);
@@ -28,11 +28,11 @@ test('two in-flight POs under the same chain do not affect the pool until one wi
   assert.equal(s.remaining, 8000);
 });
 
-test('pool subtracts only on PO Received (document worked example — Sunrise Hotels)', () => {
+test('pool subtracts only on Won (document worked example — Sunrise Hotels)', () => {
   // Property A won 100, Property B won 200, Property C still in Negotiation (not counted).
   const s = chainStatus(8000, [
-    { phase: 'PO Received', devices: 100 }, // A
-    { phase: 'PO Received', devices: 200 }, // B
+    { phase: 'Won', devices: 100 }, // A
+    { phase: 'Won', devices: 200 }, // B
     { phase: 'Negotiation', devices: 500 }, // C — not yet won
   ]);
   assert.equal(s.consumed, 300);            // "devices already won" vs original total
@@ -44,8 +44,8 @@ test('pool subtracts only on PO Received (document worked example — Sunrise Ho
 test('pool is a reference figure, not a hard cap — overage shows, never blocks', () => {
   // Cumulative wins exceed the original 8000 total.
   const s = chainStatus(8000, [
-    { phase: 'PO Received', devices: 5000 },
-    { phase: 'PO Received', devices: 4000 },
+    { phase: 'Won', devices: 5000 },
+    { phase: 'Won', devices: 4000 },
   ]);
   assert.equal(s.consumed, 9000);
   assert.equal(s.remaining, -1000);         // negative remaining = overage
@@ -54,9 +54,9 @@ test('pool is a reference figure, not a hard cap — overage shows, never blocks
 
 test('non-numeric / missing devices count as zero', () => {
   const s = chainStatus(8000, [
-    { phase: 'PO Received' },                 // no devices
-    { phase: 'PO Received', devices: null },
-    { phase: 'PO Received', devices: 150 },
+    { phase: 'Won' },                 // no devices
+    { phase: 'Won', devices: null },
+    { phase: 'Won', devices: 150 },
   ]);
   assert.equal(s.consumed, 150);
 });

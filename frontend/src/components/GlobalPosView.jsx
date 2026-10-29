@@ -5,7 +5,7 @@ import MentionTextarea from './MentionTextarea';
 
 // Chains (Global POs) browser: a list of chains with live device-pool status, and a per-chain detail
 // showing original/consumed/remaining-or-overage plus the contributing won Individual POs. All figures
-// are derived from current lead states, so they reflect any PO Received the moment it happens.
+// are derived from current lead states, so they reflect any Won the moment it happens.
 export default function GlobalPosView({ onClose }) {
   const [chains, setChains] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -136,7 +136,7 @@ function ChainDetail({ detail, onBack }) {
       </p>
       <p className="section-title" style={{ marginTop: 16 }}>Contributing Individual Orders (won)</p>
       {(!detail.contributors || detail.contributors.length === 0) ? (
-        <p style={{ fontSize: 13, color: '#94a3b8' }}>No customers won yet — the pool updates automatically the moment a linked Individual Order reaches PO Received.</p>
+        <p style={{ fontSize: 13, color: '#94a3b8' }}>No customers won yet — the pool updates automatically the moment a linked Individual Order reaches Won.</p>
       ) : (
         <table className="data-table" style={{ width: '100%' }}>
           <thead><tr><th>Customer</th><th style={{ textAlign: 'right' }}>Devices Won</th><th>Date Won</th></tr></thead>

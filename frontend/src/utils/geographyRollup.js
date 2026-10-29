@@ -13,12 +13,12 @@
 //     different states, and nothing here consults the chain's reference
 //     location — `global_po_id` is never read.
 //
-// Scope: near-term installation load only, i.e. PO Expected onward. Earlier
+// Scope: near-term installation load only, i.e. Order Expected onward. Earlier
 // stages aren't committed hardware yet and would inflate regional planning.
 // ---------------------------------------------------------------------------
 
 // Stages whose hardware is close enough to landing to plan capacity around.
-export const INSTALL_STAGES = ['PO Expected', 'PO Received'];
+export const INSTALL_STAGES = ['Order Expected', 'Won'];
 
 export const UNSPECIFIED_STATE = 'Unspecified';
 

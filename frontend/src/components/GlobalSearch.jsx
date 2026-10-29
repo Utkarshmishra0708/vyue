@@ -4,7 +4,7 @@ import { globalSearch } from '../services/api';
 
 const PHASE_COLORS = {
   New: '#3b82f6', Qualified: '#8b5cf6', Demo: '#06b6d4', Proposal: '#f59e0b',
-  Negotiation: '#ec4899', 'PO Expected': '#f97316', 'PO Received': '#10b981',
+  Negotiation: '#ec4899', 'Order Expected': '#f97316', 'Won': '#10b981',
   Lost: '#ef4444', 'On Hold': '#64748b',
 };
 

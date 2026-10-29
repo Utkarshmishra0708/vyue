@@ -28,8 +28,8 @@ const SETTINGS_PLAIN = [
 const DEFAULT_BD_PASSWORD = '123456';
 
 const DROPDOWNS = [
-  ['phase', ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold']],
-  ['lead_source', ['Channel Partner', 'KAM', 'Direct Sales', 'Lead Affiliate']],
+  ['phase', ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won', 'Lost', 'On Hold']],
+  ['lead_source', ['Channel Partner', 'Account Manager', 'Direct Sales', 'Referral Partner']],
   ['new_or_renewal', ['New', 'Renewal', 'Expansion']],
   ['lead_temperature', ['Hot', 'Warm', 'Cold']],
   // Signage channel partners — the Lead form shows these in a dropdown (with an "Other" option that
@@ -103,7 +103,7 @@ const DROPDOWNS = [
         else for (const bu of DROPDOWN_BUSINESSES) await seedOption(field, bu, values[i], i);
       }
     }
-    // JHES-only partner lists (Channel Partner + Lead Affiliate). Gupta STS is both.
+    // JHES-only partner lists (Channel Partner + Referral Partner). Gupta STS is both.
     const JHES_CHANNEL_PARTNERS = ['Mindlabz Hospitality', 'Star Hub ISO', 'Gupta STS - Indus Technologies', 'Treya Wireless Pvt Ltd', 'CTL Infocom Pvt Ltd'];
     const JHES_LEAD_AFFILIATES = ['Hospitality Sales and Marketing Company', 'MK Enterprises', 'Gupta STS - Indus Technologies', 'Amol Chauhan', 'Hotelogix', 'Hotelztech Solutions'];
     for (let i = 0; i < JHES_CHANNEL_PARTNERS.length; i++) await seedOption('channel_partner', 'jhes', JHES_CHANNEL_PARTNERS[i], i);

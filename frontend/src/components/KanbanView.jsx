@@ -36,7 +36,7 @@ function AgingChip({ lead, tatMap }) {
   );
 }
 
-const COLUMNS = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
+const COLUMNS = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won', 'Lost', 'On Hold'];
 
 // Per-column tint + accent so every column is clearly distinguishable and never renders low-contrast
 // (light) text on a white background. Card text stays dark on white for readability.
@@ -46,8 +46,8 @@ const COLUMN_STYLE = {
   Demo:          { bg: '#fffbeb', accent: '#b45309' },
   Proposal:      { bg: '#eff6ff', accent: '#1d4ed8' },
   Negotiation:   { bg: '#fff7ed', accent: '#c2410c' },
-  'PO Expected': { bg: '#f0fdfa', accent: '#0f766e' },
-  'PO Received': { bg: '#f0fdf4', accent: '#15803d' },
+  'Order Expected': { bg: '#f0fdfa', accent: '#0f766e' },
+  'Won': { bg: '#f0fdf4', accent: '#15803d' },
   Lost:          { bg: '#fef2f2', accent: '#b91c1c' },
   'On Hold':     { bg: '#f1f5f9', accent: '#64748b' },
 };

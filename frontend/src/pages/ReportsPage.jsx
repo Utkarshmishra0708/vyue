@@ -10,9 +10,12 @@ import { writeFormattedSheet } from '../utils/excelExport';
 
 const CHART_COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
-const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
-const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales', 'Lead Affiliate'];
+const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won', 'Lost', 'On Hold'];
+const SOURCES = ['Channel Partner', 'Account Manager', 'Direct Sales', 'Referral Partner'];
 const RENEWALS = ['New', 'Renewal', 'Expansion'];
+
+// Won count for a report row. The server sends it as won_leads (or won / won_count on some reports).
+const wonOf = (r) => Number(r.won ?? r.won_leads ?? r.won_count ?? 0) || 0;
 
 export default function ReportsPage() {
   const { user } = useAuth();
@@ -101,7 +104,7 @@ export default function ReportsPage() {
   }), [allLeads, dateFrom, dateTo, selBDs, selPhases, selSources, selRenewals, selStates, selServices, selPOMonths]);
 
   const totalTCV = filtered.reduce((s, l) => s + (parseFloat(l.potential_tcv_lakhs) || 0), 0);
-  const wonLeads = filtered.filter(l => l.phase === 'PO Received');
+  const wonLeads = filtered.filter(l => l.phase === 'Won');
   const wonTCV = wonLeads.reduce((s, l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
 
   const activeFilterCount = [selBDs, selPhases, selSources, selRenewals, selStates, selServices, selPOMonths].reduce((s,a) => s + a.length, 0) + (dateFrom?1:0) + (dateTo?1:0);
@@ -122,7 +125,7 @@ export default function ReportsPage() {
       : filtered.map(l => ({
           'Sr No': l.sr_no, 'Business': (l.business_unit || '').toUpperCase(), Customer: l.customer_name,
           State: l.state || '', 'Sales Rep': l.owner?.name || '', 'Lead Source': l.lead_source, 'Account Manager': l.kam_name || '',
-          'New/Renewal': l.new_or_renewal, 'Deal Value (₹L)': l.potential_tcv_lakhs, 'PO Expected': l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '',
+          'New/Renewal': l.new_or_renewal, 'Deal Value (₹L)': l.potential_tcv_lakhs, 'Order Expected': l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '',
           Phase: l.phase, 'Created At': fmtDate(l.createdAt),
         }));
     writeFormattedSheet(XLSX, rows, view === 'customers' ? 'Customers' : 'Report', `CRM_${view === 'customers' ? 'Customers' : 'Report'}_${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -136,7 +139,7 @@ export default function ReportsPage() {
           rows: filtered.map(l => [l.customer_name, (l.business_unit || '').toUpperCase(), l.city || '—', l.state || '—', l.owner?.name || '', pc(l).name || '—', pc(l).phone || '—', pc(l).email || '—', pc(l).designation || '—']),
         }
       : {
-          columns: ['Sr', 'Customer', 'State', 'Sales Rep', 'Phase', 'New/Renewal', 'Deal Value (₹L)', 'PO Expected', 'Source', 'Created'],
+          columns: ['Sr', 'Customer', 'State', 'Sales Rep', 'Phase', 'New/Renewal', 'Deal Value (₹L)', 'Order Expected', 'Source', 'Created'],
           rows: filtered.map(l => [l.sr_no, l.customer_name, l.state || '—', l.owner?.name?.split(' ')[0] || '', l.phase, l.new_or_renewal, l.potential_tcv_lakhs, l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '—', l.lead_source, fmtDate(l.createdAt)]),
         };
     exportRowsToPdf({
@@ -187,7 +190,7 @@ export default function ReportsPage() {
           <MultiSelect label="New/Renewal" options={renewalOpts} selected={selRenewals} onChange={setSelRenewals} width={200} />
           <MultiSelect label="Services" options={serviceOptions} selected={selServices} onChange={setSelServices} width={200} />
           {availableStates.length > 0 && <MultiSelect label="State" options={availableStates} selected={selStates} onChange={setSelStates} width={200} />}
-          <MultiSelect label="PO Expected Month" options={poMonths} selected={selPOMonths} onChange={setSelPOMonths} width={200} />
+          <MultiSelect label="Order Expected Month" options={poMonths} selected={selPOMonths} onChange={setSelPOMonths} width={200} />
           {activeFilterCount > 0 && <button className="btn btn-sm btn-danger" onClick={clearAll}>✕ Clear all</button>}
         </div>
 
@@ -210,7 +213,7 @@ export default function ReportsPage() {
                 const rows = Array.isArray(reportData) ? reportData : (reportData.rows || reportData.data || []);
                 const totalBds = rows.length;
                 const totalLeads = rows.reduce((s, r) => s + (r.total_leads || 0), 0);
-                const wonLeadsCount = rows.reduce((s, r) => s + (r.won || 0), 0);
+                const wonLeadsCount = rows.reduce((s, r) => s + wonOf(r), 0);
                 const avgConv = totalLeads > 0 ? ((wonLeadsCount / totalLeads) * 100).toFixed(1) : '0';
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
@@ -227,7 +230,7 @@ export default function ReportsPage() {
                 const totalSources = rows.length;
                 const totalLeads = rows.reduce((s, r) => s + (r.total_leads || 0), 0);
                 const topSource = rows.length > 0 ? rows.reduce((a, b) => (b.total_leads || 0) > (a.total_leads || 0) ? b : a).source || '—' : '—';
-                const totalWon = rows.reduce((s, r) => s + (r.won || 0), 0);
+                const totalWon = rows.reduce((s, r) => s + wonOf(r), 0);
                 const conv = totalLeads > 0 ? ((totalWon / totalLeads) * 100).toFixed(1) : '0';
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
@@ -242,7 +245,7 @@ export default function ReportsPage() {
               {view === 'monthly-trend' && reportData && (() => {
                 const rows = Array.isArray(reportData) ? reportData : (reportData.rows || reportData.data || []);
                 const totalNew = rows.reduce((s, r) => s + (r.new_leads || r.new_count || 0), 0);
-                const totalWon = rows.reduce((s, r) => s + (r.won || r.won_count || 0), 0);
+                const totalWon = rows.reduce((s, r) => s + wonOf(r), 0);
                 const totalNewTcv = rows.reduce((s, r) => s + (parseFloat(r.new_tcv) || 0), 0);
                 const totalWonTcv = rows.reduce((s, r) => s + (parseFloat(r.won_tcv) || 0), 0);
                 return (
@@ -276,7 +279,7 @@ export default function ReportsPage() {
               <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
                 {view === 'pipeline' ? (
                   <table className="data-table">
-                    <thead><tr><th>Sr</th><th>Customer</th><th>State</th><th>Sales Rep</th><th>Phase</th><th>New/Renewal</th><th style={{textAlign:'right'}}>Deal Value ({'₹'}L)</th><th>PO Expected</th><th>Source</th><th>Created</th></tr></thead>
+                    <thead><tr><th>Sr</th><th>Customer</th><th>State</th><th>Sales Rep</th><th>Phase</th><th>New/Renewal</th><th style={{textAlign:'right'}}>Deal Value ({'₹'}L)</th><th>Order Expected</th><th>Source</th><th>Created</th></tr></thead>
                     <tbody>
                       {filtered.map(l => (
                         <tr key={l.id}>
@@ -328,13 +331,13 @@ export default function ReportsPage() {
                         <thead><tr><th>Sales Rep Name</th><th style={{textAlign:'right'}}>Total Leads</th><th style={{textAlign:'right'}}>Active</th><th style={{textAlign:'right'}}>Won</th><th style={{textAlign:'right'}}>Lost</th><th style={{textAlign:'right'}}>Total Deal Value ({'₹'}L)</th><th style={{textAlign:'right'}}>Won Deal Value ({'₹'}L)</th><th style={{textAlign:'right'}}>Conv Rate (%)</th></tr></thead>
                         <tbody>
                           {rows.map((r, i) => {
-                            const conv = (r.total_leads || 0) > 0 ? (((r.won || 0) / r.total_leads) * 100).toFixed(1) : '0';
+                            const conv = (r.total_leads || 0) > 0 ? ((wonOf(r) / r.total_leads) * 100).toFixed(1) : '0';
                             return (
                               <tr key={i}>
                                 <td style={{ fontWeight: 600 }}>{r.bd_name}</td>
                                 <td style={{ textAlign: 'right' }}>{r.total_leads}</td>
                                 <td style={{ textAlign: 'right' }}>{r.active ?? '—'}</td>
-                                <td style={{ textAlign: 'right', color: '#059669', fontWeight: 700 }}>{r.won}</td>
+                                <td style={{ textAlign: 'right', color: '#059669', fontWeight: 700 }}>{wonOf(r)}</td>
                                 <td style={{ textAlign: 'right', color: '#dc2626' }}>{r.lost ?? '—'}</td>
                                 <td style={{ textAlign: 'right' }}>{'₹'}{parseFloat(r.total_tcv || 0).toFixed(1)}</td>
                                 <td style={{ textAlign: 'right', fontWeight: 700 }}>{'₹'}{parseFloat(r.won_tcv || 0).toFixed(1)}</td>
@@ -374,12 +377,12 @@ export default function ReportsPage() {
                         <thead><tr><th>Source</th><th style={{textAlign:'right'}}>Total Leads</th><th style={{textAlign:'right'}}>Won</th><th style={{textAlign:'right'}}>Deal Value ({'₹'}L)</th><th style={{textAlign:'right'}}>Won Deal Value ({'₹'}L)</th><th style={{textAlign:'right'}}>Conv Rate (%)</th></tr></thead>
                         <tbody>
                           {rows.map((r, i) => {
-                            const conv = (r.total_leads || 0) > 0 ? (((r.won || 0) / r.total_leads) * 100).toFixed(1) : '0';
+                            const conv = (r.total_leads || 0) > 0 ? ((wonOf(r) / r.total_leads) * 100).toFixed(1) : '0';
                             return (
                               <tr key={i}>
                                 <td style={{ fontWeight: 600 }}>{r.source}</td>
                                 <td style={{ textAlign: 'right' }}>{r.total_leads}</td>
-                                <td style={{ textAlign: 'right', color: '#059669', fontWeight: 700 }}>{r.won}</td>
+                                <td style={{ textAlign: 'right', color: '#059669', fontWeight: 700 }}>{wonOf(r)}</td>
                                 <td style={{ textAlign: 'right' }}>{'₹'}{parseFloat(r.tcv || r.total_tcv || 0).toFixed(1)}</td>
                                 <td style={{ textAlign: 'right', fontWeight: 700 }}>{'₹'}{parseFloat(r.won_tcv || 0).toFixed(1)}</td>
                                 <td style={{ textAlign: 'right' }}>{conv}%</td>

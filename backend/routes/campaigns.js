@@ -21,8 +21,8 @@ router.get('/', async (req, res) => {
       LEFT JOIN (
         SELECT campaign_id,
                COUNT(*)                                       AS lead_count,
-               SUM(CASE WHEN phase = 'PO Received' THEN 1 ELSE 0 END) AS won_count,
-               SUM(CASE WHEN phase = 'PO Received' THEN COALESCE(po_actual_value_lakhs, potential_tcv_lakhs, 0) ELSE 0 END) AS revenue_lakhs
+               SUM(CASE WHEN phase = 'Won' THEN 1 ELSE 0 END) AS won_count,
+               SUM(CASE WHEN phase = 'Won' THEN COALESCE(po_actual_value_lakhs, potential_tcv_lakhs, 0) ELSE 0 END) AS revenue_lakhs
         FROM leads
         WHERE business_unit = :bu AND campaign_id IS NOT NULL
         GROUP BY campaign_id

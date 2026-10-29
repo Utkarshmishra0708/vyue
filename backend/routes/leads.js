@@ -29,7 +29,7 @@ const PHASE_DATE_MAP = {
   Demo: 'demo_date',
   Proposal: 'proposal_date',
   Negotiation: 'negotiation_date',
-  'PO Received': 'po_received_date',
+  'Won': 'po_received_date',
 };
 
 // Columns tracked by the activity log. The legacy per-service columns (includes_platform,
@@ -43,7 +43,7 @@ const FIELD_LABELS = {
   lead_temperature: 'Lead Rating', competitor: 'Competitor', quantity: 'Quantity',
   potential_tcv_lakhs: 'Potential Deal Value (L)', contract_period_months: 'Contract Period (Mo)',
   po_validity_months: 'Order Validity (Mo)', phase: 'Phase', next_followup_date: 'Next Follow-Up Date',
-  po_expected_date: 'PO Expected Date', service_start_date: 'Service Start Date', service_end_date: 'Service End Date',
+  po_expected_date: 'Order Expected Date', service_start_date: 'Service Start Date', service_end_date: 'Service End Date',
   po_number: 'Order Number', lost_reason: 'Lost Reason', po_actual_value_lakhs: 'Actual Order Value (L)',
   device_requested_date: 'Delivery Requested Date',
   jhes_product: 'JHES Product', additional_notes: 'Additional Notes',
@@ -178,7 +178,7 @@ function normalizePayload(body, { isCreate, existing, role }) {
   const totalQty = serviceLines.reduce((n, l) => n + (l.hw ? (parseInt(l.hw.qty, 10) || 0) : 0), 0);
 
   const phaseChanged = isCreate || (existing && existing.phase !== phase);
-  const inactivePhase = ['PO Received', 'Lost'].includes(phase);
+  const inactivePhase = ['Won', 'Lost'].includes(phase);
 
   const payload = {
     customer_name: body.customer_name,
@@ -194,8 +194,8 @@ function normalizePayload(body, { isCreate, existing, role }) {
     state: body.state || null,
     lead_source: body.lead_source || null,
     channel_partner_name: body.lead_source === 'Channel Partner' ? (body.channel_partner_name || null) : null,
-    kam_name: body.lead_source === 'KAM' ? (body.kam_name || null) : null,
-    affiliate_name: body.lead_source === 'Lead Affiliate' ? (body.affiliate_name || null) : null,
+    kam_name: body.lead_source === 'Account Manager' ? (body.kam_name || null) : null,
+    affiliate_name: body.lead_source === 'Referral Partner' ? (body.affiliate_name || null) : null,
     new_or_renewal: body.new_or_renewal || null,
     // Link a Renewal PO back to the specific PO it renews (set by the + Additional PO → Renewal flow).
     renewed_from_lead_id: body.renewed_from_lead_id ? (parseInt(body.renewed_from_lead_id, 10) || null) : null,
@@ -208,7 +208,7 @@ function normalizePayload(body, { isCreate, existing, role }) {
     // PO validity is derived automatically from the contract period (same duration).
     po_validity_months: months,
     acv_lakhs: acv,
-    contract_value_lakhs: phase === 'PO Received' ? tcv : null,
+    contract_value_lakhs: phase === 'Won' ? tcv : null,
     phase,
     po_expected_date: body.po_expected_date || null,
     next_followup_date: inactivePhase
@@ -230,14 +230,14 @@ function normalizePayload(body, { isCreate, existing, role }) {
     additional_notes: body.additional_notes || null,
     po_document_url: body.po_document_url !== undefined ? body.po_document_url : (existing ? existing.po_document_url : null),
     // PO number (identifier) — captured only for a won deal, alongside the PO document.
-    po_number: phase === 'PO Received' ? (body.po_number ? String(body.po_number).trim() : null) : null,
+    po_number: phase === 'Won' ? (body.po_number ? String(body.po_number).trim() : null) : null,
     lost_reason: phase === 'Lost' ? (body.lost_reason || null) : null,
-    po_actual_value_lakhs: (phase === 'PO Received' && body.po_actual_value_lakhs) ? parseFloat(body.po_actual_value_lakhs) : null,
-    // Service period is captured only once a deal is won (PO Received).
-    service_start_date: phase === 'PO Received' ? (body.service_start_date || null) : null,
-    service_end_date: phase === 'PO Received' ? (body.service_end_date || null) : null,
-    billing_cycle: phase === 'PO Received' ? (body.billing_cycle || null) : null,
-    payment_terms: phase === 'PO Received' ? (body.payment_terms || null) : null,
+    po_actual_value_lakhs: (phase === 'Won' && body.po_actual_value_lakhs) ? parseFloat(body.po_actual_value_lakhs) : null,
+    // Service period is captured only once a deal is won.
+    service_start_date: phase === 'Won' ? (body.service_start_date || null) : null,
+    service_end_date: phase === 'Won' ? (body.service_end_date || null) : null,
+    billing_cycle: phase === 'Won' ? (body.billing_cycle || null) : null,
+    payment_terms: phase === 'Won' ? (body.payment_terms || null) : null,
   };
 
   // Phase date handling — only touched on an actual phase transition.
@@ -257,15 +257,15 @@ function defaultFollowup() {
   return addDaysLocal(localDateString(), 14);
 }
 
-// When a lead is saved with a source name (Channel Partner / KAM / Lead Affiliate) entered via the
+// When a lead is saved with a source name (Channel Partner / Account Manager / Referral Partner) entered via the
 // form's "Other" option, add it as a managed dropdown option for that business so it's offered for
 // future leads. Runs for every business unit — the field names are channel_partner / kam / lead_affiliate.
 async function ensureSourceNameOptions(payload, transaction) {
   const bu = payload.business_unit;
   const kinds = [
     ['Channel Partner', 'channel_partner', payload.channel_partner_name],
-    ['KAM', 'kam', payload.kam_name],
-    ['Lead Affiliate', 'lead_affiliate', payload.affiliate_name],
+    ['Account Manager', 'kam', payload.kam_name],
+    ['Referral Partner', 'lead_affiliate', payload.affiliate_name],
   ];
   for (const [src, field, raw] of kinds) {
     if (payload.lead_source !== src) continue;
@@ -342,7 +342,7 @@ router.get('/', canReadLeadData, async (req, res) => {
     }
     if (overdue === 'true') {
       where.next_followup_date = { [Op.lt]: new Date() };
-      where.phase = { [Op.notIn]: ['Lost', 'PO Received', 'On Hold'] };
+      where.phase = { [Op.notIn]: ['Lost', 'Won', 'On Hold'] };
     }
 
     const leads = await Lead.findAll({
@@ -373,7 +373,7 @@ router.get('/', canReadLeadData, async (req, res) => {
 // Customer → Location roll-up for the Customers tab on the Leads page. Scoped the same way as
 // GET /leads (leadScopeWhere), so a BD sees only their own customers. Returns:
 //   [{ customer_code, customer_name, totals, locations: [{ location_code, city, state, totals,
-//      sources: { 'Channel Partner': [...names], 'KAM': [...names] }, lead_ids: [...] }] }]
+//      sources: { 'Channel Partner': [...names], 'Account Manager': [...names] }, lead_ids: [...] }] }]
 // totals = { leads, open, won, lost, openTCV, wonTCV }
 // --------------------------------------------------------------------------
 router.get('/customers', canReadLeadData, async (req, res) => {
@@ -394,7 +394,7 @@ router.get('/customers', canReadLeadData, async (req, res) => {
       totals.leads += 1;
       const tcv = parseFloat(l.potential_tcv_lakhs) || 0;
       const paid = parseFloat(l.po_actual_value_lakhs) || tcv;
-      if (l.phase === 'PO Received') { totals.won += 1; totals.wonTCV += paid; }
+      if (l.phase === 'Won') { totals.won += 1; totals.wonTCV += paid; }
       else if (l.phase === 'Lost')   { totals.lost += 1; }
       else { totals.open += 1; totals.openTCV += tcv; }
     };
@@ -416,7 +416,7 @@ router.get('/customers', canReadLeadData, async (req, res) => {
       }
       addTotals(loc.totals, l);
       loc.lead_ids.push(l.id);
-      // Capture the specific source name (Channel Partner / KAM / Affiliate) so the UI can show it.
+      // Capture the specific source name (Channel Partner / Account Manager / Affiliate) so the UI can show it.
       if (l.lead_source) {
         const name = l.channel_partner_name || l.kam_name || l.affiliate_name || null;
         if (!loc.sources[l.lead_source]) loc.sources[l.lead_source] = new Set();
@@ -728,7 +728,7 @@ router.delete('/:id', adminOnly, requireModule('leads', 'full'), async (req, res
 // --------------------------------------------------------------------------
 // POST /api/leads/bulk — bulk import from Excel upload
 // --------------------------------------------------------------------------
-const VALID_PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
+const VALID_PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won', 'Lost', 'On Hold'];
 const VALID_TEMPS = ['Hot', 'Warm', 'Cold'];
 const VALID_RENEWAL = ['New', 'Renewal', 'Expansion'];
 const VALID_LOST_REASONS = ['Pricing', 'Competition', 'No Budget', 'No Decision', 'Timing', 'Product Fit', 'Other'];
@@ -759,6 +759,11 @@ function buildServiceLinesFromRow(r, catalog) {
   }
   return lines;
 }
+
+// Values used before the vocabulary change (releases P2-1a / P2-1b). Older spreadsheets may still contain
+// them, so they are translated to the current names on import.
+const LEGACY_VALUES = { 'PO Expected': 'Order Expected', 'PO Received': 'Won', 'KAM': 'Account Manager', 'Lead Affiliate': 'Referral Partner' };
+const modernize = (v) => LEGACY_VALUES[v] || v;
 
 router.post('/bulk', adminOnly, async (req, res) => {
   const { rows, dryRun = true, business_unit } = req.body;
@@ -795,7 +800,7 @@ router.post('/bulk', adminOnly, async (req, res) => {
 
     const customerName = (r.customer_name || '').trim();
     const ownerName = (r.owner_name || '').trim();
-    const phase = (r.phase || '').trim();
+    const phase = modernize((r.phase || '').trim());
 
     if (!customerName) errs.push({ field: 'Customer Name', message: 'Required' });
     if (!ownerName) errs.push({ field: 'Lead Owner', message: 'Required' });
@@ -858,7 +863,7 @@ router.post('/bulk', adminOnly, async (req, res) => {
     if (errs.length > 0) {
       errors.push({ row: rowNum, errors: errs });
     } else {
-      const leadSource = (r.lead_source || '').trim() || null;
+      const leadSource = modernize((r.lead_source || '').trim()) || null;
       const sourceName = (r.source_name || '').trim() || null;
       const parseBool = (v) => {
         if (!v) return false;
@@ -876,8 +881,8 @@ router.post('/bulk', adminOnly, async (req, res) => {
         state: optStr(r.state),
         lead_source: leadSource,
         channel_partner_name: leadSource === 'Channel Partner' ? sourceName : null,
-        kam_name: leadSource === 'KAM' ? sourceName : null,
-        affiliate_name: leadSource === 'Lead Affiliate' ? sourceName : null,
+        kam_name: leadSource === 'Account Manager' ? sourceName : null,
+        affiliate_name: leadSource === 'Referral Partner' ? sourceName : null,
         new_or_renewal: optStr(r.new_or_renewal),
         lead_temperature: optStr(r.lead_temperature),
         competitor: optStr(r.competitor),
@@ -886,7 +891,7 @@ router.post('/bulk', adminOnly, async (req, res) => {
         phase,
         next_followup_date: r.next_followup_date || null,
         po_expected_date: r.po_expected_date || null,
-        po_received_date: phase === 'PO Received' ? (r.po_received_date || null) : null,
+        po_received_date: phase === 'Won' ? (r.po_received_date || null) : null,
         lost_reason: phase === 'Lost' ? optStr(r.lost_reason) : null,
         hold_end_date: phase === 'On Hold' ? (r.hold_end_date || null) : null,
         contract_period_months: optNum(r.contract_period_months),
@@ -895,8 +900,8 @@ router.post('/bulk', adminOnly, async (req, res) => {
         po_actual_value_lakhs: optNum(r.po_actual_value_lakhs),
         service_start_date: r.service_start_date || null,
         service_end_date: r.service_end_date || null,
-        billing_cycle: phase === 'PO Received' ? (optStr(r.billing_cycle) || null) : null,
-        payment_terms: phase === 'PO Received' ? (optStr(r.payment_terms) || null) : null,
+        billing_cycle: phase === 'Won' ? (optStr(r.billing_cycle) || null) : null,
+        payment_terms: phase === 'Won' ? (optStr(r.payment_terms) || null) : null,
         additional_notes: optStr(r.additional_notes),
         device_requested_date: r.device_requested_date || null,
         _contacts: contacts,
@@ -950,10 +955,10 @@ router.post('/bulk', adminOnly, async (req, res) => {
       delete row._contacts;
       delete row._rowNum;
 
-      // For an imported PO Received lead with a real PO Received Date, anchor phase_changed_at to that
+      // For an imported Won lead with a real Won Date, anchor phase_changed_at to that
       // historical date so weekly/monthly performance (which uses po_received_date, falling back to
       // phase_changed_at) reflects when the PO actually landed — not the import date.
-      const historicalPhaseDate = (row.phase === 'PO Received' && row.po_received_date) ? new Date(row.po_received_date) : new Date();
+      const historicalPhaseDate = (row.phase === 'Won' && row.po_received_date) ? new Date(row.po_received_date) : new Date();
       const payload = {
         ...row,
         sr_no: maxSr,

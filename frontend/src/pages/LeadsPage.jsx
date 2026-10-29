@@ -66,8 +66,8 @@ function FollowUpDatePicker({ from, to, onFromChange, onToChange }) {
   );
 }
 
-const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
-const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales', 'Lead Affiliate'];
+const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won', 'Lost', 'On Hold'];
+const SOURCES = ['Channel Partner', 'Account Manager', 'Direct Sales', 'Referral Partner'];
 
 // Confidence band of a lead (matches the Dashboard's Pipeline Confidence card).
 const leadConfBand = (l) => {
@@ -177,9 +177,9 @@ export default function LeadsPage() {
     if (!f && !phase && !bd && !source && !conf && !ids) return;
     setCameFromDashboard(true);
     if (f === 'hot') setFilterTemps(['Hot']);
-    else if (f === 'won') setFilterPhases(['PO Received']);
+    else if (f === 'won') setFilterPhases(['Won']);
     else if (f === 'overdue') setFilterOverdue(true);
-    else if (f === 'active') setFilterPhases(['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected']);
+    else if (f === 'active') setFilterPhases(['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected']);
     if (phase) setFilterPhases(phase.split(','));
     if (source) setFilterSources(source.split(','));
     if (bd && isAdmin) setFilterBDs([bd]);
@@ -241,7 +241,7 @@ export default function LeadsPage() {
       && (!filterIds.length || filterIds.includes(String(l.id)));
   })), [leads, search, filterPhases, filterTemps, filterScores, filterSources, filterBDs, filterCustomers, filterOverdue, filterFollowFrom, filterFollowTo, filterConf, filterIds]);
 
-  const openCount = filtered.filter(l => !['Lost', 'On Hold', 'PO Received'].includes(l.phase)).length;
+  const openCount = filtered.filter(l => !['Lost', 'On Hold', 'Won'].includes(l.phase)).length;
 
   const openNew = () => { setEditLead(null); setExpansionFrom(null); setExpansionMode(null); setTab('form'); setShowForm(true); };
 
@@ -279,20 +279,27 @@ export default function LeadsPage() {
   };
   const onSaved = () => { closeForm(); fetchAll(); };
 
+  // Stages that need extra details (an order document and number for Won, a reason for Lost) can't be
+  // completed by a drag, so the lead form opens with the new stage selected instead.
+  const STAGES_NEEDING_FORM = ['Won', 'Lost'];
   const handlePhaseChangeKanban = async (leadId, newPhase) => {
     const lead = leads.find(l => l.id === leadId);
     if (!lead || lead.phase === newPhase) return;
-    // Resend the lead's existing Services Offered lines so the backend re-persists them unchanged —
-    // omitting `services` would make the server treat it as an empty list and wipe them (and zero TCV).
+    const full = await getLead(leadId).catch(() => lead);
+    if (STAGES_NEEDING_FORM.includes(newPhase)) {
+      setTab('form');
+      setEditLead({ ...full, phase: newPhase });
+      setShowForm(true);
+      return;
+    }
+    // Send the lead's complete saved values with only the stage changed. The server treats a missing
+    // field as cleared, so sending a partial lead used to wipe City, State, Customer Type and others.
+    const scalars = Object.fromEntries(Object.entries(full).filter(([, v]) => v === null || typeof v !== 'object'));
     await updateLead(leadId, {
-      customer_name: lead.customer_name, owner_id: lead.owner_id, business_unit: lead.business_unit,
-      lead_source: lead.lead_source, channel_partner_name: lead.channel_partner_name, kam_name: lead.kam_name,
-      new_or_renewal: lead.new_or_renewal, lead_temperature: lead.lead_temperature, competitor: lead.competitor,
-      potential_tcv_lakhs: lead.potential_tcv_lakhs, tcv_manual: lead.tcv_manual, contract_period_months: lead.contract_period_months,
-      po_validity_months: lead.po_validity_months, phase: newPhase, phase_date: undefined,
-      services: parseServiceLines(lead.services_json),
-      device_requested_date: lead.device_requested_date,
-      additional_notes: lead.additional_notes,
+      ...scalars,
+      phase: newPhase, phase_date: undefined,
+      // Resend the Services Offered lines so the backend re-persists them unchanged.
+      services: parseServiceLines(full.services_json),
     });
     fetchAll();
   };
@@ -362,8 +369,8 @@ export default function LeadsPage() {
         'Lead Source': l.lead_source, 'Channel Partner': l.channel_partner_name || '', 'Account Manager': l.kam_name || '', 'Referral Partner Name': l.affiliate_name || '',
         'New/Renewal': l.new_or_renewal, 'Lead Rating': l.lead_temperature, 'Competitor': l.competitor || '',
         'Quantity (Total)': l.quantity, 'Potential Deal Value (L)': l.potential_tcv_lakhs, 'Contract Period (Mo)': l.contract_period_months,
-        'Order Validity (Mo)': l.po_validity_months || '', 'ACV (L/yr)': l.acv_lakhs, 'Contract Value (L)': l.contract_value_lakhs || '',
-        'Phase': l.phase, 'Confidence %': l.confidence_score ?? '', 'Next Follow-Up': l.next_followup_date || '', 'PO Expected Date': l.po_expected_date || '',
+        'Order Validity (Mo)': l.po_validity_months || '', 'Annual Value (L/yr)': l.acv_lakhs, 'Contract Value (L)': l.contract_value_lakhs || '',
+        'Phase': l.phase, 'Confidence %': l.confidence_score ?? '', 'Next Follow-Up': l.next_followup_date || '', 'Order Expected Date': l.po_expected_date || '',
         'Order Start': l.service_start_date || '', 'Order End': l.service_end_date || '',
         'Billing Cycle': l.billing_cycle || '', 'Payment Terms': l.payment_terms || '',
       };
@@ -393,7 +400,7 @@ export default function LeadsPage() {
         rows: toExport.map(l => [
           l.sr_no, l.customer_name, l.owner?.name?.split(' ')[0] || '', l.phase, l.lead_temperature,
           l.potential_tcv_lakhs, hasConfidence(l) ? `${Math.round(Number(l.confidence_score))}%` : '—', l.lead_source,
-          ['On Hold', 'Lost', 'PO Received'].includes(l.phase) ? '—' : (l.next_followup_date ? fmtDate(l.next_followup_date) : '—'),
+          ['On Hold', 'Lost', 'Won'].includes(l.phase) ? '—' : (l.next_followup_date ? fmtDate(l.next_followup_date) : '—'),
         ]),
       }],
       filename: `Sales_CRM_${new Date().toISOString().slice(0, 10)}.pdf`,
@@ -522,7 +529,7 @@ export default function LeadsPage() {
                   const poRenewal = renewalStatus(l, renewedIds);
                   const showExpiry = poRenewal && poRenewal.band !== 'ok' && poRenewal.band !== 'renewed';
                   const rot = getRotState(l, rotLastEntry, rotTeamAvg);
-                  const isClosed = ['On Hold', 'Lost', 'PO Received'].includes(l.phase);
+                  const isClosed = ['On Hold', 'Lost', 'Won'].includes(l.phase);
                   const isLost = l.phase === 'Lost';
                   const conf = hasConfidence(l) ? Number(l.confidence_score) : null;
                   return (
@@ -534,11 +541,11 @@ export default function LeadsPage() {
                         {l.lead_ref && <p style={{ fontSize: 10, fontFamily: 'monospace', color: '#6366f1', margin: '1px 0 0' }}>{l.lead_ref}</p>}
                         <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>
                           {l.new_or_renewal} · {l.lead_source}
-                          {/* Surface the specific partner/KAM/affiliate name when the lead source needs one.
+                          {/* Surface the specific partner/Account Manager/affiliate name when the lead source needs one.
                               Keeps the row compact but adds the "who brought this in" context. */}
                           {l.lead_source === 'Channel Partner' && l.channel_partner_name && <> · <span style={{ color: '#4338ca', fontWeight: 600 }}>{l.channel_partner_name}</span></>}
-                          {l.lead_source === 'KAM' && l.kam_name && <> · <span style={{ color: '#4338ca', fontWeight: 600 }}>{l.kam_name}</span></>}
-                          {l.lead_source === 'Lead Affiliate' && l.affiliate_name && <> · <span style={{ color: '#4338ca', fontWeight: 600 }}>{l.affiliate_name}</span></>}
+                          {l.lead_source === 'Account Manager' && l.kam_name && <> · <span style={{ color: '#4338ca', fontWeight: 600 }}>{l.kam_name}</span></>}
+                          {l.lead_source === 'Referral Partner' && l.affiliate_name && <> · <span style={{ color: '#4338ca', fontWeight: 600 }}>{l.affiliate_name}</span></>}
                         </p>
                         {showExpiry && (() => {
                           const s = RENEWAL_BAND_STYLE[poRenewal.band] || RENEWAL_BAND_STYLE.ok;

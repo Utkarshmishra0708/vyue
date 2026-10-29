@@ -11,8 +11,8 @@ import { computeServicesTotals } from '../utils/pricing';
 import AuditTimeline from './AuditTimeline';
 
 
-const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
-const SOURCES = ['Channel Partner', 'KAM', 'Direct Sales', 'Lead Affiliate'];
+const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won', 'Lost', 'On Hold'];
+const SOURCES = ['Channel Partner', 'Account Manager', 'Direct Sales', 'Referral Partner'];
 // "Expansion" is kept server-side (and in the ENUM) but is NOT a manual choice in the regular New
 // New / Renewal is auto-tagged, not picked: a plain new lead is "New"; the "+ Additional PO" header
 // flow creates "Expansion" (Additional) and "Renewal" leads, prefilled from an existing customer.
@@ -156,7 +156,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
   const [bds, setBds] = useState([]);
   const [dropdowns, setDropdowns] = useState({});              // per-business dropdown options
   const [cpOther, setCpOther] = useState(false);               // "Other — enter a new name" selected
-  const [affOther, setAffOther] = useState(false);             // Lead Affiliate "Other" (JHES only)
+  const [affOther, setAffOther] = useState(false);             // Referral Partner "Other" (JHES only)
   const [ptOther, setPtOther] = useState(false);               // Customer Type "Other" → manual entry
   const [pcOther, setPcOther] = useState(false);               // Customer Category "Other" → manual entry
   const channelPartners = dropdowns.channel_partner || [];
@@ -190,7 +190,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
         && channelPartners.length && !channelPartners.includes(form.channel_partner_name)) {
       setCpOther(true);
     }
-    if (isJHES && form.lead_source === 'Lead Affiliate' && form.affiliate_name
+    if (isJHES && form.lead_source === 'Referral Partner' && form.affiliate_name
         && affiliates.length && !affiliates.includes(form.affiliate_name)) {
       setAffOther(true);
     }
@@ -294,7 +294,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
   const handlePhaseChange = (newPhase) => {
-    const inactive = ['PO Received', 'Lost'].includes(newPhase);
+    const inactive = ['Won', 'Lost'].includes(newPhase);
     setForm(f => ({
       ...f,
       phase: newPhase,
@@ -366,13 +366,13 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
           return;
         }
       }
-      // A PO document is mandatory once a deal is marked PO Received.
-      if (form.phase === 'PO Received' && !existingPoUrl && !poFile) {
-        setError('An order document is required once the phase is PO Received.');
+      // A PO document is mandatory once a deal is marked Won.
+      if (form.phase === 'Won' && !existingPoUrl && !poFile) {
+        setError('An order document is required once the phase is Won.');
         return;
       }
       // Once the PO document is attached, its PO Number (identifier) is required.
-      if (form.phase === 'PO Received' && (existingPoUrl || poFile) && !String(form.po_number || '').trim()) {
+      if (form.phase === 'Won' && (existingPoUrl || poFile) && !String(form.po_number || '').trim()) {
         setError('Please enter the Order Number for the received order.');
         return;
       }
@@ -420,7 +420,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
   // records something that already happened. Non-BDs are unrestricted.
   const minPhaseDate = isBD ? addDaysStr(todayStr(), -7) : undefined;
   const maxPhaseDate = isBD ? todayStr() : undefined;
-  const inactivePhase = ['PO Received', 'Lost'].includes(form.phase);
+  const inactivePhase = ['Won', 'Lost'].includes(form.phase);
 
   // Extras helper — renders custom fields (from Edit Template) for one template section key,
   // inline as raw <div> children so they flow into whatever grid the caller is in. Returns null
@@ -672,19 +672,19 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
               )}
             </Field>
           )}
-          {form.lead_source === 'KAM' && (
+          {form.lead_source === 'Account Manager' && (
             <Field label="Account Manager" required>
               <input required className="input" value={form.kam_name} onChange={e => set('kam_name', e.target.value)} placeholder="Key Account Manager name" />
             </Field>
           )}
-          {form.lead_source === 'Lead Affiliate' && (
+          {form.lead_source === 'Referral Partner' && (
             <Field label="Referral Partner Name" required>
               {isJHES ? (
                 <>
                   {affOther ? (
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <input required className="input" style={{ flex: 1 }} placeholder="Enter new affiliate name" value={form.affiliate_name} onChange={e => set('affiliate_name', e.target.value)} autoFocus />
-                      {showManage && <DropdownManager field="lead_affiliate" label="Lead Affiliate" onChange={loadDropdowns} />}
+                      {showManage && <DropdownManager field="lead_affiliate" label="Referral Partner" onChange={loadDropdowns} />}
                       <button type="button" className="btn btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => { setAffOther(false); set('affiliate_name', ''); }}>✕</button>
                     </div>
                   ) : (
@@ -698,7 +698,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
                         {affiliates.map(a => <option key={a} value={a}>{a}</option>)}
                         <option value="__other__">Other (enter name)…</option>
                       </select>
-                      {showManage && <DropdownManager field="lead_affiliate" label="Lead Affiliate" onChange={loadDropdowns} />}
+                      {showManage && <DropdownManager field="lead_affiliate" label="Referral Partner" onChange={loadDropdowns} />}
                     </div>
                   )}
                 </>
@@ -786,7 +786,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
         </div>
         {acv() !== null && (
           <div className="badge badge-blue" style={{ marginTop: 10, padding: '6px 12px' }}>
-            First-Year ACV: ₹{acv()} L/yr
+            First-Year Annual Value: ₹{acv()} L/yr
             {!form.tcv_manual && lines.some(l => (l.hw && l.hw.nature === 'capex') || (l.svc && l.svc.nature === 'capex')) && (
               <span style={{ marginLeft: 6, fontWeight: 500 }}>· incl. one-time in year 1</span>
             )}
@@ -826,7 +826,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
             </Field>
           )}
           {phaseChanged && (
-            <Field label={`"${form.phase}" Date${isBD ? ' (today − up to 7 days back)' : ''}`}>
+            <Field label={`${form.phase} Date${isBD ? ' (today − up to 7 days back)' : ''}`}>
               <input type="date" className="input" value={phaseDate} min={minPhaseDate} max={maxPhaseDate} onChange={e => setPhaseDate(e.target.value)} />
               <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
                 {!isBD
@@ -856,17 +856,17 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
               )}
             </Field>
           )}
-          {form.phase === 'PO Received' && fieldOn('dates', 'service_start_date') && (
+          {form.phase === 'Won' && fieldOn('dates', 'service_start_date') && (
             <Field label="Order Start Date" required>
               <input type="date" required className="input" value={form.service_start_date} onChange={e => set('service_start_date', e.target.value)} />
             </Field>
           )}
-          {form.phase === 'PO Received' && fieldOn('dates', 'service_end_date') && (
+          {form.phase === 'Won' && fieldOn('dates', 'service_end_date') && (
             <Field label="Order End Date" required>
               <input type="date" required min={form.service_start_date || undefined} className="input" value={form.service_end_date} onChange={e => set('service_end_date', e.target.value)} />
             </Field>
           )}
-          {form.phase === 'PO Received' && (() => {
+          {form.phase === 'Won' && (() => {
             const BILLING_OPTS = ['Monthly', 'Quarterly', 'Semi-annually', 'Annually', 'Advance'];
             const isCustomBilling = form.billing_cycle && !BILLING_OPTS.includes(form.billing_cycle);
             return (
@@ -886,7 +886,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
               </Field>
             );
           })()}
-          {form.phase === 'PO Received' && (() => {
+          {form.phase === 'Won' && (() => {
             const PAYMENT_OPTS = ['100% Advance', '7 Days Credit', '15 Days Credit', '30 Days Credit', '45 Days Credit'];
             const isCustomPayment = form.payment_terms && !PAYMENT_OPTS.includes(form.payment_terms);
             return (
@@ -911,7 +911,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
             <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>When the hardware for this deal is expected — used (and sorted by) in the Inventory Pipeline.</p>
           </Field>
           {fieldOn('pipeline', 'po_expected_date') && (
-            <Field label="PO Expected Date" required={req('po_expected_date')}>
+            <Field label="Order Expected Date" required={req('po_expected_date')}>
               <input type="date" required={req('po_expected_date')} className="input" value={form.po_expected_date} onChange={e => set('po_expected_date', e.target.value)} />
             </Field>
           )}
@@ -957,10 +957,10 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
           when both built-in fields are off AND no custom fields were added into 'po'. */}
       {(fieldOn('po', 'po_document_url') || fieldOn('po', 'po_number') || customBySection.get('po')) && (
       <section>
-        <p className="section-title">Order Document{form.phase === 'PO Received' && fieldOn('po', 'po_document_url') ? ' *' : ''}</p>
+        <p className="section-title">Order Document{form.phase === 'Won' && fieldOn('po', 'po_document_url') ? ' *' : ''}</p>
         {fieldOn('po', 'po_document_url') && (<>
-          {form.phase === 'PO Received' && !existingPoUrl && !poFile && (
-            <p style={{ fontSize: 12, color: '#dc2626', margin: '0 0 8px' }}>An order document is required once the phase is PO Received.</p>
+          {form.phase === 'Won' && !existingPoUrl && !poFile && (
+            <p style={{ fontSize: 12, color: '#dc2626', margin: '0 0 8px' }}>An order document is required once the phase is Won.</p>
           )}
           {existingPoUrl && !poFile && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -976,7 +976,7 @@ export default function LeadForm({ lead, onSave, onCancel, buConfig, expansionFr
           <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e => setPoFile(e.target.files[0] || null)} />
         </>)}
         {/* PO Number is asked for ONLY after a PO document is attached (identifier for the received PO). */}
-        {fieldOn('po', 'po_number') && form.phase === 'PO Received' && (poFile || existingPoUrl) && (
+        {fieldOn('po', 'po_number') && form.phase === 'Won' && (poFile || existingPoUrl) && (
           <div style={{ marginTop: 12 }}>
             <Field label="Order Number" required>
               <input required className="input" value={form.po_number} onChange={e => set('po_number', e.target.value)} placeholder="Enter order number (identifier)" />

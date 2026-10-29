@@ -15,19 +15,19 @@ export const SURVEILLANCE_ITEMS = [
 
 export const PHASE_DATE_MAP = {
   New: 'start_date', Qualified: 'qualified_date', Demo: 'demo_date',
-  Proposal: 'proposal_date', Negotiation: 'negotiation_date', 'PO Received': 'po_received_date',
+  Proposal: 'proposal_date', Negotiation: 'negotiation_date', 'Won': 'po_received_date',
 };
 
-export const STAGE_ORDER = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received', 'Lost', 'On Hold'];
+export const STAGE_ORDER = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won', 'Lost', 'On Hold'];
 
 export const STAGE_WIN_PCT = {
   New: 5, Qualified: 15, Demo: 30, Proposal: 45, Negotiation: 60,
-  'PO Expected': 80, 'PO Received': 100, Lost: 0, 'On Hold': 0,
+  'Order Expected': 80, 'Won': 100, Lost: 0, 'On Hold': 0,
 };
 
 export const PHASE_BADGE = {
   New: 'badge-gray', Qualified: 'badge-purple', Demo: 'badge-amber', Proposal: 'badge-blue',
-  Negotiation: 'badge-orange', 'PO Expected': 'badge-teal', 'PO Received': 'badge-green',
+  Negotiation: 'badge-orange', 'Order Expected': 'badge-teal', 'Won': 'badge-green',
   Lost: 'badge-red', 'On Hold': 'badge-gray',
 };
 

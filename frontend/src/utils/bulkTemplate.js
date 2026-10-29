@@ -54,14 +54,14 @@ const HARDWARE_DATE_COLUMN = [
 const PHASE_COLUMNS = [
   { header: 'Phase *', slug: 'phase' },
   { header: 'Next Follow-Up Date', slug: 'next_followup_date' },
-  { header: 'PO Expected Date', slug: 'po_expected_date' },
+  { header: 'Order Expected Date', slug: 'po_expected_date' },
   { header: 'Lost Reason', slug: 'lost_reason' },
   { header: 'Hold End Date', slug: 'hold_end_date' },
 ];
 
 const PO_COLUMNS = [
   { header: 'Order Number', slug: 'po_number' },
-  { header: 'PO Received Date', slug: 'po_received_date' },
+  { header: 'Won Date', slug: 'po_received_date' },
   { header: 'Order Start Date', slug: 'service_start_date' },
   { header: 'Order End Date', slug: 'service_end_date' },
   { header: 'Billing Cycle', slug: 'billing_cycle' },
@@ -141,7 +141,7 @@ export function getTemplateColumns(businessUnit, config) {
 }
 
 const DROPDOWN_MAP = {
-  lead_source:      ['Channel Partner', 'KAM', 'Direct Sales', 'Lead Affiliate'],
+  lead_source:      ['Channel Partner', 'Account Manager', 'Direct Sales', 'Referral Partner'],
   // Expansion is only created through the UI's dedicated "+ Expansion" flow, so the bulk-import
   // dropdown stays at New / Renewal. Backend still accepts "Expansion" if someone types it manually.
   new_or_renewal:   ['New', 'Renewal'],
@@ -246,8 +246,8 @@ export async function downloadTemplate(businessUnit, config, users) {
     ['Customer Name *', 'Required. Text.'],
     ['City', 'Text.'],
     ['State', ALL_STATES.join(', ')],
-    ['Lead Source', 'Channel Partner, KAM, Direct Sales, Lead Affiliate (dropdown)'],
-    ['Source Name', 'If Lead Source is Channel Partner / KAM / Lead Affiliate, enter the name here.'],
+    ['Lead Source', 'Channel Partner, Account Manager, Direct Sales, Referral Partner (dropdown)'],
+    ['Source Name', 'If Lead Source is Channel Partner / Account Manager / Referral Partner, enter the name here.'],
     ['New or Renewal', 'New, Renewal, Expansion (dropdown)'],
     ['Lead Temperature', 'Hot, Warm, Cold (dropdown)'],
     ['Competitor', 'Text.'],
@@ -276,14 +276,14 @@ export async function downloadTemplate(businessUnit, config, users) {
     [],
     ['— PHASE & TIMELINE —', ''],
     ['Phase *', `Required (dropdown). ${STAGE_ORDER.join(', ')}`],
-    ['Next Follow-Up Date', 'YYYY-MM-DD. Leave blank for Lost / PO Received.'],
-    ['PO Expected Date', 'YYYY-MM-DD.'],
+    ['Next Follow-Up Date', 'YYYY-MM-DD. Leave blank for Lost / Won.'],
+    ['Order Expected Date', 'YYYY-MM-DD.'],
     ['Lost Reason', `Required if Phase is Lost (dropdown). ${LOST_REASONS.join(', ')}`],
     ['Hold End Date', 'YYYY-MM-DD. For On Hold leads — when to resume.'],
     [],
     ['— ORDER WON FIELDS —', ''],
     ['Order Number', 'Text.'],
-    ['PO Received Date', 'YYYY-MM-DD. The date the order was actually received. IMPORTANT for PO Received leads — this is the date used for weekly/monthly/quarterly performance. If left blank, the lead is counted on the import date instead.'],
+    ['Won Date', 'YYYY-MM-DD. The date the order was actually received. IMPORTANT for Won leads — this is the date used for weekly/monthly/quarterly performance. If left blank, the lead is counted on the import date instead.'],
     ['Order Start Date', 'YYYY-MM-DD. When the order/service delivery begins.'],
     ['Order End Date', 'YYYY-MM-DD. When the order/service contract ends.'],
     [],
@@ -324,6 +324,20 @@ export async function downloadTemplate(businessUnit, config, users) {
   URL.revokeObjectURL(url);
 }
 
+// Column headers used by templates downloaded before the vocabulary change (releases P2-1a / P2-1b).
+// A spreadsheet filled in from an old template still imports: each old header maps to its field.
+const LEGACY_HEADER_SLUGS = {
+  'Property Type': 'property_type',
+  'Property Category': 'property_category',
+  'TCV (Lakhs)': 'tcv_lakhs',
+  'Hardware Requested Date': 'device_requested_date',
+  'PO Expected Date': 'po_expected_date',
+  'PO Number': 'po_number',
+  'PO Received Date': 'po_received_date',
+  'PO Start Date': 'service_start_date',
+  'PO End Date': 'service_end_date',
+};
+
 export function parseUploadedFile(XLSX, file, businessUnit, config) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -347,7 +361,7 @@ export function parseUploadedFile(XLSX, file, businessUnit, config) {
           const mapped = {};
           for (const [header, value] of Object.entries(r)) {
             const cleanHeader = header.trim();
-            const slug = headerMap[cleanHeader];
+            const slug = headerMap[cleanHeader] || LEGACY_HEADER_SLUGS[cleanHeader];
             if (slug) {
               mapped[slug] = formatCellValue(value);
             } else {

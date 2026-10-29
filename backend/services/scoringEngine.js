@@ -94,7 +94,7 @@ function applyHoldTransition(payload, existing, isCreate, body, now = new Date()
       payload.hold_end_date = body.hold_end_date || payload.next_followup_date || addDaysLocal(localDateString(now), 60);
     }
   } else {
-    // Active / Lost / PO Received — not on hold. Clear the freeze (this also covers a manual resume,
+    // Active / Lost / Won — not on hold. Clear the freeze (this also covers a manual resume,
     // which then restarts at the stage's base weight because last_activity_at is now).
     payload.hold_frozen_confidence = null;
     payload.hold_entered_at = null;

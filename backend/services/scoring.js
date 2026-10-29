@@ -7,7 +7,7 @@
 //   * the hourglass "jump" values between stages,
 //   * the step-function decay driven by cumulative stage-SLA breach checkpoints,
 //   * the non-zero floor,
-//   * the Lost hard-override, On-Hold freeze, and PO Received terminal cases.
+//   * the Lost hard-override, On-Hold freeze, and Won terminal cases.
 //
 // Base weights and jump values are FIXED CONSTANTS shared across every platform
 // (signage / jhes / surveillance). Only the per-stage SLA days are configurable
@@ -17,28 +17,28 @@
 
 // The seven sequential pipeline stages, in order. 'On Hold' and 'Lost' are
 // exception/terminal states handled separately (they are not in this list).
-const STAGES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received'];
+const STAGES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won'];
 
-// Stages that carry an SLA window (everything except the terminal PO Received).
-const STAGES_WITH_SLA = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected'];
+// Stages that carry an SLA window (everything except the terminal Won).
+const STAGES_WITH_SLA = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected'];
 
 // Base confidence (%) per stage — fixed.
 const BASE = {
-  New: 5, Qualified: 25, Demo: 40, Proposal: 48, Negotiation: 60, 'PO Expected': 75, 'PO Received': 95,
+  New: 5, Qualified: 25, Demo: 40, Proposal: 48, Negotiation: 60, 'Order Expected': 75, 'Won': 95,
 };
 
 // Hourglass "jump from previous" values, keyed by the FROM stage of each transition:
 //   New→Qualified 20, Qualified→Demo 15, Demo→Proposal 8, Proposal→Negotiation 12,
-//   Negotiation→PO Expected 15, PO Expected→PO Received 20.
+//   Negotiation→Order Expected 15, Order Expected→Won 20.
 // Sequence 20, 15, 8, 12, 15, 20 — wide at the ends, narrowest around Proposal.
 const JUMP_FROM = {
-  New: 20, Qualified: 15, Demo: 8, Proposal: 12, Negotiation: 15, 'PO Expected': 20,
+  New: 20, Qualified: 15, Demo: 8, Proposal: 12, Negotiation: 15, 'Order Expected': 20,
 };
 
 // Default SLA (days) per stage — the document's global table. Seeded per platform and then
 // editable per platform; this map is the fallback whenever a platform has no override for a stage.
 const DEFAULT_SLA = {
-  New: 2, Qualified: 5, Demo: 7, Proposal: 7, Negotiation: 15, 'PO Expected': 7,
+  New: 2, Qualified: 5, Demo: 7, Proposal: 7, Negotiation: 15, 'Order Expected': 7,
 };
 
 // A small non-zero floor (%) so a decayed-but-alive lead stays visually distinct from an explicitly
@@ -69,7 +69,7 @@ function slaFor(slaByStage, stage) {
 // `lead` needs: { phase, last_activity_at, hold_frozen_confidence }.
 //   - phase 'Lost'    → 0 (hard override).
 //   - phase 'On Hold' → the frozen value captured at hold entry (no decay).
-//   - phase 'PO Received' → base weight (terminal, no decay).
+//   - phase 'Won' → base weight (terminal, no decay).
 //   - otherwise → base(stage) minus the cumulative hourglass jumps for every SLA
 //     checkpoint that `d` (days since last activity) has crossed, floored at FLOOR.
 //
@@ -84,19 +84,19 @@ function computeConfidence(lead, slaByStage, now = new Date()) {
   }
   const base = BASE[phase];
   if (base === undefined) return null;                 // unknown / non-pipeline stage
-  if (phase === 'PO Received') return base;            // terminal — no decay applies
+  if (phase === 'Won') return base;            // terminal — no decay applies
 
   const i = STAGES.indexOf(phase);
   const d = daysSince(lead.last_activity_at, now);
 
   // Walk the cumulative SLA timeline T_k = SLA(S_i) + SLA(S_{i+1}) + ... + SLA(S_{i+k}).
   // Each checkpoint T_k crossed (d >= T_k) subtracts the hourglass jump for that stage's
-  // transition to the next. Once we run past PO Expected there is nothing left to subtract.
+  // transition to the next. Once we run past Order Expected there is nothing left to subtract.
   let acc = 0;          // acc after adding SLA(S_{i+k}) == T_k
   let deduction = 0;
   for (let k = 0; ; k++) {
     const idx = i + k;
-    if (idx >= STAGES.length - 1) break;               // no SLA beyond PO Expected (PO Received terminal)
+    if (idx >= STAGES.length - 1) break;               // no SLA beyond Order Expected (Won terminal)
     const stage = STAGES[idx];
     acc += slaFor(slaByStage, stage);
     if (d >= acc) deduction += (JUMP_FROM[stage] || 0);

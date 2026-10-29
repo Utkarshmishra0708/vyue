@@ -63,7 +63,7 @@ async function sweepStaleLeads(businessUnit) {
     const staleLeads = await Lead.findAll({
       where: {
         business_unit: businessUnit,
-        phase: { [Op.notIn]: ['PO Received', 'Lost', 'On Hold'] },
+        phase: { [Op.notIn]: ['Won', 'Lost', 'On Hold'] },
         [Op.or]: [
           { last_activity_at: { [Op.lt]: cutoff } },
           { last_activity_at: null, created_at: { [Op.lt]: cutoff } },
@@ -102,7 +102,7 @@ async function sweepStageTAT(businessUnit) {
     const leads = await Lead.findAll({
       where: {
         business_unit: businessUnit,
-        phase: { [Op.notIn]: ['PO Received', 'Lost', 'On Hold'] },
+        phase: { [Op.notIn]: ['Won', 'Lost', 'On Hold'] },
       },
       attributes: ['id', 'sr_no', 'customer_name', 'owner_id', 'phase', 'phase_changed_at', 'created_at'],
       raw: true,
@@ -140,7 +140,7 @@ async function sweepFollowupOverdue(businessUnit) {
     const leads = await Lead.findAll({
       where: {
         business_unit: businessUnit,
-        phase: { [Op.notIn]: ['Lost', 'PO Received', 'On Hold'] },
+        phase: { [Op.notIn]: ['Lost', 'Won', 'On Hold'] },
         next_followup_date: { [Op.lt]: today },
       },
       attributes: ['id', 'sr_no', 'customer_name', 'owner_id', 'phase', 'next_followup_date'],

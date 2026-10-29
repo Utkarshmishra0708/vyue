@@ -13,12 +13,12 @@ import AuditTimeline from './AuditTimeline';
 // services chosen in the wizard render with rate/qty and auto-calc TCV (stored the JSON way). The
 // three original businesses keep their own hand-built LeadForm instead of this.
 const STATE_OPTIONS = [...INDIAN_STATES, ...UNION_TERRITORIES];
-const SOURCE_KINDS = ['Channel Partner', 'KAM', 'Lead Affiliate'];
+const SOURCE_KINDS = ['Channel Partner', 'Account Manager', 'Referral Partner'];
 // Source kind -> { the lead column, the dropdown field it's stored under, the label }.
 const SOURCE_META = {
   'Channel Partner': { field: 'channel_partner_name', dd: 'channel_partner', label: 'Channel Partner Name' },
-  'KAM': { field: 'kam_name', dd: 'kam', label: 'Account Manager' },
-  'Lead Affiliate': { field: 'affiliate_name', dd: 'lead_affiliate', label: 'Referral Partner Name' },
+  'Account Manager': { field: 'kam_name', dd: 'kam', label: 'Account Manager' },
+  'Referral Partner': { field: 'affiliate_name', dd: 'lead_affiliate', label: 'Referral Partner Name' },
 };
 // Fields rendered by dedicated controls (not the generic section loop): stage, PO type (shown as
 // cards), PO document, and the three lead-source name fields (shown inline under Lead Source).
@@ -198,8 +198,8 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
     if (!form.owner_id) { setErr('Lead Owner is required.'); return; }
     if (!form.customer_name || !String(form.customer_name).trim()) { setErr('Customer / Account Name is required.'); return; }
     if (form.lead_source === 'Channel Partner' && !String(form.channel_partner_name || '').trim()) { setErr('Channel Partner Name is required.'); return; }
-    if (form.lead_source === 'KAM' && !String(form.kam_name || '').trim()) { setErr('Account Manager is required.'); return; }
-    if (form.lead_source === 'Lead Affiliate' && !String(form.affiliate_name || '').trim()) { setErr('Referral Partner Name is required.'); return; }
+    if (form.lead_source === 'Account Manager' && !String(form.kam_name || '').trim()) { setErr('Account Manager is required.'); return; }
+    if (form.lead_source === 'Referral Partner' && !String(form.affiliate_name || '').trim()) { setErr('Referral Partner Name is required.'); return; }
     // Contacts (POC) — enforce only what the template marks mandatory; drop empty rows.
     const nonEmptyContacts = contacts.filter(c => [c.name, c.email, c.phone, c.designation].some(v => String(v || '').trim()));
     const anyContactReq = contactCfg.nameReq || contactCfg.emailReq || contactCfg.phoneReq || contactCfg.desigReq;
@@ -405,7 +405,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
 
       {/* Phase & Timeline — between Commercials and Contacts, matching original LeadForm */}
       {(() => {
-        const inactivePhase = ['PO Received', 'Lost'].includes(form.phase);
+        const inactivePhase = ['Won', 'Lost'].includes(form.phase);
         return (
           <div>
             <p className="section-title">PHASE & TIMELINE</p>
@@ -455,10 +455,10 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
                 <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>When the hardware for this deal is expected — used (and sorted by) in the Inventory Pipeline.</p>
               </div>
               <div>
-                <label className="field-label">PO Expected Date{reqField('po_expected_date') ? ' *' : ''}</label>
+                <label className="field-label">Order Expected Date{reqField('po_expected_date') ? ' *' : ''}</label>
                 <input type="date" className="input" value={form.po_expected_date} onChange={e => setF('po_expected_date', e.target.value)} required={reqField('po_expected_date')} />
               </div>
-              {form.phase === 'PO Received' && (() => {
+              {form.phase === 'Won' && (() => {
                 const BILLING_OPTS = ['Monthly', 'Quarterly', 'Semi-annually', 'Annually', 'Advance'];
                 const isCustom = form.billing_cycle && !BILLING_OPTS.includes(form.billing_cycle);
                 return (
@@ -479,7 +479,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
                   </div>
                 );
               })()}
-              {form.phase === 'PO Received' && (() => {
+              {form.phase === 'Won' && (() => {
                 const PAYMENT_OPTS = ['100% Advance', '7 Days Credit', '15 Days Credit', '30 Days Credit', '45 Days Credit'];
                 const isCustom = form.payment_terms && !PAYMENT_OPTS.includes(form.payment_terms);
                 return (

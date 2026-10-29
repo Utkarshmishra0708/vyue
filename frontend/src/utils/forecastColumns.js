@@ -76,7 +76,7 @@ export const FORECAST_COLUMNS = [
     cell: (l) => l.device_requested_date ? fmtDate(l.device_requested_date) : '—',
     excel: (l) => l.device_requested_date ? fmtDate(l.device_requested_date) : '',
     filter: 'date', filterValue: (l) => isoDate(l.device_requested_date) },
-  { key: 'po_expected_date', label: 'PO Expected', default: true,
+  { key: 'po_expected_date', label: 'Order Expected', default: true,
     cell: (l) => l.po_expected_date ? fmtMonthYear(l.po_expected_date) : 'Unscheduled',
     excel: (l) => l.po_expected_date ? fmtMonthYear(l.po_expected_date) : 'Unscheduled',
     filter: 'date', filterValue: (l) => isoDate(l.po_expected_date) },

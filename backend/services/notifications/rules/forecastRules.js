@@ -9,7 +9,7 @@ async function sweepConfidenceDrop(businessUnit) {
     const leads = await Lead.findAll({
       where: {
         business_unit: businessUnit,
-        phase: { [Op.notIn]: ['PO Received', 'Lost', 'On Hold'] },
+        phase: { [Op.notIn]: ['Won', 'Lost', 'On Hold'] },
         confidence_score: { [Op.not]: null },
         confidence_prev: { [Op.not]: null },
       },
@@ -57,7 +57,7 @@ async function sweepPipelineTarget(businessUnit) {
     const leads = await Lead.findAll({
       where: {
         business_unit: businessUnit,
-        phase: { [Op.notIn]: ['PO Received', 'Lost'] },
+        phase: { [Op.notIn]: ['Won', 'Lost'] },
       },
       attributes: ['id', 'potential_tcv_lakhs', 'phase'],
       raw: true,

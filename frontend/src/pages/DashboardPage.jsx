@@ -114,10 +114,10 @@ export default function DashboardPage() {
     }
   }, [datePreset, customFrom, customTo]);
 
-  // The date a lead "belongs to" for the period filter: a won deal lands on its PO Received date
+  // The date a lead "belongs to" for the period filter: a won deal lands on its Won date
   // (its real business event), everything else on when it entered the system. Using the business
   // date means historical bulk-imported POs fall in their true week/month, not the import date.
-  const effectiveDate = (l) => ((l.phase === 'PO Received' && (l.po_received_date || l.phase_changed_at)) || l.createdAt);
+  const effectiveDate = (l) => ((l.phase === 'Won' && (l.po_received_date || l.phase_changed_at)) || l.createdAt);
   const filtered = useMemo(() => {
     if (!dateBounds.from && !dateBounds.to) return bdFiltered;
     return bdFiltered.filter(l => {
@@ -170,9 +170,9 @@ export default function DashboardPage() {
     navigate(`/leads?${params}`);
   };
 
-  const active = filtered.filter(l => !['Lost', 'On Hold', 'PO Received'].includes(l.phase));
-  const won = filtered.filter(l => l.phase === 'PO Received');
-  const hot = filtered.filter(l => l.lead_temperature === 'Hot' && !['Lost', 'PO Received'].includes(l.phase));
+  const active = filtered.filter(l => !['Lost', 'On Hold', 'Won'].includes(l.phase));
+  const won = filtered.filter(l => l.phase === 'Won');
+  const hot = filtered.filter(l => l.lead_temperature === 'Hot' && !['Lost', 'Won'].includes(l.phase));
   const overdue = filtered.filter(isOverdue);
   const openTCV = active.reduce((s, l) => s + (parseFloat(l.potential_tcv_lakhs) || 0), 0);
   const wonTCV = won.reduce((s, l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
@@ -197,7 +197,7 @@ export default function DashboardPage() {
 
   // Data quality — only mandatory fields (State/City are optional, so excluded)
   const missingTCV = filtered.filter(l => !l.potential_tcv_lakhs || parseFloat(l.potential_tcv_lakhs) === 0).length;
-  const missingFollowup = filtered.filter(l => !l.next_followup_date && !['PO Received', 'Lost', 'On Hold'].includes(l.phase)).length;
+  const missingFollowup = filtered.filter(l => !l.next_followup_date && !['Won', 'Lost', 'On Hold'].includes(l.phase)).length;
   const missingQuantity = filtered.filter(l => !l.quantity || l.quantity === 0).length;
   const dataQualityIssues = [
     { label: 'Missing Deal Value', count: missingTCV, badge: 'badge-red' },
@@ -223,7 +223,7 @@ export default function DashboardPage() {
     : datePreset === 'year' ? 52
     : Math.max(1, Math.round((pipeEnd - pipeStart) / 86400000 + 1) / 7);
   const pipelineTarget = scopedWeeklyTarget * pipeWeeks;
-  const pipelineWonLeads = filtered.filter(l => l.phase === 'PO Received').filter(l => {
+  const pipelineWonLeads = filtered.filter(l => l.phase === 'Won').filter(l => {
     const d = new Date(l.po_received_date || l.phase_changed_at);
     return d >= pipeStart && d <= pipeEnd;
   });
@@ -250,7 +250,7 @@ export default function DashboardPage() {
   // i.e. a true funnel — shape.
   const stageRank = Object.fromEntries(STAGE_ORDER.map((s, i) => [s, i]));
   // Funnel omits the Negotiation step by request. Counts still use each stage's TRUE rank, so a lead
-  // sitting in Negotiation is correctly counted as having reached Proposal but not yet PO Expected.
+  // sitting in Negotiation is correctly counted as having reached Proposal but not yet Order Expected.
   const funnelStages = STAGE_ORDER.filter(s => s !== 'Negotiation' && s !== 'Lost' && s !== 'On Hold').map(stage => ({
     stage,
     count: filtered.filter(l => { const r = stageRank[l.phase]; return r !== undefined && r >= stageRank[stage]; }).length,
@@ -282,11 +282,11 @@ export default function DashboardPage() {
   // source is on top. Respects the active BD filter (via `filtered`).
   const scoreThresholds = useMemo(() => dealSizeThresholds(leads), [leads]);
   const sourceStats = useMemo(() => {
-    const known = ['Channel Partner', 'KAM', 'Direct Sales'];
+    const known = ['Channel Partner', 'Account Manager', 'Direct Sales'];
     const sources = Array.from(new Set([...known, ...filtered.map(l => l.lead_source).filter(Boolean)]));
     return sources.map(src => {
       const rows = filtered.filter(l => l.lead_source === src);
-      const won = rows.filter(l => l.phase === 'PO Received').length;
+      const won = rows.filter(l => l.phase === 'Won').length;
       const lost = rows.filter(l => l.phase === 'Lost').length;
       const closed = won + lost;
       const tcv = rows.reduce((s, l) => s + (parseFloat(l.potential_tcv_lakhs) || 0), 0);
@@ -308,16 +308,16 @@ export default function DashboardPage() {
   const bdCards = isAdmin && filterBD ? bds.filter(b => b.name === filterBD) : bds;
   const annualBDPerf = bdsToShow.map(name => {
     const bdLeads = leads.filter(l => l.owner?.name === name);
-    const wonThisYear = bdLeads.filter(l => l.phase === 'PO Received' && new Date(l.po_received_date || l.phase_changed_at).getFullYear() === currentYear);
-    const closedThisYear = bdLeads.filter(l => ['PO Received','Lost'].includes(l.phase) && new Date(l.po_received_date || l.phase_changed_at || l.createdAt).getFullYear() === currentYear);
+    const wonThisYear = bdLeads.filter(l => l.phase === 'Won' && new Date(l.po_received_date || l.phase_changed_at).getFullYear() === currentYear);
+    const closedThisYear = bdLeads.filter(l => ['Won','Lost'].includes(l.phase) && new Date(l.po_received_date || l.phase_changed_at || l.createdAt).getFullYear() === currentYear);
     const wonTCVYear = wonThisYear.reduce((s,l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
     const convRate = closedThisYear.length ? Math.round((wonThisYear.length / closedThisYear.length) * 100) : 0;
-    const activeNow = bdLeads.filter(l => !['Lost','On Hold','PO Received'].includes(l.phase));
+    const activeNow = bdLeads.filter(l => !['Lost','On Hold','Won'].includes(l.phase));
     return { name, totalLeads: bdLeads.length, wonDeals: wonThisYear.length, wonTCV: wonTCVYear, convRate, activeLeads: activeNow.length };
   });
 
-  // PO Received Trend — year-over-year month-by-month comparison.
-  const wonPOs = useMemo(() => bdFiltered.filter(l => l.phase === 'PO Received'), [bdFiltered]);
+  // Won Trend — year-over-year month-by-month comparison.
+  const wonPOs = useMemo(() => bdFiltered.filter(l => l.phase === 'Won'), [bdFiltered]);
   const poTrendAvailableYears = useMemo(() => {
     const yrs = new Set();
     for (const l of wonPOs) {
@@ -374,7 +374,7 @@ export default function DashboardPage() {
     .sort((a, b) => a.daysToExpiry - b.daysToExpiry);
 
   // --- Cohort Aging Grid — financial year (Apr-Mar). Origin month = month of
-  // device_requested_date; closing month = month of po_received_date (PO Received only). ---
+  // device_requested_date; closing month = month of po_received_date (Won only). ---
   const [closureFY, setClosureFY] = useState(() => {
     const now = new Date();
     return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
@@ -407,7 +407,7 @@ export default function DashboardPage() {
       if (l.phase === 'Lost') {
         grid[originKey].lost += units;
         grid[originKey].lostIds.push(l.id);
-      } else if (l.phase === 'PO Received' && l.po_received_date) {
+      } else if (l.phase === 'Won' && l.po_received_date) {
         const prd = new Date(l.po_received_date);
         const closeKey = mKey(prd.getMonth(), prd.getFullYear());
         if (!grid[originKey].cells[closeKey]) grid[originKey].cells[closeKey] = 0;
@@ -432,7 +432,7 @@ export default function DashboardPage() {
   }, [bdFiltered, closureFY]);
 
   // --- Target vs Expected vs Won — attainment for the selected period. Expected is driven by each
-  // deal's PO Expected date (open deals forecast to land in the period); Won by PO Received date
+  // deal's Order Expected date (open deals forecast to land in the period); Won by Won date
   // (deals actually closed). Target scales the stored weekly target by the period length. Uses
   // bdFiltered (its own period axis), independent of the header date-range filter. ---
   const attCfg = INV_GRAN.find(g => g.key === attPeriod) || INV_GRAN[1];
@@ -441,8 +441,8 @@ export default function DashboardPage() {
     const cur = periodBucket(ref, attPeriod, 0);
     const prev = periodBucket(ref, attPeriod, -1);
     const inRange = (dateStr, b) => { if (!dateStr) return false; const d = new Date(dateStr); return d >= b.start && d <= b.end; };
-    const wonRows = (b) => bdFiltered.filter(l => l.phase === 'PO Received' && inRange(l.po_received_date || l.phase_changed_at, b));
-    const expRows = (b) => bdFiltered.filter(l => !['Lost', 'PO Received'].includes(l.phase) && inRange(l.po_expected_date, b));
+    const wonRows = (b) => bdFiltered.filter(l => l.phase === 'Won' && inRange(l.po_received_date || l.phase_changed_at, b));
+    const expRows = (b) => bdFiltered.filter(l => !['Lost', 'Won'].includes(l.phase) && inRange(l.po_expected_date, b));
     const sumWon = (rows) => rows.reduce((s, l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
     const sumTcv = (rows) => rows.reduce((s, l) => s + (parseFloat(l.potential_tcv_lakhs) || 0), 0);
     const wonCur = wonRows(cur), expCur = expRows(cur);
@@ -634,7 +634,7 @@ export default function DashboardPage() {
               {bdCards.map(b => {
                 const bdWeeklyTarget = bdTargets[b.name] ?? weeklyTarget;
                 const bdTarget = bdWeeklyTarget * pipeWeeks;
-                const bdWonLeads = filtered.filter(l => l.owner?.name === b.name && l.phase === 'PO Received').filter(l => {
+                const bdWonLeads = filtered.filter(l => l.owner?.name === b.name && l.phase === 'Won').filter(l => {
                   const d = new Date(l.po_received_date || l.phase_changed_at); return d >= pipeStart && d <= pipeEnd;
                 });
                 const bdWon = bdWonLeads.reduce((s,l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
@@ -674,7 +674,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
             <div>
               <p className="section-title" style={{ margin: 0 }}>Target vs Expected vs Won</p>
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>Expected = deals with a PO Expected date this {attCfg.unit}; Won = orders received this {attCfg.unit}</p>
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>Expected = deals with a Order Expected date this {attCfg.unit}; Won = orders received this {attCfg.unit}</p>
             </div>
             <select className="input" style={{ width: 160 }} value={attPeriod} onChange={e => setAttPeriod(e.target.value)}>
               {INV_GRAN.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
@@ -689,7 +689,7 @@ export default function DashboardPage() {
             </div>
             <div className={`card-sm ${attainment.expectedIds.length ? 'clickable' : ''}`} style={{ textAlign: 'center', cursor: attainment.expectedIds.length ? 'pointer' : 'default' }}
               onClick={() => navigateWithIds(attainment.expectedIds, `Expected · this ${attCfg.unit}`)}
-              title={attainment.expectedIds.length ? `View the ${attainment.expCount} deal(s) with a PO Expected date this ${attCfg.unit}` : undefined}>
+              title={attainment.expectedIds.length ? `View the ${attainment.expCount} deal(s) with a Order Expected date this ${attCfg.unit}` : undefined}>
               <div style={{ fontSize: 11, color: '#94a3b8' }}>Expected (order due)</div>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#6366f1' }}>₹{attainment.expected.toFixed(1)}L</div>
               <div style={{ fontSize: 11, color: '#94a3b8' }}>{attainment.expCount} deal{attainment.expCount === 1 ? '' : 's'}</div>
@@ -904,12 +904,12 @@ export default function DashboardPage() {
 
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-              <p className="section-title" style={{ margin: 0 }}>📊 PO Received Trend</p>
+              <p className="section-title" style={{ margin: 0 }}>📊 Won Trend</p>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                 <select className="input" style={{ width: 110, fontSize: 11, height: 28, padding: '2px 6px' }} value={poTrendMetric} onChange={e => setPoTrendMetric(e.target.value)}>
                   <option value="count">Count</option>
                   <option value="tcv">Deal Value (₹L)</option>
-                  <option value="acv">ACV (₹L)</option>
+                  <option value="acv">Annual Value (₹L)</option>
                   {isSignage && <option value="licenses">Licenses</option>}
                 </select>
                 {poTrendAvailableYears.map(yr => (
@@ -945,7 +945,7 @@ export default function DashboardPage() {
                   {poTrendActiveYears.map((yr, i) => (
                     <span key={yr}>
                       <span style={{ display: 'inline-block', width: 10, height: 10, background: PO_TREND_COLORS[i % PO_TREND_COLORS.length], borderRadius: 2, marginRight: 4 }} />
-                      {yr}: <strong>{poTrendTotals[yr]?.count || 0}</strong> orders · Deal Value <strong>₹{(poTrendTotals[yr]?.tcv || 0).toFixed(1)}L</strong> · ACV <strong>₹{(poTrendTotals[yr]?.acv || 0).toFixed(1)}L</strong>{isSignage && <> · <strong>{poTrendTotals[yr]?.licenses || 0}</strong> Lic</>}
+                      {yr}: <strong>{poTrendTotals[yr]?.count || 0}</strong> orders · Deal Value <strong>₹{(poTrendTotals[yr]?.tcv || 0).toFixed(1)}L</strong> · Annual Value <strong>₹{(poTrendTotals[yr]?.acv || 0).toFixed(1)}L</strong>{isSignage && <> · <strong>{poTrendTotals[yr]?.licenses || 0}</strong> Lic</>}
                     </span>
                   ))}
                 </div>

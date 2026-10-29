@@ -157,7 +157,7 @@ const Lead = sequelize.define('Lead', {
   // which use their own per-service columns.
   services_json:           { type: DataTypes.TEXT },
   po_document_url:         { type: DataTypes.STRING(512) },
-  // Identifier for the received PO — captured once a PO document is attached at PO Received.
+  // Identifier for the received PO — captured once a PO document is attached at Won.
   po_number:               { type: DataTypes.STRING(64) },
   lost_reason:             { type: DataTypes.STRING(255) },
   po_actual_value_lakhs:   { type: DataTypes.DECIMAL(12, 2) },
@@ -230,7 +230,7 @@ const Setting = sequelize.define('Setting', {
 // --------------------------------------------------------------------------
 // GlobalPo — chain/account-level reference record (a hotel chain, etc). NOT a funnel entity: it has
 // no stage and no confidence score. Individual (Local) POs (leads) link to it via leads.global_po_id.
-// Consumed devices are DERIVED from linked leads at PO Received (see services/chainPool.js).
+// Consumed devices are DERIVED from linked leads at Won (see services/chainPool.js).
 // --------------------------------------------------------------------------
 const GlobalPo = sequelize.define('GlobalPo', {
   id:                  { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },

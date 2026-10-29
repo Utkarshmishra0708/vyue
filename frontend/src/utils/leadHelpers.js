@@ -150,7 +150,7 @@ export function addDaysStr(dateStr, days) {
 }
 
 export function isTATBreached(lead) {
-  if (['PO Expected', 'PO Received', 'Lost', 'On Hold'].includes(lead.phase)) return false;
+  if (['Order Expected', 'Won', 'Lost', 'On Hold'].includes(lead.phase)) return false;
   const dateKey = PHASE_DATE_MAP[lead.phase];
   const dateStr = lead.phase_changed_at || (dateKey ? lead[dateKey] : null) || lead.createdAt;
   if (!dateStr) return false;
@@ -170,9 +170,9 @@ export function daysInStage(lead) {
 //   warn = past the target, up to 2x (amber)
 //   over = more than 2x the target (red)
 //   null = no aging (closed/paused phases) or no target configured for the stage (neutral)
-// Closed/terminal phases (PO Received, Lost) and the paused On Hold phase carry no aging.
+// Closed/terminal phases (Won, Lost) and the paused On Hold phase carry no aging.
 export function stageAging(lead, tatMap) {
-  if (['PO Received', 'Lost', 'On Hold'].includes(lead.phase)) return { days: null, target: null, level: null };
+  if (['Won', 'Lost', 'On Hold'].includes(lead.phase)) return { days: null, target: null, level: null };
   const days = daysInStage(lead);
   if (days === null) return { days: null, target: null, level: null };
   const target = (tatMap && tatMap[lead.phase] != null) ? Number(tatMap[lead.phase]) : null;
@@ -181,7 +181,7 @@ export function stageAging(lead, tatMap) {
   return { days, target, level };
 }
 
-// Renewal radar, keyed on PO End Date (service_end_date) for WON POs (phase PO Received).
+// Renewal radar, keyed on PO End Date (service_end_date) for WON POs (phase Won).
 // Build a Set of lead IDs that have been renewed (some other lead points to them via renewed_from_lead_id).
 // Pass this set into renewalStatus so renewed POs show "Renewed" instead of expiry warnings.
 export function buildRenewedSet(leads) {
@@ -195,7 +195,7 @@ export function buildRenewedSet(leads) {
 //   renewed (PO has been renewed — stop nagging)
 //   expired (<0) · red (≤30 / 1mo) · amber (≤60 / 2mo) · yellow (≤90 / 3mo) · ok (>90, far out)
 export function renewalStatus(lead, renewedIds) {
-  if (lead.phase !== 'PO Received') return null;
+  if (lead.phase !== 'Won') return null;
   // If this PO has already been renewed, short-circuit — no expiry warning needed.
   if (renewedIds && renewedIds.has(lead.id)) return { days: null, band: 'renewed' };
   const end = lead.service_end_date;
@@ -233,7 +233,7 @@ export function renewalLabel(status) {
 
 export function isOverdue(lead) {
   if (!lead.next_followup_date) return false;
-  if (['Lost', 'PO Received', 'On Hold'].includes(lead.phase)) return false;
+  if (['Lost', 'Won', 'On Hold'].includes(lead.phase)) return false;
   return new Date(lead.next_followup_date) < new Date();
 }
 
@@ -263,7 +263,7 @@ export function confidenceTrend(lead) {
 
 // Phase → progression score (30% weight). Lost is excluded from scoring entirely.
 const PHASE_SCORE = {
-  'PO Received': 100, 'PO Expected': 90, Negotiation: 85, Proposal: 70,
+  'Won': 100, 'Order Expected': 90, Negotiation: 85, Proposal: 70,
   Demo: 55, Qualified: 40, New: 20, 'On Hold': 15,
 };
 
@@ -340,7 +340,7 @@ export function buildRotMetrics(history) {
 }
 
 export function getRotState(lead, lastEntry, teamAvg) {
-  if (['PO Received', 'Lost', 'On Hold'].includes(lead.phase)) return null;
+  if (['Won', 'Lost', 'On Hold'].includes(lead.phase)) return null;
   const entry = lastEntry[lead.id];
   const since = entry ? new Date(entry.changed_at) : new Date(lead.phase_changed_at || lead.createdAt);
   const ageDays = daysBetween(since, new Date());

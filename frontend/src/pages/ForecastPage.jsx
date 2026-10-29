@@ -95,12 +95,12 @@ export default function ForecastPage() {
   // reads the filtered set, so every number on screen agrees with the rows you can see.
   const deviceLeads = useMemo(() => allLeads.filter(l => matchesFilters(l, filters)), [allLeads, filters]);
 
-  // PO Received is already won, so it leaves the ranked list and gets its own section at
+  // Won is already won, so it leaves the ranked list and gets its own section at
   // the very end of the dashboard. `activeLeads` is what the prioritized table shows.
   const { active: activeLeads, won: wonLeads } = useMemo(() => partitionByPriority(deviceLeads), [deviceLeads]);
 
   // State-wise installation load. Built from the filtered set so it agrees with the rest of
-  // the dashboard, then narrowed to the committed stages (PO Expected onward).
+  // the dashboard, then narrowed to the committed stages (Order Expected onward).
   const stateRollup = useMemo(() => rollupByState(deviceLeads, { stages: INSTALL_STAGES }), [deviceLeads]);
   const stateRollupTotal = useMemo(() => rollupTotal(stateRollup), [stateRollup]);
   const [expandedStates, setExpandedStates] = useState(() => new Set());
@@ -126,7 +126,7 @@ export default function ForecastPage() {
     navigate(`/leads?lead=${l.id}&from=forecast`);
   };
 
-  // One detail row — shared by the prioritized table and the won (PO Received) section
+  // One detail row — shared by the prioritized table and the won section
   // below it, so both stay identical in columns, affordances and behaviour.
   const renderRow = (l) => {
     const clickable = canOpenLead(l);
@@ -290,7 +290,7 @@ export default function ForecastPage() {
               <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Units in Pipeline</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{grandTotal.toLocaleString()}</p></div>
               <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Hardware Lines</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{deviceLeads.length}</p></div>
               <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Hardware Types</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{skus.length}</p></div>
-              <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Units</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{deviceLeads.filter(l => l.phase === 'PO Received').reduce((s,l) => s + units(l), 0).toLocaleString()}</p></div>
+              <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Units</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{deviceLeads.filter(l => l.phase === 'Won').reduce((s,l) => s + units(l), 0).toLocaleString()}</p></div>
             </div>
 
             <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -454,7 +454,7 @@ export default function ForecastPage() {
             {wonLeads.length > 0 && (
               <div className="card" style={{ padding: 0, opacity: 0.92 }}>
                 <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <p style={{ fontWeight: 700, fontSize: 14, margin: 0, color: '#15803d' }}>Won — PO Received</p>
+                  <p style={{ fontWeight: 700, fontSize: 14, margin: 0, color: '#15803d' }}>Won</p>
                   <span style={{ fontSize: 12, color: '#64748b' }}>
                     {wonLeads.length} deal{wonLeads.length === 1 ? '' : 's'} · {wonLeads.reduce((s, l) => s + units(l), 0).toLocaleString()} units · excluded from the prioritized ranking above
                   </span>

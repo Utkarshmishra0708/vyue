@@ -5,23 +5,23 @@
 // opportunity is most urgent.
 //
 // Precedence, in order:
-//   1. Stage       — PO Expected, Negotiation, Proposal, Demo, Qualified, New
+//   1. Stage       — Order Expected, Negotiation, Proposal, Demo, Qualified, New
 //   2. Confidence  — descending (the server-maintained score; see backend/services/scoring.js)
 //   3. Chain       — chain-linked properties ahead of standalone ones
 //   4. TCV         — descending, JHES platform + device, excluding IPTV
 //
-// PO Received is won and no longer part of active forecasting, so it is partitioned
+// Won is won and no longer part of active forecasting, so it is partitioned
 // out of the ranked list entirely (see partitionByPriority) rather than merely sorted
 // last. Stages outside the ranked sequence — On Hold, Lost — sink below the ranked
 // ones but stay visible; the spec doesn't place them, and hiding them would lose data.
 // ---------------------------------------------------------------------------
 import { priorityTcvLakhs } from './leadHelpers';
 
-export const WON_PHASE = 'PO Received';
+export const WON_PHASE = 'Won';
 
 // Lower rank sorts first.
 const STAGE_RANK = {
-  'PO Expected': 0,
+  'Order Expected': 0,
   Negotiation: 1,
   Proposal: 2,
   Demo: 3,
@@ -68,7 +68,7 @@ export function sortByPriority(leads) {
 }
 
 // Split into the ranked active pipeline and the won leads, each sorted. Views that
-// present PO Received as its own trailing section consume both halves.
+// present Won as its own trailing section consume both halves.
 export function partitionByPriority(leads) {
   const active = [];
   const won = [];
@@ -77,7 +77,7 @@ export function partitionByPriority(leads) {
 }
 
 // One flat list with the won leads appended after the ranked ones — for views that
-// show a single table but still want PO Received pushed to the very end.
+// show a single table but still want Won pushed to the very end.
 export function sortWithWonLast(leads) {
   const { active, won } = partitionByPriority(leads);
   return [...active, ...won];

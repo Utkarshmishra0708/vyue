@@ -10,8 +10,8 @@
 const FIELD_SECTIONS = [
   { key: 'account', label: 'Account', fields: [
     { slug: 'customer_name',     label: 'Customer / Account Name',        type: 'text',   core: true },
-    { slug: 'property_type',     label: 'Account Type',                   type: 'select', core: true, options: ['Chain', 'Standalone', 'Other'] },
-    { slug: 'property_category', label: 'Account Category',               type: 'select', core: true, options: ['Hospital', 'Hotels', 'BFSI', 'Retail', 'Real Estate', 'Manufacturing', 'IT/ITES', 'Education', 'Bank', 'Corporate Office', 'Restaurants', 'Other'] },
+    { slug: 'property_type',     label: 'Customer Type',                   type: 'select', core: true, options: ['Chain', 'Standalone', 'Other'] },
+    { slug: 'property_category', label: 'Customer Category',               type: 'select', core: true, options: ['Hospital', 'Hotels', 'BFSI', 'Retail', 'Real Estate', 'Manufacturing', 'IT/ITES', 'Education', 'Bank', 'Corporate Office', 'Restaurants', 'Other'] },
   ] },
   { key: 'location', label: 'Location', fields: [
     { slug: 'city',  label: 'City',      type: 'text',   core: true },
@@ -20,8 +20,8 @@ const FIELD_SECTIONS = [
   { key: 'source', label: 'Source', fields: [
     { slug: 'lead_source',          label: 'Lead Source',    type: 'select', core: true, optionsFrom: 'dropdown:lead_source' },
     { slug: 'channel_partner_name', label: 'Channel Partner', type: 'text',  core: true },
-    { slug: 'kam_name',             label: 'KAM',            type: 'text',   core: true },
-    { slug: 'affiliate_name',       label: 'Affiliate',      type: 'text',   core: true },
+    { slug: 'kam_name',             label: 'Account Manager',            type: 'text',   core: true },
+    { slug: 'affiliate_name',       label: 'Referral Partner Name',      type: 'text',   core: true },
   ] },
   { key: 'classification', label: 'Classification', fields: [
     { slug: 'new_or_renewal',   label: 'New / Renewal / Expansion', type: 'select', core: true, options: ['New', 'Renewal', 'Expansion'] },
@@ -31,15 +31,15 @@ const FIELD_SECTIONS = [
   { key: 'commercials', label: 'Commercials', fields: [
     { slug: 'quantity',              label: 'Quantity',              type: 'number',  core: true },
     { slug: 'potential_tcv_lakhs',   label: 'Potential Deal Value (Lakhs)', type: 'decimal', core: true },
-    { slug: 'acv_lakhs',             label: 'ACV (Lakhs)',           type: 'decimal', core: true },
+    { slug: 'acv_lakhs',             label: 'Annual Value (Lakhs)',           type: 'decimal', core: true },
     { slug: 'contract_value_lakhs',  label: 'Contract Value (Lakhs)', type: 'decimal', core: true },
     { slug: 'contract_period_months', label: 'Contract Period (months)', type: 'number', core: true },
     { slug: 'po_validity_months',    label: 'Order Validity (months)',  type: 'number',  core: true },
   ] },
   { key: 'pipeline', label: 'Pipeline', fields: [
-    { slug: 'phase',              label: 'Sales Stage',        type: 'select', core: true, options: ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'PO Expected', 'PO Received'] },
+    { slug: 'phase',              label: 'Sales Stage',        type: 'select', core: true, options: ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won'] },
     { slug: 'next_followup_date', label: 'Next Follow-up Date', type: 'date',  core: true },
-    { slug: 'po_expected_date',   label: 'PO Expected Date',    type: 'date',  core: true },
+    { slug: 'po_expected_date',   label: 'Order Expected Date',    type: 'date',  core: true },
   ] },
   // Contacts (POC): the repeatable contact sub-form on the lead. Name & Email are always required
   // and always shown (at least one POC is mandatory on every lead). Phone and Designation can be
@@ -97,7 +97,7 @@ const MODULE_CATALOG = [
 
 // Dashboard / report options offered by the wizard. Captured as the unit's settings for now; the
 // per-BU dashboard/report engines that consume them are a later phase.
-const DASHBOARD_CATALOG = ['Executive', 'Sales', 'Funnel', 'Revenue', 'Forecast', 'PMO', 'Delivery', 'Account', 'Product', 'Resource'];
+const DASHBOARD_CATALOG = ['Executive', 'Sales', 'Funnel', 'Revenue', 'Forecast', 'Manager', 'Delivery', 'Account', 'Product', 'Resource'];
 const REPORT_CATALOG = ['Weekly', 'Monthly', 'Quarterly', 'Revenue', 'Forecast', 'Funnel', 'Sales Performance', 'Team Performance'];
 
 module.exports = { FIELD_SECTIONS, FIELD_CATALOG, FIELD_TYPES, MODULE_CATALOG, DASHBOARD_CATALOG, REPORT_CATALOG };

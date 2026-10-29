@@ -25,7 +25,7 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
     for (const c of map.values()) {
       c.sourceLead = c.pos.reduce((a, b) => ((b.id || 0) > (a.id || 0) ? b : a), c.pos[0]);
       // Renewal candidates = won POs (they have a PO End Date to renew); newest first.
-      c.renewable = c.pos.filter(p => p.phase === 'PO Received').sort((a, b) => (b.id || 0) - (a.id || 0));
+      c.renewable = c.pos.filter(p => p.phase === 'Won').sort((a, b) => (b.id || 0) - (a.id || 0));
     }
     return [...map.values()].sort((a, b) => a.customer_name.localeCompare(b.customer_name));
   }, [leads]);
@@ -102,7 +102,7 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
                   {open && (
                     <div style={{ background: '#f8fafc' }}>
                       {c.renewable.length === 0 && (
-                        <div style={{ padding: '10px 18px', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No won orders to renew (an order must be in "PO Received" to renew it).</div>
+                        <div style={{ padding: '10px 18px', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No won orders to renew (an order must be Won before it can be renewed).</div>
                       )}
                       {c.renewable.map(po => {
                         const st = renewalStatus(po, renewedIds);

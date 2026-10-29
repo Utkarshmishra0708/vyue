@@ -20,13 +20,13 @@ router.get('/bd-performance', async (req, res) => {
       SELECT
         u.name                                                    AS bd_name,
         COUNT(*)                                                  AS total_leads,
-        SUM(CASE WHEN l.phase NOT IN ('PO Received','Lost') THEN 1 ELSE 0 END) AS active_leads,
-        SUM(CASE WHEN l.phase = 'PO Received' THEN 1 ELSE 0 END) AS won_leads,
+        SUM(CASE WHEN l.phase NOT IN ('Won','Lost') THEN 1 ELSE 0 END) AS active_leads,
+        SUM(CASE WHEN l.phase = 'Won' THEN 1 ELSE 0 END) AS won_leads,
         SUM(CASE WHEN l.phase = 'Lost' THEN 1 ELSE 0 END)        AS lost_leads,
         COALESCE(SUM(l.potential_tcv_lakhs), 0)                   AS total_tcv,
-        COALESCE(SUM(CASE WHEN l.phase = 'PO Received' THEN COALESCE(l.po_actual_value_lakhs, l.potential_tcv_lakhs, 0) ELSE 0 END), 0) AS won_tcv,
+        COALESCE(SUM(CASE WHEN l.phase = 'Won' THEN COALESCE(l.po_actual_value_lakhs, l.potential_tcv_lakhs, 0) ELSE 0 END), 0) AS won_tcv,
         ROUND(
-          SUM(CASE WHEN l.phase = 'PO Received' THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0),
+          SUM(CASE WHEN l.phase = 'Won' THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0),
           1
         ) AS conversion_rate
       FROM leads l
@@ -57,11 +57,11 @@ router.get('/source-analysis', async (req, res) => {
       SELECT
         COALESCE(lead_source, 'Unknown') AS source,
         COUNT(*)                                                  AS total_leads,
-        SUM(CASE WHEN phase = 'PO Received' THEN 1 ELSE 0 END)  AS won_leads,
+        SUM(CASE WHEN phase = 'Won' THEN 1 ELSE 0 END)  AS won_leads,
         COALESCE(SUM(potential_tcv_lakhs), 0)                     AS total_tcv,
-        COALESCE(SUM(CASE WHEN phase = 'PO Received' THEN COALESCE(po_actual_value_lakhs, potential_tcv_lakhs, 0) ELSE 0 END), 0) AS won_tcv,
+        COALESCE(SUM(CASE WHEN phase = 'Won' THEN COALESCE(po_actual_value_lakhs, potential_tcv_lakhs, 0) ELSE 0 END), 0) AS won_tcv,
         ROUND(
-          SUM(CASE WHEN phase = 'PO Received' THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0),
+          SUM(CASE WHEN phase = 'Won' THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0),
           1
         ) AS conversion_rate
       FROM leads
@@ -86,10 +86,10 @@ router.get('/monthly-trend', async (req, res) => {
       SELECT
         DATE_FORMAT(created_at, '%Y-%m') AS month,
         COUNT(*)                                                  AS new_leads,
-        SUM(CASE WHEN phase = 'PO Received' THEN 1 ELSE 0 END)  AS won_leads,
+        SUM(CASE WHEN phase = 'Won' THEN 1 ELSE 0 END)  AS won_leads,
         SUM(CASE WHEN phase = 'Lost' THEN 1 ELSE 0 END)          AS lost_leads,
         COALESCE(SUM(potential_tcv_lakhs), 0)                     AS new_tcv,
-        COALESCE(SUM(CASE WHEN phase = 'PO Received' THEN COALESCE(po_actual_value_lakhs, potential_tcv_lakhs, 0) ELSE 0 END), 0) AS won_tcv
+        COALESCE(SUM(CASE WHEN phase = 'Won' THEN COALESCE(po_actual_value_lakhs, potential_tcv_lakhs, 0) ELSE 0 END), 0) AS won_tcv
       FROM leads
       WHERE business_unit = :bu
         AND created_at >= DATE_SUB(CURDATE(), INTERVAL :months MONTH)
@@ -130,8 +130,8 @@ router.get('/campaign-roi', async (req, res) => {
       LEFT JOIN (
         SELECT campaign_id,
                COUNT(*)                                       AS lead_count,
-               SUM(CASE WHEN phase = 'PO Received' THEN 1 ELSE 0 END) AS won_count,
-               SUM(CASE WHEN phase = 'PO Received' THEN COALESCE(po_actual_value_lakhs, potential_tcv_lakhs, 0) ELSE 0 END) AS revenue_lakhs
+               SUM(CASE WHEN phase = 'Won' THEN 1 ELSE 0 END) AS won_count,
+               SUM(CASE WHEN phase = 'Won' THEN COALESCE(po_actual_value_lakhs, potential_tcv_lakhs, 0) ELSE 0 END) AS revenue_lakhs
         FROM leads
         WHERE business_unit = :bu AND campaign_id IS NOT NULL
         GROUP BY campaign_id

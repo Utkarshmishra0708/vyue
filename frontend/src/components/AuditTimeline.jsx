@@ -1,8 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { getChangeLog } from '../services/api';
 
+// Readable names for lead fields; anything not listed falls back to the field name in Title Case.
+const FIELD_NAMES = {
+  po_received_date: 'Won Date', po_expected_date: 'Order Expected Date', po_number: 'Order Number',
+  po_document_url: 'Order Document', po_actual_value_lakhs: 'Actual Order Value (L)', po_validity_months: 'Order Validity (Mo)',
+  po_type: 'Order Type', global_po_id: 'Master Order', potential_tcv_lakhs: 'Potential Deal Value (L)', acv_lakhs: 'Annual Value (L)',
+  tcv_manual: 'Deal Value Entered Manually', property_type: 'Customer Type', property_category: 'Customer Category',
+  kam_name: 'Account Manager', affiliate_name: 'Referral Partner Name', owner_id: 'Sales Rep', device_requested_date: 'Delivery Requested Date',
+  sent_to_scm: 'Sent to Supply Chain', lead_temperature: 'Lead Rating', new_or_renewal: 'New/Renewal', services_json: 'Services Offered', contract_value_lakhs: 'Contract Value (L)',
+};
+
 function formatFieldName(name) {
   if (!name) return '';
+  if (FIELD_NAMES[name]) return FIELD_NAMES[name];
   return name
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());

@@ -148,7 +148,7 @@ export default function ServicesOffered({ catalog = [], contractMonths, value = 
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 13, fontWeight: 700, color: '#0f172a', padding: '4px 2px' }}>
         <span>Deal Value: ₹{totals.tcvLakhs.toFixed(2)} L</span>
-        <span style={{ color: '#64748b' }}>First-year ACV: ₹{totals.acvLakhs.toFixed(2)} L</span>
+        <span style={{ color: '#64748b' }}>First-year Annual Value: ₹{totals.acvLakhs.toFixed(2)} L</span>
       </div>
     </section>
   );

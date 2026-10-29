@@ -131,8 +131,8 @@ export default function IndiaMap({ leads = [] }) {
 
       if (lead.customer_name) d.customersSet.add(lead.customer_name);
 
-      // Annual revenue: (TCV / contract_months) × 12 — PO Received only
-      if (lead.phase === 'PO Received') {
+      // Annual revenue: (TCV / contract_months) × 12 — Won only
+      if (lead.phase === 'Won') {
         const tcv = parseFloat(lead.potential_tcv_lakhs) || 0;
         const months = parseInt(lead.contract_period_months, 10) || 12;
         d.revenue += (tcv / months) * 12;

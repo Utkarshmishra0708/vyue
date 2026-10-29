@@ -2,7 +2,7 @@ const { Lead } = require('../../models');
 const { Op } = require('sequelize');
 
 function renewalStatus(lead, renewedIds) {
-  if (lead.phase !== 'PO Received') return null;
+  if (lead.phase !== 'Won') return null;
   if (renewedIds && renewedIds.has(lead.id)) return { days: null, band: 'renewed' };
   const end = lead.service_end_date;
   if (!end) return null;
@@ -36,7 +36,7 @@ async function loadRenewedSetForBu(businessUnit) {
 
 async function wonLeadsForBu(businessUnit) {
   return Lead.findAll({
-    where: { business_unit: businessUnit, phase: 'PO Received' },
+    where: { business_unit: businessUnit, phase: 'Won' },
     attributes: ['id', 'owner_id', 'business_unit', 'customer_name', 'sr_no', 'phase', 'service_end_date', 'renewed_from_lead_id'],
     raw: true,
   });

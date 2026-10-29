@@ -2,14 +2,14 @@
 // Chain device-pool logic (Global vs Individual PO mapping document).
 //
 // A chain's consumed device count is DERIVED, never stored: it is the sum of "devices" (the lead's
-// headline Quantity) across the chain's Individual POs that have reached PO Received. A PO in any
-// earlier stage, On Hold, or Lost contributes zero — so the pool changes ONLY on a PO Received
+// headline Quantity) across the chain's Individual POs that have reached Won. A PO in any
+// earlier stage, On Hold, or Lost contributes zero — so the pool changes ONLY on a Won
 // transition, automatically, with no manual recalculation. The original chain total is a reference
 // figure, not a hard cap: cumulative wins may exceed it, in which case the remaining goes negative and
 // the chain is flagged "exceeded" rather than blocking the win.
 // ---------------------------------------------------------------------------
 
-const WON_STAGE = 'PO Received';
+const WON_STAGE = 'Won';
 
 // Pure: compute a chain's pool status from its original total and its Individual POs.
 // `individualPos` = [{ phase, devices }]. Returns { original, consumed, remaining, exceeded, wonCount }.

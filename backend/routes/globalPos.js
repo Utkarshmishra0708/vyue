@@ -1,6 +1,6 @@
 // Global PO (chain) records + their derived device-pool status. A Global PO is a reference record only
 // (no funnel, no scoring); Individual POs (leads) link to it via leads.global_po_id. Consumed devices
-// are DERIVED from linked leads at PO Received, so the figures are always live (see services/chainPool.js).
+// are DERIVED from linked leads at Won, so the figures are always live (see services/chainPool.js).
 const router = require('express').Router();
 const { GlobalPo, Lead } = require('../models');
 const { authenticate, adminOnly, requireModule, requireAnyModule } = require('../middleware/auth');

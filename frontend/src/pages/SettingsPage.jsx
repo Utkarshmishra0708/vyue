@@ -547,7 +547,7 @@ export default function SettingsPage() {
                   </tbody>
                 </table>
               )}
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: '10px 0 0' }}>PO Received is terminal (no TAT). Allowed range 1–365 days.</p>
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: '10px 0 0' }}>Won is terminal (no TAT). Allowed range 1–365 days.</p>
               {tatMsg && <p style={{ fontSize: 12, margin: '10px 0 0', color: tatMsg.toLowerCase().includes('error') ? '#dc2626' : '#059669' }}>{tatMsg}</p>}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
                 <button className="btn" onClick={() => setTatModal(false)} disabled={tatBusy}>Close</button>

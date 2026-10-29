@@ -10,7 +10,7 @@ const NOW = new Date('2026-08-08T12:00:00');
 const ago = (d) => new Date(NOW.getTime() - d * 86400000);
 
 // The document's global SLA table (also the seeded default for every platform).
-const GLOBAL_SLA = { ...DEFAULT_SLA }; // New:2 Qualified:5 Demo:7 Proposal:7 Negotiation:15 PO Expected:7
+const GLOBAL_SLA = { ...DEFAULT_SLA }; // New:2 Qualified:5 Demo:7 Proposal:7 Negotiation:15 Order Expected:7
 
 test('within SLA → full base weight, no decay', () => {
   // Qualified base 25, SLA 5 — 4 days since activity, not breached.
@@ -49,9 +49,9 @@ test('Lost is a hard 0 override regardless of stage/time', () => {
   assert.equal(computeConfidence({ phase: 'Lost', last_activity_at: ago(100) }, GLOBAL_SLA, NOW), 0);
 });
 
-test('PO Received is terminal — base 95, no decay', () => {
-  assert.equal(computeConfidence({ phase: 'PO Received', last_activity_at: ago(0) }, GLOBAL_SLA, NOW), 95);
-  assert.equal(computeConfidence({ phase: 'PO Received', last_activity_at: ago(90) }, GLOBAL_SLA, NOW), BASE['PO Received']);
+test('Won is terminal — base 95, no decay', () => {
+  assert.equal(computeConfidence({ phase: 'Won', last_activity_at: ago(0) }, GLOBAL_SLA, NOW), 95);
+  assert.equal(computeConfidence({ phase: 'Won', last_activity_at: ago(90) }, GLOBAL_SLA, NOW), BASE['Won']);
 });
 
 test('On Hold freezes at the captured value with zero decay (even past the end date)', () => {

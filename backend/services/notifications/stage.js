@@ -12,7 +12,7 @@ function daysInStage(lead) {
 }
 
 function stageAging(lead, tatMap) {
-  if (['PO Received', 'Lost', 'On Hold'].includes(lead.phase)) return { days: null, target: null, level: null };
+  if (['Won', 'Lost', 'On Hold'].includes(lead.phase)) return { days: null, target: null, level: null };
   const days = daysInStage(lead);
   if (days === null) return { days: null, target: null, level: null };
   const target = (tatMap && tatMap[lead.phase] != null) ? Number(tatMap[lead.phase]) : null;
