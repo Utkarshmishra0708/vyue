@@ -19,7 +19,7 @@ const User = sequelize.define('User', {
   role:          { type: DataTypes.ENUM('super_admin', 'business_admin', 'pmo', 'bd', 'forecast'), allowNull: false, defaultValue: 'bd' },
   // business_unit is a slug FK into business_units (migration 029). Was an ENUM; now a plain
   // VARCHAR so a new business unit needs no DDL. Still part of the email_business_unit composite key.
-  business_unit: { type: DataTypes.STRING(32), unique: 'email_business_unit', allowNull: false, defaultValue: 'signage' },
+  business_unit: { type: DataTypes.STRING(32), unique: 'email_business_unit', allowNull: false },
   initials:      { type: DataTypes.STRING(8) },
   color:         { type: DataTypes.STRING(32), defaultValue: 'bg-indigo-500' },
   active:        { type: DataTypes.BOOLEAN, defaultValue: true },
@@ -57,7 +57,7 @@ const Lead = sequelize.define('Lead', {
   customer_name:           { type: DataTypes.STRING(255), allowNull: false },
   owner_id:                { type: DataTypes.INTEGER, allowNull: false },
   // business_unit is a slug FK into business_units (migration 029) — was an ENUM, now VARCHAR.
-  business_unit:           { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'signage' },
+  business_unit:           { type: DataTypes.STRING(32), allowNull: false },
   // Account Mix — captured at the top of the lead form (all businesses).
   property_type:           { type: DataTypes.STRING(32) },   // Chain | Standalone | Other
   property_category:       { type: DataTypes.STRING(64) },   // Hotel | Hospital | BFSI | Retail | …
@@ -235,7 +235,7 @@ const Setting = sequelize.define('Setting', {
 const GlobalPo = sequelize.define('GlobalPo', {
   id:                  { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   // business_unit is a slug FK into business_units (migration 029) — was an ENUM, now VARCHAR.
-  business_unit:       { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'signage' },
+  business_unit:       { type: DataTypes.STRING(32), allowNull: false },
   chain_name:          { type: DataTypes.STRING(255), allowNull: false },
   device_total:        { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   device_type:         { type: DataTypes.STRING(100), allowNull: false, defaultValue: 'Hardware' },
@@ -255,7 +255,7 @@ const GlobalPo = sequelize.define('GlobalPo', {
 const Voc = sequelize.define('Voc', {
   id:                   { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   voc_no:               { type: DataTypes.INTEGER, unique: true },
-  business_unit:        { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'surveillance' },
+  business_unit:        { type: DataTypes.STRING(32), allowNull: false },
   date_of_entry:        { type: DataTypes.DATEONLY },
   customer_name:        { type: DataTypes.STRING(255), allowNull: false },
   total_account_value_lakhs: { type: DataTypes.DECIMAL(14, 2) },

@@ -5,15 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import { IS_PROD } from '../env';
 import { APP_NAME } from '../config/brand';
 
-// Fallback presentation for the three original business units — used only if the live list from
-// GET /api/business-units fails to load (e.g. the API is briefly unreachable). The API is the
-// source of truth, so a business unit added later appears here with no code change.
-const BU_FALLBACK = {
-  signage:      { slug: 'signage',      name: 'Signage',      color: '#4f46e5', description: 'Digital Signage Solutions' },
-  jhes:         { slug: 'jhes',         name: 'JHES',         color: '#ea580c', description: 'Jio Hospitality & Entertainment Services' },
-  surveillance: { slug: 'surveillance', name: 'Surveillance', color: '#0891b2', description: 'Surveillance & Security Solutions' },
-};
-const FALLBACK_LIST = Object.values(BU_FALLBACK);
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -35,16 +26,18 @@ export default function LoginPage() {
     }
   }, [loading, isAuthenticated, user, navigate]);
 
-  // Load the selectable business units. On failure, fall back to the three originals so login still works.
+  // Load the selectable businesses from the database. The code knows no business names, so if the list
+  // can't load, the page says so instead of showing a fixed list.
+  const [listError, setListError] = useState(false);
   useEffect(() => {
     getBusinessUnits('active')
-      .then(list => setBusinessUnits(Array.isArray(list) && list.length ? list : FALLBACK_LIST))
-      .catch(() => setBusinessUnits(FALLBACK_LIST));
+      .then(list => { setBusinessUnits(Array.isArray(list) ? list : []); setListError(false); })
+      .catch(() => { setBusinessUnits([]); setListError(true); });
   }, []);
 
   // The cards to render, and the presentation for the currently-selected slug.
-  const buList = businessUnits || FALLBACK_LIST;
-  const buMeta = (slug) => (businessUnits || []).find(b => b.slug === slug) || BU_FALLBACK[slug] || { slug, name: slug, color: '#6366f1', description: '' };
+  const buList = businessUnits || [];
+  const buMeta = (slug) => (businessUnits || []).find(b => b.slug === slug) || { slug, name: slug, color: '#6366f1', description: '' };
 
   const goBack = (target) => {
     setError(''); setPassword(''); setIdent('');
@@ -108,6 +101,9 @@ export default function LoginPage() {
         <h1 style={s.title}>{APP_NAME}</h1>
         <p style={s.sub}>Select your business to continue</p>
 
+        {businessUnits === null && <p style={s.sub}>Loading businesses…</p>}
+        {listError && <p style={{ ...s.sub, color: '#dc2626' }}>Couldn't load the list of businesses. Check that the server is running, then refresh the page.</p>}
+        {businessUnits !== null && !listError && buList.length === 0 && <p style={s.sub}>No businesses have been set up yet. Sign in as Owner to create one.</p>}
         {buList.map(b => (
           <button key={b.slug} onClick={() => { setBu(b.slug); setStep('credentials'); setError(''); }}
             style={{ ...s.buButton, borderColor: b.color }}>

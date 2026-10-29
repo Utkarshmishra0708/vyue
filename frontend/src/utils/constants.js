@@ -1,9 +1,3 @@
-export const BU_CONFIG = {
-  signage:      { label: 'Signage',      color: '#4f46e5', description: 'Digital Signage Solutions' },
-  jhes:         { label: 'JHES',         color: '#ea580c', description: 'Jio Hospitality & Entertainment Services' },
-  surveillance: { label: 'Surveillance', color: '#0891b2', description: 'Surveillance & Security Solutions' },
-};
-
 // Surveillance service catalogue. Each service can be offered as OPEX (recurring) and/or CAPEX
 // (one-time) — the form lists each one under both. Mirror of the surveillance TCV calc in
 // backend/routes/leads.js (computeSurveillanceBreakdown).

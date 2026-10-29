@@ -24,7 +24,8 @@ const FIELD_SECTIONS = [
     { slug: 'affiliate_name',       label: 'Referral Partner Name',      type: 'text',   core: true },
   ] },
   { key: 'classification', label: 'Classification', fields: [
-    { slug: 'new_or_renewal',   label: 'New / Renewal / Expansion', type: 'select', core: true, options: ['New', 'Renewal', 'Expansion'] },
+    // New / Renewal / Expansion is not offered as a form field: the app sets it itself (plain new leads
+    // are New; the Renew and Additional Order actions set Renewal or Expansion).
     { slug: 'lead_temperature', label: 'Lead Temperature',          type: 'select', core: true, options: ['Hot', 'Warm', 'Cold'] },
     { slug: 'competitor',       label: 'Competitor',                type: 'text',   core: true },
   ] },

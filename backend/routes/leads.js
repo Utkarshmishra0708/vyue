@@ -183,7 +183,7 @@ function normalizePayload(body, { isCreate, existing, role }) {
   const payload = {
     customer_name: body.customer_name,
     owner_id: body.owner_id,
-    business_unit: body.business_unit || 'signage',
+    business_unit: body.business_unit || (existing && existing.business_unit) || null,
     // Account Mix (all businesses).
     property_type: body.property_type || null,
     property_category: body.property_category || null,
@@ -475,6 +475,7 @@ router.post('/', requireModule('leads', 'full'), async (req, res) => {
   try {
     const body = { ...req.body };
     if (req.user.role === 'bd') body.owner_id = req.user.id; // Sales Reps can only create leads for themselves
+    body.business_unit = req.user.business_unit; // a new lead always belongs to the business the user is signed in to
 
     const { payload } = normalizePayload(body, { isCreate: true, role: req.user.role });
 
@@ -565,6 +566,7 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
 
     const body = { ...req.body };
     if (req.user.role === 'bd') body.owner_id = existing.owner_id; // Sales Reps cannot reassign leads
+    body.business_unit = existing.business_unit; // a lead never moves to another business
 
     const before = existing.toJSON();
     const { payload, phaseChanged, fromPhase } = normalizePayload(body, { isCreate: false, existing: before, role: req.user.role });

@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { switchPlatform } from '../services/api';
-import { BU_CONFIG, ROLE_LABEL } from '../utils/constants';
+import { ROLE_LABEL } from '../utils/constants';
+import useBusinessUnits from '../utils/useBusinessUnits';
 import { IS_PROD } from '../env';
 import { APP_NAME, APP_LOGO } from '../config/brand';
 
@@ -44,7 +45,8 @@ export default function Sidebar() {
     });
   };
 
-  const bu = BU_CONFIG[user.business_unit] || BU_CONFIG.signage;
+  const { meta: businessOf } = useBusinessUnits();
+  const bu = businessOf(user.business_unit);
   // Console-only (Global Admin via the Admin button): shows ONLY the Admin Console — no business
   // pages. Business logins get the full operational nav for their platform.
   const navItems = isConsoleOnly
@@ -155,7 +157,7 @@ export default function Sidebar() {
                 background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', cursor: 'pointer',
               }}>
               {user.platforms.map(bu => (
-                <option key={bu} value={bu}>{(BU_CONFIG[bu] || {}).label || bu}</option>
+                <option key={bu} value={bu}>{businessOf(bu).name}</option>
               ))}
             </select>
           </div>
@@ -163,7 +165,7 @@ export default function Sidebar() {
         {!collapsed && (
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{user.name}</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>{isSuperAdmin ? 'Owner' : (ROLE_LABEL[user.role] || user.role)}{isConsoleOnly ? ' · All businesses' : ` · ${bu.label}`}</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>{isSuperAdmin ? 'Owner' : (ROLE_LABEL[user.role] || user.role)}{isConsoleOnly ? ' · All businesses' : ` · ${bu.name}`}</div>
           </div>
         )}
         {/* Returns to the main page (business selection). Reaching the pre-login landing ends the

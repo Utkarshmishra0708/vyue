@@ -122,13 +122,17 @@ router.get('/', async (req, res) => {
 // label (for example "PO Expected Date" -> "Order Expected Date") would keep showing the old wording.
 const CATALOG_FIELDS = new Map(FIELD_SECTIONS.flatMap(sec => sec.fields.map(f => [f.slug, f])));
 const CATALOG_SECTIONS = new Map(FIELD_SECTIONS.map(sec => [sec.key, sec]));
+const SYSTEM_SET_FIELDS = new Set(['new_or_renewal']); // set automatically, never a form field
 function withCurrentLabels(schema) {
   return {
     ...schema,
     sections: schema.sections.map(sec => ({
       ...sec,
       label: !sec.custom && CATALOG_SECTIONS.has(sec.key) ? CATALOG_SECTIONS.get(sec.key).label : sec.label,
-      fields: (sec.fields || []).map(f => (!f.custom && CATALOG_FIELDS.has(f.slug)) ? { ...f, label: CATALOG_FIELDS.get(f.slug).label } : f),
+      fields: (sec.fields || [])
+        // Fields the app now sets by itself are dropped from saved templates too.
+        .filter(f => !SYSTEM_SET_FIELDS.has(f.slug))
+        .map(f => (!f.custom && CATALOG_FIELDS.has(f.slug)) ? { ...f, label: CATALOG_FIELDS.get(f.slug).label } : f),
     })),
   };
 }

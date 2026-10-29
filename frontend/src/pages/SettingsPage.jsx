@@ -6,7 +6,6 @@ import PermissionsModal from '../components/PermissionsModal';
 import SuperAdminsPanel from '../components/SuperAdminsPanel';
 import PermissionMatrix, { PermissionLegend } from '../components/PermissionMatrix';
 import { getManagedUsers, addUser, updateUser, setUserActive, deleteUser, resetBdPassword, getTat, updateTat, setActivityFeedAccess, getBusinessUnits } from '../services/api';
-import { BU_CONFIG } from '../utils/constants';
 import { IS_PROD } from '../env';
 
 const ROLE_LABEL = { super_admin: 'Owner', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Sales Rep' };
@@ -355,7 +354,7 @@ export default function SettingsPage() {
   const isSuper = isSuperAdmin;
   const effectiveRole = isSuperAdmin ? 'super_admin' : user.role;
   const buLabel = manageBusiness
-    ? (buOptions.find(b => b.slug === manageBusiness)?.name || (BU_CONFIG[manageBusiness] || {}).label || manageBusiness)
+    ? (buOptions.find(b => b.slug === manageBusiness)?.name || manageBusiness)
     : '';
 
   return (

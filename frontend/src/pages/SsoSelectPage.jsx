@@ -9,12 +9,6 @@ import { APP_NAME } from '../config/brand';
 // /sales_crm?ssoTicket=<jwt>, App.captureSsoFromUrl stashes the ticket in sessionStorage and routes
 // here. We redeem the ticket to list the accounts, let the user pick a business unit, then exchange
 // the ticket for a token for that account and land on /leads — bypassing the login page entirely. ===
-// Fallback presentation, used only if the live list (GET /api/business-units) fails to load.
-const BU_FALLBACK = {
-  signage:      { name: 'Signage',      color: '#4f46e5', description: 'Digital Signage Solutions' },
-  jhes:         { name: 'JHES',         color: '#ea580c', description: 'Jio Hospitality & Entertainment Services' },
-  surveillance: { name: 'Surveillance', color: '#0891b2', description: 'Surveillance & Security Solutions' },
-};
 
 export default function SsoSelectPage() {
   const navigate = useNavigate();
@@ -44,11 +38,11 @@ export default function SsoSelectPage() {
   useEffect(() => {
     getBusinessUnits()
       .then(list => setBuBySlug(Object.fromEntries((list || []).map(b => [b.slug, b]))))
-      .catch(() => setBuBySlug({}));  // fall back to BU_FALLBACK below
+      .catch(() => setBuBySlug({}));
   }, []);
 
-  // Presentation for a slug: live list first, then the hardcoded fallback, then the raw slug.
-  const buMeta = (slug) => buBySlug[slug] || BU_FALLBACK[slug] || { name: slug, color: '#6366f1', description: '' };
+  // Presentation for a slug from the live list; the raw slug if the list didn't load.
+  const buMeta = (slug) => buBySlug[slug] || { name: slug, color: '#6366f1', description: '' };
 
   const handlePick = async (businessUnit) => {
     setBusy(true);
