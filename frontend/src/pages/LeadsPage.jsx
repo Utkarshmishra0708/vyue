@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import Layout from '../components/Layout';
-import LeadForm from '../components/LeadForm';
 import CustomLeadForm from '../components/CustomLeadForm';
 import ActivityLogView from '../components/ActivityLogView';
 import MultiSelect from '../components/MultiSelect';
@@ -98,9 +97,6 @@ function TrendArrow({ trend }) {
 
 export default function LeadsPage() {
   const { user, isAdmin, canEdit, canFull, canAct } = useAuth();
-  // Custom (wizard-built) businesses render a schema-driven lead form from their template; the three
-  // originals keep their hand-built LeadForm unchanged.
-  const isCustomBusiness = !['signage', 'jhes', 'surveillance'].includes(user.business_unit);
   // Create and delete are Full-Access capabilities. Chains is module-level configuration, which
   // Edit deliberately excludes. Bulk update mutates records, so it needs Edit.
   // canAct is false for a Read-only Super Admin, who sees no action affordance on any platform.
@@ -622,9 +618,8 @@ export default function LeadsPage() {
             </div>
             <div className="modal-body">
               {tab === 'form'
-                ? (isCustomBusiness
-                    ? <CustomLeadForm lead={editLead} onSave={onSaved} onCancel={closeForm} buConfig={buConfig} expansionFrom={expansionFrom} expansionMode={expansionMode} />
-                    : <LeadForm lead={editLead} onSave={onSaved} onCancel={closeForm} buConfig={buConfig} expansionFrom={expansionFrom} expansionMode={expansionMode} />)
+                // Every business uses the template-driven form, built from its own lead template.
+                ? <CustomLeadForm lead={editLead} onSave={onSaved} onCancel={closeForm} buConfig={buConfig} expansionFrom={expansionFrom} expansionMode={expansionMode} />
                 : <ActivityLogView leadId={editLead.id} />}
             </div>
           </div>

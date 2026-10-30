@@ -2,11 +2,14 @@ const { ChangeLog } = require('../models');
 
 const SKIP_FIELDS = new Set([
   'id', 'createdAt', 'updatedAt', 'created_at', 'updated_at', 'created_by', 'updated_by',
+  // Linked records and values the app maintains itself; they are not edits by the user.
+  'owner', 'confidence_computed_at', 'last_activity_at',
 ]);
 
 function stringify(val) {
   if (val === null || val === undefined) return null;
-  if (typeof val === 'object') return JSON.stringify(val);
+  // An empty object counts as empty, so "nothing" -> {} isn't recorded as a change.
+  if (typeof val === 'object') return (!Array.isArray(val) && Object.keys(val).length === 0) ? null : JSON.stringify(val);
   return String(val);
 }
 

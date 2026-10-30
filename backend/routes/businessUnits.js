@@ -146,7 +146,6 @@ function resolveFormSchema(bu) {
     })),
   };
 }
-const isOriginalSlug = (slug) => ['signage', 'jhes', 'surveillance'].includes(slug);
 
 // GET /api/business-units/:slug/config — resolved config (form schema, services, modules) for one
 // unit. Any authenticated user may read it: the lead form needs their own business's schema. This is
@@ -159,7 +158,6 @@ router.get('/:slug/config', authenticate, async (req, res) => {
     const cfg = bu.config || {};
     return res.json({
       slug: bu.slug, name: bu.name, color: bu.color, status: bu.status,
-      isOriginal: isOriginalSlug(bu.slug),
       formSchema: resolveFormSchema(bu),
       services: svc.map(s => ({ slug: s.slug, label: s.label, nature: s.nature, hardware: !!s.hardware, category: s.category || (s.hardware ? 'hardware' : 'software') })),
       modules: cfg.modules || null,

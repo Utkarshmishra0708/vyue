@@ -10,7 +10,7 @@
 const FIELD_SECTIONS = [
   { key: 'account', label: 'Account', fields: [
     { slug: 'customer_name',     label: 'Customer / Account Name',        type: 'text',   core: true },
-    { slug: 'property_type',     label: 'Customer Type',                   type: 'select', core: true, options: ['Chain', 'Standalone', 'Other'] },
+    { slug: 'property_type',     label: 'Customer Type',                   type: 'select', core: true, options: ['Part of a group', 'Standalone', 'Other'] },
     { slug: 'property_category', label: 'Customer Category',               type: 'select', core: true, options: ['Hospital', 'Hotels', 'BFSI', 'Retail', 'Real Estate', 'Manufacturing', 'IT/ITES', 'Education', 'Bank', 'Corporate Office', 'Restaurants', 'Other'] },
   ] },
   { key: 'location', label: 'Location', fields: [

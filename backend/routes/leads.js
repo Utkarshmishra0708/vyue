@@ -569,6 +569,15 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
     body.business_unit = existing.business_unit; // a lead never moves to another business
 
     const before = existing.toJSON();
+    // A field the request leaves out keeps its saved value. Each business's template decides which
+    // fields its form shows, and a form never sends the fields it hides, so treating a missing field as
+    // "cleared" wiped those values on every save (for example New/Renewal, Competitor, the renewal
+    // link). A field the user really clears is sent as an empty value, and is still cleared.
+    for (const [k, v] of Object.entries(before)) if (body[k] === undefined) body[k] = v;
+    if (req.body.services === undefined) {
+      try { body.services = typeof before.services_json === 'string' ? JSON.parse(before.services_json || '[]') : (before.services_json || []); }
+      catch { body.services = []; }
+    }
     const { payload, phaseChanged, fromPhase } = normalizePayload(body, { isCreate: false, existing: before, role: req.user.role });
 
     // Validate the chain link (if any): the Global PO must exist and belong to the same business.
@@ -764,7 +773,7 @@ function buildServiceLinesFromRow(r, catalog) {
 
 // Values used before the vocabulary change (releases P2-1a / P2-1b). Older spreadsheets may still contain
 // them, so they are translated to the current names on import.
-const LEGACY_VALUES = { 'PO Expected': 'Order Expected', 'PO Received': 'Won', 'KAM': 'Account Manager', 'Lead Affiliate': 'Referral Partner' };
+const LEGACY_VALUES = { 'PO Expected': 'Order Expected', 'PO Received': 'Won', 'KAM': 'Account Manager', 'Lead Affiliate': 'Referral Partner', 'Chain': 'Part of a group' };
 const modernize = (v) => LEGACY_VALUES[v] || v;
 
 router.post('/bulk', adminOnly, async (req, res) => {
@@ -888,7 +897,7 @@ router.post('/bulk', adminOnly, async (req, res) => {
         new_or_renewal: optStr(r.new_or_renewal),
         lead_temperature: optStr(r.lead_temperature),
         competitor: optStr(r.competitor),
-        property_type: optStr(r.property_type),
+        property_type: optStr(modernize((r.property_type || '').trim())),
         property_category: optStr(r.property_category),
         phase,
         next_followup_date: r.next_followup_date || null,

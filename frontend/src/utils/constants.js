@@ -77,7 +77,7 @@ export const UNION_TERRITORIES = [
 ];
 
 // --- Account Mix (all businesses) ---
-export const PROPERTY_TYPES = ['Chain', 'Standalone', 'Other'];
+export const PROPERTY_TYPES = ['Part of a group', 'Standalone', 'Other'];
 export const PROPERTY_CATEGORIES = [
   'Hospital', 'Hotels', 'BFSI', 'Retail', 'Real Estate', 'Manufacturing',
   'IT/ITES', 'Education', 'Bank', 'Corporate Office', 'Restaurants', 'Other',

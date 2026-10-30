@@ -17,7 +17,6 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
   const [sections, setSections] = useState(null);
   const [services, setServices] = useState([]);   // [{ slug, label, nature, category, enabled }]
   const [modules, setModules] = useState([]);      // [{ slug, label, core, enabled }]
-  const [isOriginal, setIsOriginal] = useState(false);
   const [newSection, setNewSection] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -26,7 +25,6 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
     Promise.all([getBusinessUnitConfig(bu.slug), getBuCatalog()])
       .then(([cfg, cat]) => {
         setCatalog(cat);
-        setIsOriginal(cfg.isOriginal);
         // Load the saved schema, then MERGE any catalog sections it's missing (e.g. a section added
         // to the product after this business was created, like Contacts (POC)) so nothing in the
         // lead form is absent from the editor. New sections come in enabled with their catalog fields.
@@ -120,7 +118,6 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
           </div>
           <p style={{ fontSize: 12.5, color: '#64748b', margin: '6px 0 0' }}>
             Turn sections on/off, toggle fields, mark mandatory, and add custom fields/sections. Changes apply to this business's New Lead form.
-            {isOriginal && ' This is an original business — its built-in fields stay; your edits (hidden fields, custom fields) layer on top.'}
           </p>
         </div>
 

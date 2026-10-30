@@ -592,9 +592,9 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
             )}
             <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e => setPoFile(e.target.files[0] || null)} />
           </>)}
-          {poNumberOn && (poFile || existingPoUrl || !docOn) && (
+          {poNumberOn && (
             <div style={{ marginTop: 12, maxWidth: 380 }}>
-              <label className="field-label">Order Number{docOn ? ' *' : ''}</label>
+              <label className="field-label">Order Number{docOn && (poFile || existingPoUrl) ? ' *' : ''}</label>
               <input className="input" value={form.po_number || ''} onChange={e => setF('po_number', e.target.value)} placeholder="Enter order number (identifier)" />
               <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>A unique identifier for the received order{docOn ? ', required once the document is attached' : ''}.</p>
             </div>
@@ -622,7 +622,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
             </div>
             );
           })}
-          {contacts.length === 0 && <p style={{ fontSize: 12, color: '#dc2626' }}>At least one contact (POC) is required — click "+ Add Contact".</p>}
+          {contacts.length === 0 && (contactCfg.nameReq || contactCfg.emailReq || contactCfg.phoneReq || contactCfg.desigReq) && <p style={{ fontSize: 12, color: '#dc2626' }}>At least one contact (POC) is required — click "+ Add Contact".</p>}
         </div>
       </div>
 
