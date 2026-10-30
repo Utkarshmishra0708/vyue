@@ -231,6 +231,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
     // Won needs the order document (when the template uses it), and its Order Number once attached.
     if (form.phase === 'Won' && docOn && !existingPoUrl && !poFile) { setErr('An order document is required once the phase is Won.'); return; }
     if (form.phase === 'Won' && poNumberOn && (existingPoUrl || poFile) && !String(form.po_number || '').trim()) { setErr('Please enter the Order Number for the received order.'); return; }
+    if (phaseChanged && isBD && phaseDate && (phaseDate < minPhaseDate || phaseDate > maxPhaseDate)) { setErr(`Pick a ${form.phase} date from ${minPhaseDate} to today. Sales Reps can backdate up to 7 days, and not into the future.`); return; }
     if (form.tcv_manual && String(form.potential_tcv_lakhs ?? '').trim() === '') { setErr('Enter the deal value, or untick "Enter the deal value by hand".'); return; }
     // Contacts (POC) — enforce only what the template marks mandatory; drop empty rows.
     const nonEmptyContacts = contacts.filter(c => [c.name, c.email, c.phone, c.designation].some(v => String(v || '').trim()));

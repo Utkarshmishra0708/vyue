@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import Layout from '../components/Layout';
 import CustomLeadForm from '../components/CustomLeadForm';
+import StageChangeDialog, { STAGES_WITH_DIALOG } from '../components/StageChangeDialog';
 import ActivityLogView from '../components/ActivityLogView';
 import MultiSelect from '../components/MultiSelect';
 import KanbanView from '../components/KanbanView';
@@ -276,17 +277,21 @@ export default function LeadsPage() {
   };
   const onSaved = () => { closeForm(); fetchAll(); };
 
-  // Stages that need extra details (an order document and number for Won, a reason for Lost) can't be
-  // completed by a drag, so the lead form opens with the new stage selected instead.
-  const STAGES_NEEDING_FORM = ['Won', 'Lost'];
+  // Won, Lost and On Hold need a few details (order document and number, a reason, a resume date), so
+  // dropping a lead there opens a small dialog asking only for those. Other moves save straight away.
+  const [stageDialog, setStageDialog] = useState(null); // { lead, toPhase }
+  const openFullFormAt = (full, toPhase) => {
+    setStageDialog(null);
+    setTab('form');
+    setEditLead({ ...full, phase: toPhase, _savedPhase: full.phase });
+    setShowForm(true);
+  };
   const handlePhaseChangeKanban = async (leadId, newPhase) => {
     const lead = leads.find(l => l.id === leadId);
     if (!lead || lead.phase === newPhase) return;
     const full = await getLead(leadId).catch(() => lead);
-    if (STAGES_NEEDING_FORM.includes(newPhase)) {
-      setTab('form');
-      setEditLead({ ...full, phase: newPhase, _savedPhase: full.phase });
-      setShowForm(true);
+    if (STAGES_WITH_DIALOG.includes(newPhase)) {
+      setStageDialog({ lead: full, toPhase: newPhase });
       return;
     }
     // Send the lead's complete saved values with only the stage changed. The server treats a missing
@@ -627,6 +632,17 @@ export default function LeadsPage() {
       )}
 
       {showChains && <GlobalPosView onClose={() => setShowChains(false)} />}
+
+      {stageDialog && (
+        <StageChangeDialog
+          lead={stageDialog.lead}
+          toPhase={stageDialog.toPhase}
+          buConfig={buConfig}
+          onCancel={() => setStageDialog(null)}
+          onDone={() => { setStageDialog(null); fetchAll(); }}
+          onOpenForm={() => openFullFormAt(stageDialog.lead, stageDialog.toPhase)}
+        />
+      )}
 
       {showExpansionPicker && (
         <ExpansionPicker leads={leads} onPick={openExpansionFrom} onClose={() => setShowExpansionPicker(false)} />

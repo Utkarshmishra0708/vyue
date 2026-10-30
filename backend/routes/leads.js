@@ -169,8 +169,10 @@ function normalizePayload(body, { isCreate, existing, role }) {
     acv = tcv && years ? +(tcv / years).toFixed(2) : 0;
   } else {
     const totals = computeServicesTotals(serviceLines, months);
-    tcv = totals.tcvLakhs;
-    acv = totals.acvLakhs;
+    // With no services there is nothing to calculate: leave the value empty rather than 0.00, so it
+    // shows as missing (and an unrelated save doesn't turn "empty" into "0.00").
+    tcv = serviceLines.length ? totals.tcvLakhs : null;
+    acv = serviceLines.length ? totals.acvLakhs : null;
   }
   const phase = body.phase || 'New';
 
