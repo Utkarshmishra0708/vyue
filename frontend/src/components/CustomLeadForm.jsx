@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getBds, getDropdowns, getBusinessUnitConfig, createLead, updateLead, getGlobalPos, createGlobalPo, getCampaigns } from '../services/api';
+import { getBds, getDropdowns, getBusinessUnitConfig, createLead, updateLead, getGlobalPos, createGlobalPo, getCampaigns, uploadPoDocument, fileUrl } from '../services/api';
 import { STAGE_ORDER, INDIAN_STATES, UNION_TERRITORIES } from '../utils/constants';
 import { todayStr, addDaysStr } from '../utils/leadHelpers';
 import MentionTextarea from './MentionTextarea';
@@ -23,6 +23,9 @@ const SOURCE_META = {
 // Fields rendered by dedicated controls (not the generic section loop): stage, PO type (shown as
 // cards), PO document, and the three lead-source name fields (shown inline under Lead Source).
 const SKIP = new Set(['phase', 'next_followup_date', 'po_expected_date', 'lost_reason', 'po_type', 'po_document_url', 'channel_partner_name', 'kam_name', 'affiliate_name',
+  // Order Number sits with the order document (shown at Won); Potential Deal Value has its own
+  // "enter by hand" control next to the services.
+  'po_number', 'potential_tcv_lakhs',
   // new_or_renewal is no longer a manual field — plain new leads auto-tag "New"; the "+ Additional PO"
   // header flow tags leads "Expansion" (Additional) or "Renewal".
   'new_or_renewal',
@@ -49,6 +52,9 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
   const [campaigns, setCampaigns] = useState([]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [phaseDate, setPhaseDate] = useState(todayStr());           // date the stage change happened
+  const [poFile, setPoFile] = useState(null);                         // order document chosen for upload
+  const [existingPoUrl, setExistingPoUrl] = useState(lead?.po_document_url || null);
 
   useEffect(() => {
     Promise.all([getBusinessUnitConfig(user.business_unit), getBds(user.business_unit), getDropdowns(), getGlobalPos().catch(() => []), getCampaigns().catch(() => [])])
@@ -64,8 +70,11 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
         setLines(lead ? parseServiceLines(lead.services_json) : (isRenewal ? parseServiceLines(expansionFrom.services_json) : []));
         // Seed form + custom values from an existing lead (edit) or blanks (create).
         if (lead) {
-          setForm({ owner_id: lead.owner_id || '', phase: lead.phase || 'New', contract_period_months: lead.contract_period_months || '', global_po_id: lead.global_po_id || '', campaign_id: lead.campaign_id || '', next_followup_date: lead.next_followup_date || '', po_expected_date: lead.po_expected_date || '', device_requested_date: lead.device_requested_date || '', lost_reason: lead.lost_reason || '', ...pickCore(lead, config) });
+          setForm({ owner_id: lead.owner_id || '', phase: lead.phase || 'New', contract_period_months: lead.contract_period_months || '', global_po_id: lead.global_po_id || '', campaign_id: lead.campaign_id || '', next_followup_date: lead.next_followup_date || '', po_expected_date: lead.po_expected_date || '', device_requested_date: lead.device_requested_date || '', lost_reason: lead.lost_reason || '', ...pickCore(lead, config), tcv_manual: !!lead.tcv_manual, potential_tcv_lakhs: lead.potential_tcv_lakhs ?? '', hold_end_date: lead.hold_end_date || '', po_number: lead.po_number || '' });
           setCustom(lead.custom_fields || {});
+          setExistingPoUrl(lead.po_document_url || null);
+          setPoFile(null);
+          setPhaseDate(todayStr());
           setContacts((lead.contacts || []).map(c => ({ name: c.name, phone: c.phone || '', email: c.email || '', designation: c.designation || '' })));
           if (lead.global_po_id) setLinkToChain(true);
         } else {
@@ -75,7 +84,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
           //   renewal    → copy statics PLUS deal size; tagged "Renewal", linked to the source PO.
           const ef = expansionFrom || null;
           const renewal = ef && expansionMode === 'renewal';
-          const base = { owner_id: ef?.owner_id || '', phase: 'New', contract_period_months: '', next_followup_date: '', po_expected_date: '', device_requested_date: '', lost_reason: '', new_or_renewal: 'New' };
+          const base = { owner_id: ef?.owner_id || '', phase: 'New', contract_period_months: '', next_followup_date: '', po_expected_date: '', device_requested_date: '', lost_reason: '', new_or_renewal: 'New', tcv_manual: false };
           if (ef) {
             // Copy any core-field slug that the saved template tracks AND the source lead has a value for.
             Object.assign(base, pickCore(ef, config));
@@ -96,6 +105,8 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
             if (renewal) {
               base.contract_period_months = ef.contract_period_months || '';
               base.potential_tcv_lakhs = ef.potential_tcv_lakhs || '';
+              // Keep the copied value as entered by hand, so it isn't recalculated to 0 before services are re-entered.
+              base.tcv_manual = true;
               base.po_validity_months = ef.po_validity_months || '';
             }
           }
@@ -141,6 +152,20 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
   const reqField = (slug) => slug === 'customer_name' || slug === 'phase' || slug === 'owner_id' || !!mandatoryOf[slug];
 
   const setF = (slug, v) => setForm(f => ({ ...f, [slug]: v }));
+
+  // A field is "on" when this business's template enables it.
+  const fieldOn = (sectionKey, slug) => sections.some(sec => sec.key === sectionKey && (sec.fields || []).some(f => f.slug === slug && f.enabled));
+  const docOn = fieldOn('po', 'po_document_url');
+  const poNumberOn = fieldOn('po', 'po_number');
+  const manualValueOn = fieldOn('commercials', 'potential_tcv_lakhs');
+  // Stage date: shown whenever the stage differs from the saved one (and for a new lead). A Sales Rep
+  // may backdate it up to 7 days, never into the future; other roles may pick any date.
+  // `_savedPhase` is set when the Kanban board opens this form with a new stage already selected.
+  const isBD = user.role === 'bd';
+  const savedPhase = lead ? (lead._savedPhase || lead.phase) : null;
+  const phaseChanged = !lead || form.phase !== savedPhase;
+  const minPhaseDate = isBD ? addDaysStr(todayStr(), -7) : undefined;
+  const maxPhaseDate = isBD ? todayStr() : undefined;
   const setC = (slug, v) => setCustom(c => ({ ...c, [slug]: v }));
   const addContact = () => setContacts(c => [...c, { name: '', phone: '', email: '', designation: '' }]);
   const updateContact = (i, key, val) => setContacts(c => c.map((row, idx) => idx === i ? { ...row, [key]: val } : row));
@@ -153,6 +178,9 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
       return [...new Set([...(dropdowns.lead_source || []), ...SOURCE_KINDS])];
     }
     if (f.slug === 'state') return STATE_OPTIONS;
+    // Lead Rating options can be managed per business (Settings, Dropdown lists).
+    // Options added there are offered alongside the template's defaults, not instead of them.
+    if (f.slug === 'lead_temperature') return [...new Set([...(Array.isArray(f.options) ? f.options : []), ...(dropdowns.lead_temperature || [])])];
     // Hide "Expansion" from the New/Renewal picker in the regular New Lead flow — Expansion leads
     // can ONLY be created from the + Expansion flow, which locks the field to "Expansion" itself.
     if (f.slug === 'new_or_renewal') {
@@ -200,6 +228,10 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
     if (form.lead_source === 'Channel Partner' && !String(form.channel_partner_name || '').trim()) { setErr('Channel Partner Name is required.'); return; }
     if (form.lead_source === 'Account Manager' && !String(form.kam_name || '').trim()) { setErr('Account Manager is required.'); return; }
     if (form.lead_source === 'Referral Partner' && !String(form.affiliate_name || '').trim()) { setErr('Referral Partner Name is required.'); return; }
+    // Won needs the order document (when the template uses it), and its Order Number once attached.
+    if (form.phase === 'Won' && docOn && !existingPoUrl && !poFile) { setErr('An order document is required once the phase is Won.'); return; }
+    if (form.phase === 'Won' && poNumberOn && (existingPoUrl || poFile) && !String(form.po_number || '').trim()) { setErr('Please enter the Order Number for the received order.'); return; }
+    if (form.tcv_manual && String(form.potential_tcv_lakhs ?? '').trim() === '') { setErr('Enter the deal value, or untick "Enter the deal value by hand".'); return; }
     // Contacts (POC) — enforce only what the template marks mandatory; drop empty rows.
     const nonEmptyContacts = contacts.filter(c => [c.name, c.email, c.phone, c.designation].some(v => String(v || '').trim()));
     const anyContactReq = contactCfg.nameReq || contactCfg.emailReq || contactCfg.phoneReq || contactCfg.desigReq;
@@ -219,17 +251,24 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
       services: lines,
       custom_fields: custom,
       contacts: nonEmptyContacts,
-      // Renewal copies the source PO's TCV verbatim — keep it manual so the backend doesn't recompute
-      // it to 0 before the user has re-entered services. Plain/additional leads compute from services.
-      tcv_manual: (!lead && expansionFrom && expansionMode === 'renewal'),
+      // Deal value: typed by hand when ticked; otherwise the server calculates it from the services.
+      tcv_manual: !!form.tcv_manual,
+      potential_tcv_lakhs: form.tcv_manual ? form.potential_tcv_lakhs : undefined,
+      phase_date: phaseChanged ? phaseDate : undefined,
+      po_document_url: existingPoUrl,
       // Renewal flow: link this new lead back to the specific PO it renews.
       renewed_from_lead_id: (!lead && expansionFrom && expansionMode === 'renewal') ? expansionFrom.id : undefined,
     };
 
     setBusy(true);
     try {
-      if (lead) await updateLead(lead.id, body);
-      else await createLead(body);
+      const saved = lead ? await updateLead(lead.id, body) : await createLead(body);
+      // Upload a newly chosen order document, then record its address on the lead.
+      const savedId = (saved && saved.id) || (lead && lead.id);
+      if (poFile && savedId) {
+        const { url } = await uploadPoDocument(savedId, poFile);
+        await updateLead(savedId, { ...body, phase_date: undefined, po_document_url: url });
+      }
       onSave();
     } catch (e2) {
       setErr(e2.response?.data?.message || 'Could not save the lead.');
@@ -266,8 +305,26 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
 
   // Services Offered block — the shared catalog-driven, three-category section.
   const servicesBlock = (
-    <ServicesOffered key="__services__" catalog={cfg.services || []} contractMonths={form.contract_period_months}
-      value={lines} onChange={setLines} />
+    <React.Fragment key="__services__">
+      <ServicesOffered catalog={cfg.services || []} contractMonths={form.contract_period_months}
+        value={lines} onChange={setLines} />
+      {manualValueOn && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: -6 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#334155', cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!form.tcv_manual} onChange={e => setF('tcv_manual', e.target.checked)} />
+            Enter the deal value by hand instead of calculating it from the services
+          </label>
+          {form.tcv_manual && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="field-label" style={{ margin: 0 }}>Deal Value (₹ Lakhs) *</span>
+              <input className="input" type="number" step="0.01" min="0" style={{ width: 140 }}
+                value={form.potential_tcv_lakhs ?? ''} onChange={e => setF('potential_tcv_lakhs', e.target.value)} />
+            </span>
+          )}
+          {form.tcv_manual && <span style={{ fontSize: 11, color: '#94a3b8' }}>The calculated total above is not used while this is ticked.</span>}
+        </div>
+      )}
+    </React.Fragment>
   );
 
   // Global PO branch — create a chain reference record instead of a lead.
@@ -442,6 +499,15 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
                   </div>
                 );
               })()}
+              {phaseChanged && (
+                <div>
+                  <label className="field-label">{form.phase} Date{isBD ? ' (today − up to 7 days back)' : ''}</label>
+                  <input type="date" className="input" value={phaseDate} min={minPhaseDate} max={maxPhaseDate} onChange={e => setPhaseDate(e.target.value)} />
+                  <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                    {isBD ? 'Defaults to today. You can backdate up to 7 days if this stage actually happened earlier, but not choose a future date.' : 'Defaults to today. You can set any date.'}
+                  </p>
+                </div>
+              )}
               {form.phase === 'On Hold' && (
                 <div>
                   <label className="field-label">Resume / Hold-until Date</label>
@@ -504,6 +570,37 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
           </div>
         );
       })()}
+
+      {/* Order document and Order Number — needed once the stage is Won (as the template allows). */}
+      {form.phase === 'Won' && (docOn || poNumberOn) && (
+        <div>
+          <p className="section-title">ORDER DOCUMENT{docOn ? ' *' : ''}</p>
+          {docOn && (<>
+            {!existingPoUrl && !poFile && (
+              <p style={{ fontSize: 12, color: '#dc2626', margin: '0 0 8px' }}>An order document is required once the phase is Won.</p>
+            )}
+            {existingPoUrl && !poFile && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div className="badge badge-green" style={{ padding: '6px 12px' }}>
+                  <a href={fileUrl(existingPoUrl)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>📄 View uploaded document</a>
+                </div>
+                <button type="button" className="btn btn-sm" style={{ color: '#dc2626', fontSize: 11 }}
+                  onClick={() => { if (window.confirm('Remove the uploaded order document?')) setExistingPoUrl(null); }}>
+                  🗑 Remove
+                </button>
+              </div>
+            )}
+            <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e => setPoFile(e.target.files[0] || null)} />
+          </>)}
+          {poNumberOn && (poFile || existingPoUrl || !docOn) && (
+            <div style={{ marginTop: 12, maxWidth: 380 }}>
+              <label className="field-label">Order Number{docOn ? ' *' : ''}</label>
+              <input className="input" value={form.po_number || ''} onChange={e => setF('po_number', e.target.value)} placeholder="Enter order number (identifier)" />
+              <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>A unique identifier for the received order{docOn ? ', required once the document is attached' : ''}.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Section: Contacts (POC) — between Phase & Timeline and PO/Dates/Other */}
       <div>

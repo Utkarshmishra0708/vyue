@@ -107,7 +107,7 @@ router.post('/', requireModule('leads', 'full'), async (req, res) => {
     await audit.record({
       actor: req.user, entityType: 'chain', entityId: created.id, subject: created.chain_name,
       businessUnit: created.business_unit, action: 'chain_created',
-      field: 'Chain', from: null, to: created.chain_name, note: 'Chain created',
+      field: 'Parent Account', from: null, to: created.chain_name, note: 'Parent account created',
     });
     return res.status(201).json(created);
   } catch (err) {
@@ -161,7 +161,7 @@ router.delete('/:id', adminOnly, requireModule('leads', 'full'), async (req, res
     await audit.record({
       actor: req.user, entityType: 'chain', entityId: c.id, subject: c.chain_name,
       businessUnit: c.business_unit, action: 'chain_deleted',
-      field: 'Chain', from: c.chain_name, to: null, note: 'Chain deleted',
+      field: 'Parent Account', from: c.chain_name, to: null, note: 'Parent account deleted',
     });
     return res.json({ message: 'Master Order deleted' });
   } catch (err) {

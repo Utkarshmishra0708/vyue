@@ -4,9 +4,19 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import PermissionsModal from '../components/PermissionsModal';
 import SuperAdminsPanel from '../components/SuperAdminsPanel';
+import DropdownManager from '../components/DropdownManager';
 import PermissionMatrix, { PermissionLegend } from '../components/PermissionMatrix';
 import { getManagedUsers, addUser, updateUser, setUserActive, deleteUser, resetBdPassword, getTat, updateTat, setActivityFeedAccess, getBusinessUnits } from '../services/api';
 import { IS_PROD } from '../env';
+
+// Dropdown lists a business can manage for its lead form.
+const DROPDOWN_LISTS = [
+  { field: 'lead_source',      label: 'Lead Source',            hint: 'Where a lead came from' },
+  { field: 'channel_partner',  label: 'Channel Partner names',  hint: 'Offered when the source is Channel Partner' },
+  { field: 'kam',              label: 'Account Manager names',  hint: 'Offered when the source is Account Manager' },
+  { field: 'lead_affiliate',   label: 'Referral Partner names', hint: 'Offered when the source is Referral Partner' },
+  { field: 'lead_temperature', label: 'Lead Rating',            hint: 'For example Hot, Warm, Cold' },
+];
 
 const ROLE_LABEL = { super_admin: 'Owner', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Sales Rep' };
 const ROLE_COLOR = { super_admin: '#7c3aed', business_admin: '#4f46e5', pmo: '#0ea5e9', bd: '#0891b2' };
@@ -290,6 +300,8 @@ export default function SettingsPage() {
   // Business Admin may set it, and only for a Manager (pmo). A Manager can never grant it — to self or
   // to another Manager — so the button is shown only when the actor is super_admin/business_admin.
   const canGrantFeed = canAct && (isSuperAdmin || user.role === 'business_admin');
+  // Dropdown lists are managed inside a business (the lists belong to that business).
+  const canManageLists = canAct && !isConsoleOnly && (isSuperAdmin || ['business_admin', 'pmo'].includes(user.role));
   const handleToggleFeed = async (u) => {
     const next = !u.activity_feed_access;
     const verb = next ? 'Grant' : 'Revoke';
@@ -490,6 +502,26 @@ export default function SettingsPage() {
           </div>
           {!manageBusiness && <p style={{ fontSize: 13, color: '#94a3b8', margin: '10px 0 0' }}>Select a business above to view its stage TAT.</p>}
         </div>
+
+        {canManageLists && (
+          <div className="card">
+            <p className="section-title" style={{ margin: 0 }}>Dropdown lists{buLabel ? ` — ${buLabel}` : ''}</p>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 12px' }}>
+              The choices offered in this business's lead form. Click Manage to add or remove options.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {DROPDOWN_LISTS.map(d => (
+                <div key={d.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{d.label}</div>
+                    <div style={{ fontSize: 11.5, color: '#94a3b8' }}>{d.hint}</div>
+                  </div>
+                  <DropdownManager field={d.field} label={d.label} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="card" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: '#92400e', margin: '0 0 4px' }}>💡 Weekly targets</p>

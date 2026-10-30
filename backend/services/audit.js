@@ -16,7 +16,7 @@ const ENTITY_TYPES = ['lead', 'chain', 'permissions', 'sla'];
 
 const ENTITY_LABELS = {
   lead: 'Lead',
-  chain: 'Chain',
+  chain: 'Parent Account',
   permissions: 'Permissions',
   sla: 'SLA Config',
 };
