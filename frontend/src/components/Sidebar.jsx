@@ -60,7 +60,7 @@ export default function Sidebar() {
         { path: '/dashboard', label: 'Dashboard', disabled: !canView('dashboard') },
         ...(buHasModule('voc') ? [{ path: '/voc', label: 'Customer Feedback', disabled: !canView('voc') }] : []),
         ...(buHasModule('customers') ? [{ path: '/customers', label: 'Customers', disabled: !canView('customers') }] : []),
-        { path: '/forecast',  label: 'Inventory Pipeline',  disabled: !canView('forecast') },
+        ...(buHasModule('forecast') ? [{ path: '/forecast', label: 'Inventory Pipeline', disabled: !canView('forecast') }] : []),
         { path: '/reports',   label: 'Reports',   disabled: !canView('reports') },
         ...(buHasModule('campaigns') ? [{ path: '/campaigns', label: 'Campaigns', disabled: !canView('campaigns') }] : []),
         // Activities kanban — only shown when the BU has enabled it (Surveillance by default,

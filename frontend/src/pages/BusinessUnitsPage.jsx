@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import BuWizard from '../components/BuWizard';
 import BuTemplateEditor from '../components/BuTemplateEditor';
 import {
-  getBusinessUnitsManage, createBusinessUnit, updateBusinessUnit,
+  getBusinessUnitsManage, updateBusinessUnit,
   deleteBusinessUnit, cloneBusinessUnit,
 } from '../services/api';
 import { refreshBusinessUnits } from '../utils/useBusinessUnits';
@@ -21,7 +21,7 @@ const PRESET_COLORS = ['#4f46e5', '#ea580c', '#0891b2', '#16a34a', '#db2777', '#
 const slugify = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
 
 export default function BusinessUnitsPage() {
-  const { canAct, isSuperAdmin, user } = useAuth();
+  const { canAct, isSuperAdmin, user, refreshUser } = useAuth();
   // A Business Admin reaches this page scoped to their OWN BU only. They can Edit and Edit template
   // but cannot Create / Clone / Disable / Archive / Delete — those remain Global-Admin-only. The
   // backend enforces the same via per-route guards; this gate just hides the controls accordingly.
@@ -34,7 +34,7 @@ export default function BusinessUnitsPage() {
   const canEditBu     = canAct && (isGa || isBaOwnOnly);
   const [units, setUnits] = useState(null);
   const [error, setError] = useState('');
-  const [modal, setModal] = useState(null);   // { mode: 'create'|'edit'|'clone', bu? }
+  const [modal, setModal] = useState(null);   // { mode: 'edit'|'clone', bu }
   const [wizard, setWizard] = useState(false); // guided creation wizard
   const [editTpl, setEditTpl] = useState(null); // { slug, name } — template editor target
   const [confirmDel, setConfirmDel] = useState(null); // { bu, usage, deletable }
@@ -42,10 +42,11 @@ export default function BusinessUnitsPage() {
   const load = useCallback(() => {
     setError('');
     refreshBusinessUnits(); // the sidebar, switcher and other screens pick up any change
+    refreshUser();          // the menu's modules and the business switcher too, without a reload
     getBusinessUnitsManage()
       .then(setUnits)
       .catch(err => setError(err.response?.data?.message || 'Could not load businesses.'));
-  }, []);
+  }, [refreshUser]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -72,13 +73,12 @@ export default function BusinessUnitsPage() {
             <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#0f172a' }}>{isGa ? 'Businesses' : 'Business'}</h1>
             <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
               {isGa
-                ? 'Create and manage business platforms. A new unit appears in login and across the app immediately — no code changes.'
+                ? 'Create businesses with Guided setup, and manage them here. A new business appears on the login page and across the app straight away.'
                 : 'Edit the presentation and template for your business. Only an Owner can create, clone, disable, archive or delete a business.'}
             </p>
           </div>
           {canCreate && (
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn" style={s.ghost} onClick={() => setModal({ mode: 'create' })}>+ Quick add</button>
               <button className="btn" style={s.primary} onClick={() => setWizard(true)}>+ Guided setup</button>
             </div>
           )}
@@ -167,8 +167,9 @@ function Stat({ label, n }) {
   );
 }
 
-// Create / Edit / Clone share one form. Clone starts from the source unit's presentation but needs
-// a brand-new slug + name (config is copied server-side).
+// Edit and Clone share one form. Clone starts from the source unit's presentation but needs a
+// brand-new slug + name (config is copied server-side). New businesses are created only through
+// Guided setup, so their form, services and modules are always chosen deliberately.
 function BuFormModal({ mode, bu, onClose, onSaved }) {
   const isEdit = mode === 'edit';
   const isClone = mode === 'clone';
@@ -186,7 +187,7 @@ function BuFormModal({ mode, bu, onClose, onSaved }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const onName = (v) => { set('name', v); if (!slugTouched && !isEdit) set('slug', slugify(v)); };
 
-  const title = isEdit ? `Edit ${bu.name}` : isClone ? `Clone ${bu.name}` : 'New Business';
+  const title = isEdit ? `Edit ${bu.name}` : `Clone ${bu.name}`;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -194,10 +195,8 @@ function BuFormModal({ mode, bu, onClose, onSaved }) {
     try {
       if (isEdit) {
         await updateBusinessUnit(bu.slug, { name: form.name, description: form.description, color: form.color, business_type: form.business_type });
-      } else if (isClone) {
-        await cloneBusinessUnit(bu.slug, { slug: form.slug, name: form.name });
       } else {
-        await createBusinessUnit({ slug: form.slug, name: form.name, description: form.description, color: form.color, business_type: form.business_type });
+        await cloneBusinessUnit(bu.slug, { slug: form.slug, name: form.name });
       }
       onSaved();
     } catch (e2) {
@@ -246,7 +245,7 @@ function BuFormModal({ mode, bu, onClose, onSaved }) {
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 18 }}>
           <button type="button" className="btn" style={s.ghost} onClick={onClose}>Cancel</button>
           <button type="submit" className="btn" style={s.primary} disabled={busy}>
-            {busy ? 'Saving…' : isEdit ? 'Save changes' : isClone ? 'Create clone' : 'Create'}
+            {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Create clone'}
           </button>
         </div>
       </form>

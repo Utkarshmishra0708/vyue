@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Layout from '../components/Layout';
 import useBusinessUnits from '../utils/useBusinessUnits';
-import { getForecastDevices, setSentToScm } from '../services/api';
+import { getForecastDevices, setSentToScm, getBusinessUnitConfig } from '../services/api';
 import { fmtDate, fmtMonthYear, primaryContact, formatOtherContacts } from '../utils/leadHelpers';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import ColumnPicker, { useColumnPreference } from '../components/ColumnPicker';
@@ -21,13 +22,22 @@ const monthLabel = (k) => k === 'unscheduled' ? 'Unscheduled' : fmtMonthYear(k +
 
 export default function ForecastPage() {
   const navigate = useNavigate();
-  const { isForecastOnly, isAdmin, logout, user, canEdit, canView, canAct } = useAuth();
+  const { isForecastOnly, isAdmin, user, canEdit, canView, canAct } = useAuth();
   // Read-only on Forecast can look but not tick Sent to SCM.
   const forecastCanEdit = canAct && canEdit('forecast');
   // Cross-module: opening a lead needs Leads access. Without it the rows simply aren't
   // clickable — the dashboard stays fully usable rather than erroring on a click.
   const canOpenLeadsModule = canView('leads');
   const { meta: businessOf } = useBusinessUnits();
+  // Whether this business's own catalog has any hardware service (null until known).
+  const [catalogHasHardware, setCatalogHasHardware] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    getBusinessUnitConfig(user?.business_unit)
+      .then(cfg => { if (alive) setCatalogHasHardware((cfg.services || []).some(sv => sv.hardware)); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [user?.business_unit]);
   const buName = businessOf(user?.business_unit).name || '';
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -255,10 +265,10 @@ export default function ForecastPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
+    <Layout>
+    <div style={{ minHeight: '100%', background: '#f1f5f9' }}>
       <div style={{ position: 'sticky', top: 0, zIndex: 20, background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button className="btn btn-sm" onClick={() => isForecastOnly ? logout() : navigate('/leads')}>{isForecastOnly ? 'Sign out' : '← Back'}</button>
           <div>
             <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Inventory Pipeline</h1>
             <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Hardware units expected — by month &amp; item · prioritized by stage, confidence, parent account, then Deal Value</p>
@@ -286,7 +296,11 @@ export default function ForecastPage() {
         {/* Gated on the UNFILTERED set: if filters exclude everything the table must stay on
             screen, or the user loses the controls needed to clear them. */}
         {loading ? <p style={{ color: '#94a3b8' }}>Loading…</p> : allLeads.length === 0 ? (
-          <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hardware items found — check that services are flagged as HW in the BU template.</p>
+          <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>
+            {catalogHasHardware === false
+              ? "This business's catalog has no hardware services. Mark a service as Hardware (or Hardware + Software) in Edit template, and leads with that service will appear here."
+              : 'No hardware items yet. Leads with a hardware service and a quantity above 0 appear here.'}
+          </p>
         ) : (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
@@ -478,5 +492,6 @@ export default function ForecastPage() {
         )}
       </div>
     </div>
+    </Layout>
   );
 }

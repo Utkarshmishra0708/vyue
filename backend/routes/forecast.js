@@ -32,6 +32,8 @@ router.get('/devices', authenticate, requireModule('forecast', 'read'), async (r
     // Catalog entries that carry hardware (category hardware or hardware_software → hardware=true),
     // used to resolve a line's stable slug for the row id and per-line SCM tracking.
     const hwServices = await ServiceDefinition.findAll({ where: { business_unit: bu, active: true, hardware: true } });
+    // No hardware in the catalog means no Inventory Pipeline for this business.
+    if (!hwServices.length) return res.status(403).json({ message: 'This business sells no hardware, so it has no Inventory Pipeline.' });
     const hwByLabel = new Map(hwServices.map(s => [s.label, s]));
 
     const commonAttrs = [

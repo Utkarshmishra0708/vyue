@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User, BusinessUnit } = require('../models');
+const { User, BusinessUnit, ServiceDefinition } = require('../models');
 const { authenticate } = require('../middleware/auth');
 const {
   effectivePermissions, PERMISSION_MANAGER_ROLES, isSuperAdmin, superAdminScope, canSeeActivityFeed,
@@ -44,6 +44,11 @@ async function authUserPayload(user) {
     const cfg = bu?.config || null;
     const map = {};
     for (const m of MODULES) map[m] = moduleEnabledForBu(cfg, m);
+    // The Inventory Pipeline only exists for a business that sells hardware: even when its switch is
+    // on, it stays hidden until the catalog has at least one Hardware (or Hardware + Software) service.
+    if (map.forecast) {
+      map.forecast = (await ServiceDefinition.count({ where: { business_unit: user.business_unit, active: true, hardware: true } })) > 0;
+    }
     safe.bu_modules = map;
   } catch {
     safe.bu_modules = null;

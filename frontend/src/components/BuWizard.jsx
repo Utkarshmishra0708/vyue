@@ -41,6 +41,9 @@ export default function BuWizard({ onClose, onCreated }) {
   const [sections, setSections] = useState([]);   // [{ key, label, enabled, custom, collapsed, fields:[...] }]
   const [services, setServices] = useState([]);   // [{ slug, label, nature, enabled, custom }]
   const [modules, setModules] = useState([]);
+  // The Inventory Pipeline follows the services: on when at least one is Hardware (or Hardware +
+  // Software), off otherwise, until the admin ticks or unticks it themselves.
+  const [forecastTouched, setForecastTouched] = useState(false);
   const [dashboards, setDashboards] = useState([]);
   const [reports, setReports] = useState([]);
   const [workflow, setWorkflow] = useState({ enabled: false, levels: [{ level: 1, approver_role: 'pmo' }] });
@@ -66,6 +69,12 @@ export default function BuWizard({ onClose, onCreated }) {
   // Template selection only affects the starting field/section set — services are always built from
   // scratch per business (no pre-filled service list).
   const applyTemplate = (val) => setTemplate(val);
+
+  const sellsHardware = services.some(sv => sv.enabled !== false && (sv.category === 'hardware' || sv.category === 'hardware_software'));
+  useEffect(() => {
+    if (forecastTouched) return;
+    setModules(ms => ms.map(m => m.slug === 'forecast' ? { ...m, enabled: sellsHardware } : m));
+  }, [sellsHardware, forecastTouched, modules.length]);
 
   // ---- service catalog builder (grouped by category) ----
   const addService = (category, label, nature) => {
@@ -233,9 +242,16 @@ export default function BuWizard({ onClose, onCreated }) {
               {modules.map(m => (
                 <div key={m.slug} style={ov.row}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: m.core ? 'default' : 'pointer' }}>
-                    <input type="checkbox" checked={m.enabled} disabled={m.core} onChange={() => setModules(ms => ms.map(x => x.slug === m.slug && !x.core ? { ...x, enabled: !x.enabled } : x))} />
+                    <input type="checkbox" checked={m.enabled} disabled={m.core} onChange={() => { if (m.slug === 'forecast') setForecastTouched(true); setModules(ms => ms.map(x => x.slug === m.slug && !x.core ? { ...x, enabled: !x.enabled } : x)); }} />
                     <span style={{ fontSize: 13, color: m.enabled ? '#0f172a' : '#94a3b8' }}>{m.label}{m.core && <span style={ov.pill}>core</span>}</span>
                   </label>
+                  {m.slug === 'forecast' && !forecastTouched && (
+                    <div style={{ fontSize: 11.5, color: '#64748b', margin: '2px 0 0 24px' }}>
+                      {sellsHardware
+                        ? 'On, because a service in step 3 is Hardware. Hardware on leads is planned here.'
+                        : 'Off, because no service in step 3 is Hardware. It only appears once a service is marked Hardware.'}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

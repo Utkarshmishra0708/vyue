@@ -164,7 +164,14 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
                 {modules.map(m => (
                   <label key={m.slug} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #f1f5f9', cursor: m.core ? 'not-allowed' : 'pointer' }}>
                     <input type="checkbox" checked={m.enabled} disabled={m.core} onChange={() => toggleModule(m.slug)} />
-                    <span style={{ fontSize: 13, color: m.enabled ? '#0f172a' : '#94a3b8', flex: 1 }}>{m.label}</span>
+                    <span style={{ fontSize: 13, color: m.enabled ? '#0f172a' : '#94a3b8', flex: 1 }}>
+                      {m.label}
+                      {m.slug === 'forecast' && (
+                        <span style={{ display: 'block', fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>
+                          Appears only once a service is marked Hardware (or Hardware + Software).
+                        </span>
+                      )}
+                    </span>
                     {m.core && <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', background: '#f1f5f9', padding: '1px 8px', borderRadius: 999 }}>CORE</span>}
                   </label>
                 ))}

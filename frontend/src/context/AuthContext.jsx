@@ -47,6 +47,13 @@ export function AuthProvider({ children }) {
     // Re-arm only when the identity changes, not on every permission refresh.
   }, [user?.id]);
 
+  // Re-read the signed-in user now (their modules and the businesses they can switch to), for screens
+  // that just changed them, so the menu and switcher update without a page reload.
+  const refreshUser = useCallback(() => {
+    if (!localStorage.getItem('salescrm_token')) return Promise.resolve();
+    return getMe().then(fresh => setUser(fresh)).catch(() => {});
+  }, []);
+
   const login = useCallback((token, u) => {
     localStorage.setItem('salescrm_token', token);
     setConsoleMode(localStorage.getItem('salescrm_console') === '1');
@@ -130,7 +137,7 @@ export function AuthProvider({ children }) {
     isBusinessAdmin, isBD, isForecastOnly, canManageUsers, canManageDropdowns, canForecast,
     permissions, can, canView, canEdit, canFull, canManagePermissions,
     superAdminScope, isCrossPlatform, isReadOnlyAdmin, canAct, canSeeActivityFeed,
-    buModules, buHasModule,
+    buModules, buHasModule, refreshUser,
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
