@@ -1,12 +1,3 @@
-// Surveillance service catalogue. Each service can be offered as OPEX (recurring) and/or CAPEX
-// (one-time) — the form lists each one under both. Mirror of the surveillance TCV calc in
-// backend/routes/leads.js (computeSurveillanceBreakdown).
-export const SURVEILLANCE_ITEMS = [
-  'JioSecure Platform', 'Jio Bridge Device', 'JioSecure Cloud Storage', 'Continuous Recording',
-  'Event Based Recording', 'Jio Cameras', 'JioSecure Analytics Suite', 'JSL Platform', 'JSL Devices',
-  'JSL Cloud Storage', 'Jio Smart Shop (Shutter Kit)', 'Jio Smart Shop Subscription',
-];
-
 export const PHASE_DATE_MAP = {
   New: 'start_date', Qualified: 'qualified_date', Demo: 'demo_date',
   Proposal: 'proposal_date', Negotiation: 'negotiation_date', 'Won': 'po_received_date',
@@ -27,33 +18,6 @@ export const PHASE_BADGE = {
 
 export const TEMP_BADGE = { Hot: 'badge-red', Warm: 'badge-amber', Cold: 'badge-blue' };
 
-export const DEVICE_SKU_MAP = {
-  MCM3000: 'Media Player', JSB210: 'Media Player', J100: 'Media Player', C2Av2: 'Media Player', M2S: 'Dongle',
-};
-
-// Signage services offered on a lead, with the cost nature that drives the TCV auto-calc.
-//   opex  → recurring: billed monthly over the contract term (qty × rate × contract months)
-//   capex → one-time:  qty × rate
-// The `device` line is handled separately in the form because its nature is chosen per-lead by
-// the BD (see device_cost_type). Mirror of TCV_SERVICES in backend/routes/leads.js — keep in sync.
-// All column-based services (drives the TCV auto-calc). Each business shows a subset in its form:
-//   Signage → platform / cms / connectivity / amc / display / installation (+ Device)
-//   JHES    → jhes / iptv (+ Device)
-// The device line is handled separately in the form (its cost nature is per-lead). Mirror of
-// TCV_SERVICES in backend/routes/leads.js — keep in sync.
-export const ALL_SERVICES = [
-  { key: 'platform',     label: 'Platform',     nature: 'opex' },
-  { key: 'cms',          label: 'CMS',          nature: 'opex' },
-  { key: 'connectivity', label: 'Connectivity', nature: 'opex' },
-  { key: 'amc',          label: 'AMC (Annual Maintenance Charge)', nature: 'opex' },
-  { key: 'iptv',         label: 'IPTV',         nature: 'opex' },
-  { key: 'jhes',         label: 'JHES',         nature: 'opex' },
-  { key: 'display',      label: 'Display',      nature: 'capex' },
-  { key: 'installation', label: 'Installation Charge (one-time)',  nature: 'capex' },
-];
-const svcByKey = (...keys) => ALL_SERVICES.filter(s => keys.includes(s.key));
-export const SIGNAGE_SERVICES = svcByKey('platform', 'cms', 'connectivity', 'amc', 'display', 'installation');
-export const JHES_SERVICES    = svcByKey('jhes', 'iptv');
 
 export const LOST_REASONS = ['Pricing', 'Competition', 'No Budget', 'No Decision', 'Timing', 'Product Fit', 'Other'];
 export const TAT_DAYS = 14;

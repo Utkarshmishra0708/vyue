@@ -1,78 +1,15 @@
-import { PHASE_DATE_MAP, TAT_DAYS, ALL_SERVICES } from './constants';
+import { PHASE_DATE_MAP, TAT_DAYS } from './constants';
 
-// Auto-calculated Total Contract Value, in lakhs (₹ / 100,000), from a lead/form's ticked services:
-//   opex  → qty × rate × contract months   (recurring)
-//   capex → qty × rate                      (one-time)
-// The device line uses its per-lead cost type (form.device_cost_type, default capex). Returns ''
-// when nothing is calculable (no services, or missing rate/qty), so callers can show a blank field.
-// Mirror of computeTcvLakhs() in backend/routes/leads.js — keep the two formulas in sync.
-// Split the ticked services into OPEX (recurring) and CAPEX (one-time) parts, both in lakhs.
-// Mirror of computeTcvBreakdown() in backend/routes/leads.js — keep the two in sync.
-export function computeTcvBreakdown(form) {
-  const months = parseInt(form.contract_period_months, 10) || 0;
-  let opex = 0, capex = 0;
-  const add = (included, rate, qty, nature) => {
-    if (!included) return;
-    const r = parseFloat(rate) || 0;
-    const q = parseInt(qty, 10) || 0;
-    if (!r || !q) return;
-    if (nature === 'opex') opex += r * q * months; else capex += r * q;
-  };
-  for (const svc of ALL_SERVICES) {
-    add(form[`includes_${svc.key}`], form[`${svc.key}_rate`], form[`${svc.key}_qty`], svc.nature);
-  }
-  add(form.includes_device, form.device_rate, form.device_qty, form.device_cost_type === 'opex' ? 'opex' : 'capex');
-  return { opexLakhs: opex / 100000, capexLakhs: capex / 100000 };
-}
 
-export function computeTcvLakhs(form) {
-  const { opexLakhs, capexLakhs } = computeTcvBreakdown(form);
-  const tcv = opexLakhs + capexLakhs;
-  return tcv > 0 ? +tcv.toFixed(2) : '';
-}
-
-// The contract value used for PRIORITIZATION (see utils/leadPriority.js) — deliberately
-// narrower than computeTcvLakhs: the JHES platform line plus the device line, with IPTV
-// excluded. Always derived from the current rate/qty fields rather than the stored
-// potential_tcv_lakhs, so the ranking can't be skewed by a stale or hand-typed total.
-//
-// Forecast rows arrive with this already derived server-side as `price_tcv_lakhs` (the
-// forecast API withholds raw rates), so that value is used when present. Mirror of
-// priceFields() in backend/routes/forecast.js — keep the two in sync.
+// The deal value used to rank Inventory Pipeline rows (see utils/leadPriority.js). Pipeline rows carry
+// the hardware line's value, worked out by the server from the business's own services
+// (`price_tcv_lakhs`); anything else falls back to the lead's Deal Value.
 export function priorityTcvLakhs(lead) {
   if (lead == null) return 0;
   const pre = parseFloat(lead.price_tcv_lakhs);
   if (Number.isFinite(pre)) return pre;
-
-  const months = parseInt(lead.contract_period_months, 10) || 0;
-  const line = (included, rate, qty, nature) => {
-    if (!included) return 0;
-    const r = parseFloat(rate) || 0;
-    const q = parseInt(qty, 10) || 0;
-    if (!r || !q) return 0;
-    return (nature === 'opex' ? r * q * months : r * q) / 100000;
-  };
-  const jhes = line(lead.includes_jhes, lead.jhes_rate, lead.jhes_qty, 'opex');
-  const device = line(lead.includes_device, lead.device_rate, lead.device_qty, lead.device_cost_type === 'opex' ? 'opex' : 'capex');
-  const total = jhes + device;
-  return total > 0 ? +total.toFixed(2) : 0;
-}
-
-// First-year Annual Contract Value in lakhs. OPEX is annualised across the contract term; CAPEX
-// (one-time) is realised in full in year 1. For a hand-typed TCV (no service breakdown, e.g. JHES)
-// the whole value is annualised evenly. Returns null when it can't be computed.
-export function computeAcvLakhs(form, { manual, manualTcv } = {}) {
-  const months = parseInt(form.contract_period_months, 10) || 0;
-  const years = months ? months / 12 : 0;
-  if (manual) {
-    const tcv = parseFloat(manualTcv) || 0;
-    if (!tcv || !years) return null;
-    return +(tcv / years).toFixed(2);
-  }
-  const { opexLakhs, capexLakhs } = computeTcvBreakdown(form);
-  if (opexLakhs + capexLakhs <= 0) return null;
-  const opexPerYear = years ? opexLakhs / years : opexLakhs;
-  return +(opexPerYear + capexLakhs).toFixed(2);
+  const tcv = parseFloat(lead.potential_tcv_lakhs);
+  return Number.isFinite(tcv) ? tcv : 0;
 }
 
 // Additional Notes is stored as rich-text HTML (react-quill). Strip tags for

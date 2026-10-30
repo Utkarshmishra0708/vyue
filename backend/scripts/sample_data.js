@@ -64,7 +64,7 @@ const SCENARIOS = [
   ['Proposal',    'Warm', 'Channel Partner', 'New',       16.0, 14, { device: true }],
 ];
 const STAGE_ORDER = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won'];
-const DEVICE_SKUS = ['MCM3000', 'JSB210', 'J100', 'C2Av2', 'M2S'];
+const DEVICE_SKUS = ['HW-100', 'HW-200', 'HW-300', 'HW-400', 'HW-500'];
 
 async function clearSample(t) {
   const leads = await Lead.findAll({ where: { additional_notes: { [Op.like]: `${TAG}%` } }, attributes: ['id'], transaction: t });

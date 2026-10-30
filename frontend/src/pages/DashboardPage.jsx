@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getLeads, getStageHistory, getSettings, setSetting, getBds } from '../services/api';
+import { getLeads, getStageHistory, getSettings, setSetting, getBds, getBusinessUnitConfig } from '../services/api';
 import { STAGE_ORDER, STAGE_WIN_PCT, PHASE_BADGE } from '../utils/constants';
 import { fmtDate, isOverdue, daysBetween, calcLeadScore, dealSizeThresholds, renewalStatus, renewalLabel, RENEWAL_BAND_STYLE, buildRenewedSet } from '../utils/leadHelpers';
 import IndiaMap from '../components/IndiaMap';
@@ -73,7 +73,16 @@ export default function DashboardPage() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [attPeriod, setAttPeriod] = useState('monthly');
-  const [poTrendMetric, setPoTrendMetric] = useState('count'); // count | tcv | acv | licenses
+  const [poTrendMetric, setPoTrendMetric] = useState('count'); // count | tcv | acv | licenses (shown as Units)
+  // Hardware units are shown only for a business whose own service catalog includes hardware.
+  const [hasHardware, setHasHardware] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    getBusinessUnitConfig(user.business_unit)
+      .then(cfg => { if (alive) setHasHardware((cfg.services || []).some(sv => sv.hardware)); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [user.business_unit]);
   const [poTrendYears, setPoTrendYears] = useState([]);
 
   useEffect(() => {
@@ -233,9 +242,8 @@ export default function DashboardPage() {
   const pipelineWon = pipelineWonLeads.reduce((s, l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
   const pipelinePct = Math.min(100, Math.round((pipelineWon / pipelineTarget) * 100));
 
-  // Signage-only extras: Total Licenses (quantity sum) + Distinct Customers
-  const isSignage = (user.business_unit || '').toLowerCase() === 'signage';
-  const sigWonLeads = isSignage ? pipelineWonLeads : [];
+  // Extras for a business that sells hardware: total hardware units won + distinct customers
+  const sigWonLeads = hasHardware ? pipelineWonLeads : [];
   const pipelineLicenses = sigWonLeads.reduce((s, l) => s + (parseInt(l.quantity, 10) || 0), 0);
   const pipelineCustomers = new Set(sigWonLeads.map(l => l.customer_name).filter(Boolean)).size;
 
@@ -617,9 +625,9 @@ export default function DashboardPage() {
           <div style={{ height: 8, background: '#f1f5f9', borderRadius: 99, marginBottom: 10 }}>
             <div style={{ height: 8, width: `${pipelinePct}%`, background: pipelinePct >= 100 ? '#059669' : '#4f46e5', borderRadius: 99 }} />
           </div>
-          {isSignage && (
+          {hasHardware && (
             <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#334155', marginBottom: 4 }}>
-              <span>📦 <strong>{pipelineLicenses}</strong> Licenses</span>
+              <span>📦 <strong>{pipelineLicenses}</strong> Units</span>
               <span>👥 <strong>{pipelineCustomers}</strong> Customer{pipelineCustomers !== 1 ? 's' : ''}</span>
             </div>
           )}
@@ -641,8 +649,8 @@ export default function DashboardPage() {
                   const d = new Date(l.po_received_date || l.phase_changed_at); return d >= pipeStart && d <= pipeEnd;
                 });
                 const bdWon = bdWonLeads.reduce((s,l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
-                const bdLic = isSignage ? bdWonLeads.reduce((s,l) => s + (parseInt(l.quantity, 10) || 0), 0) : 0;
-                const bdCust = isSignage ? new Set(bdWonLeads.map(l => l.customer_name).filter(Boolean)).size : 0;
+                const bdLic = hasHardware ? bdWonLeads.reduce((s,l) => s + (parseInt(l.quantity, 10) || 0), 0) : 0;
+                const bdCust = hasHardware ? new Set(bdWonLeads.map(l => l.customer_name).filter(Boolean)).size : 0;
                 const pct = Math.min(100, Math.round((bdWon / bdTarget) * 100));
                 return (
                   <div key={b.id}>
@@ -660,9 +668,9 @@ export default function DashboardPage() {
                     <div style={{ height: 6, background: '#f1f5f9', borderRadius: 99, marginTop: 4 }}>
                       <div style={{ height: 6, width: `${pct}%`, background: pct >= 100 ? '#059669' : '#818cf8', borderRadius: 99 }} />
                     </div>
-                    {isSignage && (
+                    {hasHardware && (
                       <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
-                        <span>📦 {bdLic} licenses</span>
+                        <span>📦 {bdLic} units</span>
                         <span>👥 {bdCust} customer{bdCust !== 1 ? 's' : ''}</span>
                       </div>
                     )}
@@ -913,7 +921,7 @@ export default function DashboardPage() {
                   <option value="count">Count</option>
                   <option value="tcv">Deal Value (₹L)</option>
                   <option value="acv">Annual Value (₹L)</option>
-                  {isSignage && <option value="licenses">Licenses</option>}
+                  {hasHardware && <option value="licenses">Units</option>}
                 </select>
                 {poTrendAvailableYears.map(yr => (
                   <label key={yr} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, cursor: 'pointer' }}>
@@ -948,7 +956,7 @@ export default function DashboardPage() {
                   {poTrendActiveYears.map((yr, i) => (
                     <span key={yr}>
                       <span style={{ display: 'inline-block', width: 10, height: 10, background: PO_TREND_COLORS[i % PO_TREND_COLORS.length], borderRadius: 2, marginRight: 4 }} />
-                      {yr}: <strong>{poTrendTotals[yr]?.count || 0}</strong> orders · Deal Value <strong>₹{(poTrendTotals[yr]?.tcv || 0).toFixed(1)}L</strong> · Annual Value <strong>₹{(poTrendTotals[yr]?.acv || 0).toFixed(1)}L</strong>{isSignage && <> · <strong>{poTrendTotals[yr]?.licenses || 0}</strong> Lic</>}
+                      {yr}: <strong>{poTrendTotals[yr]?.count || 0}</strong> orders · Deal Value <strong>₹{(poTrendTotals[yr]?.tcv || 0).toFixed(1)}L</strong> · Annual Value <strong>₹{(poTrendTotals[yr]?.acv || 0).toFixed(1)}L</strong>{hasHardware && <> · <strong>{poTrendTotals[yr]?.licenses || 0}</strong> units</>}
                     </span>
                   ))}
                 </div>
