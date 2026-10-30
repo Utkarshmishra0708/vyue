@@ -53,6 +53,11 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
   }, [bu.slug]);
 
   const toggleModule = (slug) => setModules(ms => ms.map(m => m.slug === slug ? { ...m, enabled: !m.enabled } : m));
+  // The Inventory Pipeline only exists for a business that sells hardware, so its switch can only be
+  // used once a service is marked Hardware (or Hardware + Software). Its saved setting is kept.
+  const sellsHardware = services.some(sv => sv.category === 'hardware' || sv.category === 'hardware_software');
+  const switchLocked = (m) => m.core || (m.slug === 'forecast' && !sellsHardware);
+  const shownOn = (m) => m.enabled && !(m.slug === 'forecast' && !sellsHardware);
 
   const addService = (category, label, nature) => {
     const name = String(label || '').trim();
@@ -162,13 +167,15 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
               <div style={{ padding: '8px 12px' }}>
                 <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 8px' }}>Turn modules on or off for this business. Core modules (Leads, Dashboard) can't be disabled — everyone needs them.</p>
                 {modules.map(m => (
-                  <label key={m.slug} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #f1f5f9', cursor: m.core ? 'not-allowed' : 'pointer' }}>
-                    <input type="checkbox" checked={m.enabled} disabled={m.core} onChange={() => toggleModule(m.slug)} />
-                    <span style={{ fontSize: 13, color: m.enabled ? '#0f172a' : '#94a3b8', flex: 1 }}>
+                  <label key={m.slug} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #f1f5f9', cursor: switchLocked(m) ? 'not-allowed' : 'pointer' }}>
+                    <input type="checkbox" checked={shownOn(m)} disabled={switchLocked(m)} onChange={() => toggleModule(m.slug)} />
+                    <span style={{ fontSize: 13, color: shownOn(m) ? '#0f172a' : '#94a3b8', flex: 1 }}>
                       {m.label}
                       {m.slug === 'forecast' && (
                         <span style={{ display: 'block', fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>
-                          Appears only once a service is marked Hardware (or Hardware + Software).
+                          {sellsHardware
+                            ? 'Plans the hardware on this business\'s leads.'
+                            : 'Available once a service is marked Hardware (or Hardware + Software) in Services above.'}
                         </span>
                       )}
                     </span>

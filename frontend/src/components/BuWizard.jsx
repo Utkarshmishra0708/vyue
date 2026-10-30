@@ -72,8 +72,11 @@ export default function BuWizard({ onClose, onCreated }) {
 
   const sellsHardware = services.some(sv => sv.enabled !== false && (sv.category === 'hardware' || sv.category === 'hardware_software'));
   useEffect(() => {
+    // No hardware: the Inventory Pipeline is off and can't be switched on. With hardware it starts on,
+    // and the admin's own choice is kept once they change it.
+    if (!sellsHardware) { setModules(ms => ms.map(m => m.slug === 'forecast' ? { ...m, enabled: false } : m)); return; }
     if (forecastTouched) return;
-    setModules(ms => ms.map(m => m.slug === 'forecast' ? { ...m, enabled: sellsHardware } : m));
+    setModules(ms => ms.map(m => m.slug === 'forecast' ? { ...m, enabled: true } : m));
   }, [sellsHardware, forecastTouched, modules.length]);
 
   // ---- service catalog builder (grouped by category) ----
@@ -242,14 +245,14 @@ export default function BuWizard({ onClose, onCreated }) {
               {modules.map(m => (
                 <div key={m.slug} style={ov.row}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: m.core ? 'default' : 'pointer' }}>
-                    <input type="checkbox" checked={m.enabled} disabled={m.core} onChange={() => { if (m.slug === 'forecast') setForecastTouched(true); setModules(ms => ms.map(x => x.slug === m.slug && !x.core ? { ...x, enabled: !x.enabled } : x)); }} />
+                    <input type="checkbox" checked={m.enabled} disabled={m.core || (m.slug === 'forecast' && !sellsHardware)} onChange={() => { if (m.slug === 'forecast') setForecastTouched(true); setModules(ms => ms.map(x => x.slug === m.slug && !x.core ? { ...x, enabled: !x.enabled } : x)); }} />
                     <span style={{ fontSize: 13, color: m.enabled ? '#0f172a' : '#94a3b8' }}>{m.label}{m.core && <span style={ov.pill}>core</span>}</span>
                   </label>
-                  {m.slug === 'forecast' && !forecastTouched && (
+                  {m.slug === 'forecast' && (
                     <div style={{ fontSize: 11.5, color: '#64748b', margin: '2px 0 0 24px' }}>
                       {sellsHardware
-                        ? 'On, because a service in step 3 is Hardware. Hardware on leads is planned here.'
-                        : 'Off, because no service in step 3 is Hardware. It only appears once a service is marked Hardware.'}
+                        ? 'Plans the hardware on this business\'s leads (a service in step 3 is Hardware).'
+                        : 'Available once a service in step 3 is marked Hardware (or Hardware + Software).'}
                     </div>
                   )}
                 </div>

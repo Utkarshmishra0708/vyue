@@ -10,6 +10,7 @@
     "seed": "node scripts/seed.js",
     "sample": "node scripts/sample_data.js",
     "reset": "node scripts/reset.js",
+    "backup": "node scripts/backup.js",
     "migrate": "node scripts/migrate.js",
     "recompute": "node scripts/recompute.js",
     "test": "node --test"

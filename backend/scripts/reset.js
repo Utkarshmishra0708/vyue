@@ -1,5 +1,5 @@
-// Resets the database to a brand-new install: deletes the whole database, recreates it empty, then runs
-// the setup (migrations) and the seed. EVERYTHING in the database is lost: leads, users, businesses.
+// Resets the database to a brand-new install: first saves a full copy of it (see backup.js), then
+// deletes it, recreates it empty, and runs the setup (migrations) and the seed.
 //
 //   npm run reset -- --yes
 //
@@ -7,7 +7,7 @@
 const path = require('path');
 const { spawnSync } = require('child_process');
 const env = require('dotenv').config({ path: path.join(__dirname, '..', '.env') }).parsed || {};
-const mysql = require('mysql2/promise');
+const { backupDatabase, connect } = require('./backup');
 
 (async () => {
   if ((env.NODE_ENV || process.env.NODE_ENV) === 'production') {
@@ -16,14 +16,15 @@ const mysql = require('mysql2/promise');
   const dbName = env.DB_NAME || 'sales_crm';
   if (!process.argv.includes('--yes')) {
     console.log(`This deletes EVERYTHING in the database "${dbName}" and starts again as a brand-new install.`);
+  console.log('A backup copy is saved first, so it can be undone.');
     console.log('To go ahead, run:  npm run reset -- --yes');
     process.exit(0);
   }
   if (!/^[A-Za-z0-9_]+$/.test(dbName)) { console.error(`Unexpected database name: ${dbName}`); process.exit(1); }
-  const conn = await mysql.createConnection({
-    host: env.DB_HOST || 'localhost', port: Number(env.DB_PORT) || 3306,
-    user: env.DB_USER || 'root', password: env.DB_PASSWORD || '',
-  });
+  const conn = await connect();
+  // Safety first: copy the database before deleting anything, so a mistaken reset can be undone.
+  const backup = await backupDatabase(conn, dbName);
+  if (backup) console.log(`✓ Backup saved as "${backup.name}" (${backup.tables} tables, ${backup.rows} rows). To go back: set DB_NAME=${backup.name} in backend\\.env and restart the backend.`);
   await conn.query(`DROP DATABASE IF EXISTS \`${dbName}\``);
   await conn.query(`CREATE DATABASE \`${dbName}\` CHARACTER SET utf8mb4`);
   await conn.end();
