@@ -1,7 +1,7 @@
 // Data isolation, enforced at the API layer (not just in the UI).
-// Every account belongs to exactly ONE business unit (signage / jhes / surveillance) — see the
-// JIOAUTIFY per-BU account model — so ALL roles are scoped to their own business_unit: a signage
-// user never sees jhes leads and vice-versa. On top of that, a BD only ever sees rows they own.
+// Every account belongs to exactly ONE business (one account per business per person), so ALL
+// roles are scoped to their own business_unit: a user of one business never sees another business's
+// leads. On top of that, a Sales Rep (role 'bd') only ever sees rows they own.
 
 function leadScopeWhere(user, extra = {}) {
   // A Super Admin is scoped to the business they signed into, exactly like a normal PMO — logging

@@ -368,12 +368,13 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
         <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#3730a3', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 16 }}>{expansionMode === 'renewal' ? '🔄' : '➕'}</span>
           <span>
-            <strong>{expansionMode === 'renewal' ? 'Renewal of' : 'Additional Order for'} {expansionFrom.customer_name}</strong>
-            {expansionFrom.lead_ref && <span style={{ color: '#6366f1', fontFamily: 'monospace', marginLeft: 6 }}>· copied from {expansionFrom.lead_ref}</span>}
-            <span style={{ color: '#64748b', marginLeft: 6, fontSize: 12 }}>
+            <strong>
               {expansionMode === 'renewal'
-                ? 'Statics, services and deal size copied from the order being renewed. Adjust the dates and price.'
-                : 'Static details filled in. Fill the services, deal size and dates fresh.'}
+                ? `Renewing order ${expansionFrom.po_number || expansionFrom.lead_ref || ''} (${expansionFrom.customer_name})`
+                : `New order for ${expansionFrom.customer_name}`}
+            </strong>
+            <span style={{ color: '#64748b', marginLeft: 6, fontSize: 12 }}>
+              {expansionMode === 'renewal' ? 'Check the dates and price, then save.' : 'Add what they are buying, then save.'}
             </span>
           </span>
         </div>

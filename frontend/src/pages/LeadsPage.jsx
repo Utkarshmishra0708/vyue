@@ -438,7 +438,7 @@ export default function LeadsPage() {
           <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} title="View customers and their orders by city" onClick={() => navigate('/customers')}>👥 Customers</button>
           {isAdmin && <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} onClick={() => setShowBulkUpload(true)}>⬆ Bulk Import</button>}
           {leadsCanFull && <button className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '8px 14px' }} onClick={openNew}>+ New Lead</button>}
-          {leadsCanFull && <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 14px', background: '#f1f5f9', color: '#4338ca', borderColor: '#c7d2fe' }} onClick={() => setShowExpansionPicker(true)}>+ Renew / Additional Order</button>}
+          {leadsCanFull && <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 14px', background: '#f1f5f9', color: '#4338ca', borderColor: '#c7d2fe' }} onClick={() => setShowExpansionPicker(true)}>+ Existing Customer</button>}
         </div>
       </div>
 
