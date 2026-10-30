@@ -7,6 +7,7 @@ import {
   getBusinessUnitsManage, createBusinessUnit, updateBusinessUnit,
   deleteBusinessUnit, cloneBusinessUnit,
 } from '../services/api';
+import { refreshBusinessUnits } from '../utils/useBusinessUnits';
 
 // Global Admin surface for managing business units dynamically (no code change, no DDL). Create /
 // edit / disable / archive / delete (safe) / clone-from-template. Only a Global Admin reaches this
@@ -40,6 +41,7 @@ export default function BusinessUnitsPage() {
 
   const load = useCallback(() => {
     setError('');
+    refreshBusinessUnits(); // the sidebar, switcher and other screens pick up any change
     getBusinessUnitsManage()
       .then(setUnits)
       .catch(err => setError(err.response?.data?.message || 'Could not load businesses.'));

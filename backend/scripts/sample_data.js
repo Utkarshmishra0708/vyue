@@ -139,7 +139,7 @@ async function main() {
     let reps = await User.findAll({ where: { business_unit: slug, role: 'bd', active: true }, order: [['id', 'ASC']] });
     if (!reps.length) {
       reps = [];
-      for (const [n, i] of [['Sample Rep One', 'R1'], ['Sample Rep Two', 'R2']]) {
+      for (const [n, i] of [['Riya Shah', 'RS'], ['Arjun Mehta', 'AM']]) {
         reps.push(await User.create({ name: `${n} (${bu.name})`, initials: i, color: 'bg-sky-500', role: 'bd', business_unit: slug, password_hash: testHash }));
       }
     }

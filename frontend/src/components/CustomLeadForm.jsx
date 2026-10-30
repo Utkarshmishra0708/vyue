@@ -421,6 +421,11 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
               <option value="">Select owner</option>
               {bds.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
+            {bds.length === 0 && (
+              <p style={{ fontSize: 11.5, color: '#b45309', marginTop: 4 }}>
+                This business has no Sales Reps yet. Leads are owned by Sales Reps, so add one in Settings → Users first.
+              </p>
+            )}
           </div>
           <div>
             <label className="field-label">Campaign</label>

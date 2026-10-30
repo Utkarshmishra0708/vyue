@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { Lead, User, ActivityLog, LeadContact, ServiceDefinition } = require('../models');
+const { Lead, User, ActivityLog, LeadContact, ServiceDefinition, BusinessUnit } = require('../models');
 const { Op } = require('sequelize');
 const { authenticate, requireModule } = require('../middleware/auth');
 const { hasLevel } = require('../services/permissions');
@@ -95,9 +95,12 @@ router.get('/devices', authenticate, requireModule('forecast', 'read'), async (r
 
     const slaMap = await slaMapFor(bu);
     const now = new Date();
+    // Each row carries its business's display name (the slug is only an internal ID).
+    const names = new Map((await BusinessUnit.findAll({ attributes: ['slug', 'name'] })).map(b => [b.slug, b.name]));
     for (const row of payload) {
       const live = computeConfidence(row, slaMap, now);
       if (live !== null) row.confidence_score = live;
+      row.business_name = names.get(row.business_unit) || row.business_unit;
     }
 
     return res.json(payload);

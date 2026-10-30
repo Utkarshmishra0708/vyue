@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import useBusinessUnits from '../utils/useBusinessUnits';
 import { getForecastDevices, setSentToScm } from '../services/api';
 import { fmtDate, fmtMonthYear, primaryContact, formatOtherContacts } from '../utils/leadHelpers';
 import { exportRowsToPdf } from '../utils/pdfExport';
@@ -26,7 +27,8 @@ export default function ForecastPage() {
   // Cross-module: opening a lead needs Leads access. Without it the rows simply aren't
   // clickable — the dashboard stays fully usable rather than erroring on a click.
   const canOpenLeadsModule = canView('leads');
-  const buName = (user?.business_unit || '').toUpperCase();
+  const { meta: businessOf } = useBusinessUnits();
+  const buName = businessOf(user?.business_unit).name || '';
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   // Forecast is scoped server-side to the caller's business unit, so there's no cross-business filter.
