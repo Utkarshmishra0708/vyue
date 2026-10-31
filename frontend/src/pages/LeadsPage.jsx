@@ -19,6 +19,7 @@ import { sortWithWonLast } from '../utils/leadPriority';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import { writeFormattedSheet } from '../utils/excelExport';
 import { APP_NAME } from '../config/brand';
+import useBusinessUnits from '../utils/useBusinessUnits';
 
 // Compact date-range picker for the Follow-up filter. Single button opens a small popover
 // with From + To date inputs. Shows the selected range as a short label on the button.
@@ -98,6 +99,7 @@ function TrendArrow({ trend }) {
 
 export default function LeadsPage() {
   const { user, isAdmin, canEdit, canFull, canAct } = useAuth();
+  const { meta: businessOf } = useBusinessUnits();
   // Create and delete are Full-Access capabilities. Chains is module-level configuration, which
   // Edit deliberately excludes. Bulk update mutates records, so it needs Edit.
   // canAct is false for a Read-only Super Admin, who sees no action affordance on any platform.
@@ -363,7 +365,7 @@ export default function LeadsPage() {
       const poc = primaryContact(l);
       const row = {
         'Sr No': l.sr_no, 'Lead Ref': l.lead_ref || '', 'Customer Code': l.customer_code || '',
-        'Business': (l.business_unit || '').toUpperCase(), 'Customer': l.customer_name,
+        'Business': businessOf(l.business_unit).name, 'Customer': l.customer_name,
         'City': l.city || '', 'State': l.state || '', 'Lead Owner': l.owner?.name || '',
         // Contact / POC details (primary contact; any additional POCs listed in "Other Contacts").
         'Contact Name': poc.name, 'Contact Phone': poc.phone, 'Contact Email': poc.email, 'Contact Designation': poc.designation,

@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { bulkImportLeads, getManagedUsers } from '../services/api';
 import { parseUploadedFile, downloadTemplate } from '../utils/bulkTemplate';
+import useBusinessUnits from '../utils/useBusinessUnits';
 
 export default function BulkUploadModal({ businessUnit, config, onClose, onImported }) {
+  const { meta: businessOf } = useBusinessUnits();
+  const businessName = businessOf(businessUnit).name;
   const fileRef = useRef(null);
   const [step, setStep] = useState('upload'); // upload | preview | importing | done
   const [users, setUsers] = useState([]);
@@ -53,7 +56,7 @@ export default function BulkUploadModal({ businessUnit, config, onClose, onImpor
   const handleDownloadTemplate = async () => {
     setErr('');
     try {
-      await downloadTemplate(businessUnit, config, users);
+      await downloadTemplate(businessUnit, config, users, businessName);
     } catch (ex) {
       console.error('Template download failed:', ex);
       setErr(ex?.message || 'Could not generate the template. Please try again.');
@@ -77,7 +80,7 @@ export default function BulkUploadModal({ businessUnit, config, onClose, onImpor
               </p>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button className="btn" onClick={handleDownloadTemplate}>⬇ Download Template</button>
-                <span style={{ fontSize: 12, color: '#94a3b8' }}>for {businessUnit.toUpperCase()}</span>
+                <span style={{ fontSize: 12, color: '#94a3b8' }}>for {businessName}</span>
               </div>
               <div style={{ border: '2px dashed #e2e8f0', borderRadius: 12, padding: 32, textAlign: 'center', background: '#f8fafc' }}>
                 <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} style={{ display: 'none' }} />

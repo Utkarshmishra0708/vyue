@@ -8,6 +8,7 @@ import { fmtDate, fmtMonthYear } from '../utils/leadHelpers';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import { writeFormattedSheet } from '../utils/excelExport';
 import { APP_NAME } from '../config/brand';
+import useBusinessUnits from '../utils/useBusinessUnits';
 
 const CHART_COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
@@ -17,9 +18,12 @@ const RENEWALS = ['New', 'Renewal', 'Expansion'];
 
 // Won count for a report row. The server sends it as won_leads (or won / won_count on some reports).
 const wonOf = (r) => Number(r.won ?? r.won_leads ?? r.won_count ?? 0) || 0;
+const activeOf = (r) => Number(r.active ?? r.active_leads ?? 0) || 0;
+const lostOf = (r) => Number(r.lost ?? r.lost_leads ?? r.lost_count ?? 0) || 0;
 
 export default function ReportsPage() {
   const { user } = useAuth();
+  const { meta: businessOf } = useBusinessUnits();
   const [allLeads, setAllLeads] = useState([]);
   const [bds, setBds] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -119,12 +123,12 @@ export default function ReportsPage() {
     const XLSX = await import('xlsx');
     const rows = view === 'customers'
       ? filtered.map(l => ({
-          Customer: l.customer_name, 'Business': (l.business_unit || '').toUpperCase(),
+          Customer: l.customer_name, 'Business': businessOf(l.business_unit).name,
           City: l.city || '', State: l.state || '', Owner: l.owner?.name || '',
           'Contact Name': pc(l).name || '', Phone: pc(l).phone || '', Email: pc(l).email || '', Designation: pc(l).designation || '',
         }))
       : filtered.map(l => ({
-          'Sr No': l.sr_no, 'Business': (l.business_unit || '').toUpperCase(), Customer: l.customer_name,
+          'Sr No': l.sr_no, 'Business': businessOf(l.business_unit).name, Customer: l.customer_name,
           State: l.state || '', 'Sales Rep': l.owner?.name || '', 'Lead Source': l.lead_source, 'Account Manager': l.kam_name || '',
           'New/Renewal': l.new_or_renewal, 'Deal Value (₹L)': l.potential_tcv_lakhs, 'Order Expected': l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '',
           Phase: l.phase, 'Created At': fmtDate(l.createdAt),
@@ -137,7 +141,7 @@ export default function ReportsPage() {
     const table = view === 'customers'
       ? {
           columns: ['Customer', 'Business', 'City', 'State', 'Owner', 'Contact', 'Phone', 'Email', 'Designation'],
-          rows: filtered.map(l => [l.customer_name, (l.business_unit || '').toUpperCase(), l.city || '—', l.state || '—', l.owner?.name || '', pc(l).name || '—', pc(l).phone || '—', pc(l).email || '—', pc(l).designation || '—']),
+          rows: filtered.map(l => [l.customer_name, businessOf(l.business_unit).name, l.city || '—', l.state || '—', l.owner?.name || '', pc(l).name || '—', pc(l).phone || '—', pc(l).email || '—', pc(l).designation || '—']),
         }
       : {
           columns: ['Sr', 'Customer', 'State', 'Sales Rep', 'Phase', 'New/Renewal', 'Deal Value (₹L)', 'Order Expected', 'Source', 'Created'],
@@ -297,7 +301,7 @@ export default function ReportsPage() {
                     <tbody>
                       {filtered.map(l => (
                         <tr key={l.id}>
-                          <td>{l.customer_name}</td><td>{(l.business_unit || '').toUpperCase()}</td><td>{l.city || '—'}</td><td>{l.state || '—'}</td>
+                          <td>{l.customer_name}</td><td>{businessOf(l.business_unit).name}</td><td>{l.city || '—'}</td><td>{l.state || '—'}</td>
                           <td>{l.owner?.name || '—'}</td><td>{pc(l).name || '—'}</td><td>{pc(l).phone || '—'}</td><td>{pc(l).email || '—'}</td><td>{pc(l).designation || '—'}</td>
                         </tr>
                       ))}
@@ -337,9 +341,9 @@ export default function ReportsPage() {
                               <tr key={i}>
                                 <td style={{ fontWeight: 600 }}>{r.bd_name}</td>
                                 <td style={{ textAlign: 'right' }}>{r.total_leads}</td>
-                                <td style={{ textAlign: 'right' }}>{r.active ?? '—'}</td>
+                                <td style={{ textAlign: 'right' }}>{activeOf(r)}</td>
                                 <td style={{ textAlign: 'right', color: '#059669', fontWeight: 700 }}>{wonOf(r)}</td>
-                                <td style={{ textAlign: 'right', color: '#dc2626' }}>{r.lost ?? '—'}</td>
+                                <td style={{ textAlign: 'right', color: '#dc2626' }}>{lostOf(r)}</td>
                                 <td style={{ textAlign: 'right' }}>{'₹'}{parseFloat(r.total_tcv || 0).toFixed(1)}</td>
                                 <td style={{ textAlign: 'right', fontWeight: 700 }}>{'₹'}{parseFloat(r.won_tcv || 0).toFixed(1)}</td>
                                 <td style={{ textAlign: 'right' }}>{conv}%</td>
@@ -427,7 +431,7 @@ export default function ReportsPage() {
                               <td style={{ fontWeight: 600 }}>{r.month}</td>
                               <td style={{ textAlign: 'right' }}>{r.new_leads ?? r.new_count ?? '—'}</td>
                               <td style={{ textAlign: 'right', color: '#059669', fontWeight: 700 }}>{r.won ?? r.won_count ?? '—'}</td>
-                              <td style={{ textAlign: 'right', color: '#dc2626' }}>{r.lost ?? r.lost_count ?? '—'}</td>
+                              <td style={{ textAlign: 'right', color: '#dc2626' }}>{lostOf(r)}</td>
                               <td style={{ textAlign: 'right' }}>{'₹'}{parseFloat(r.new_tcv || 0).toFixed(1)}</td>
                               <td style={{ textAlign: 'right', fontWeight: 700 }}>{'₹'}{parseFloat(r.won_tcv || 0).toFixed(1)}</td>
                             </tr>

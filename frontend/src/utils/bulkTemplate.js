@@ -156,7 +156,8 @@ const DROPDOWN_MAP = {
 const ALL_STATES = [...INDIAN_STATES, ...UNION_TERRITORIES];
 const MAX_DATA_ROW = 501;
 
-export async function downloadTemplate(businessUnit, config, users) {
+export async function downloadTemplate(businessUnit, config, users, businessName) {
+  const buLabel = businessName || businessUnit;
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
   const columns = getTemplateColumns(businessUnit, config);
@@ -240,7 +241,7 @@ export async function downloadTemplate(businessUnit, config, users) {
   const bu = (businessUnit || '').toLowerCase();
   const instrRows = [
     ['Bulk Lead Import — Instructions', ''],
-    [`Business: ${businessUnit.toUpperCase()}`, ''],
+    [`Business: ${buLabel}`, ''],
     [],
     ['Column', 'Valid Values / Format'],
     ['Customer Name *', 'Required. Text.'],
@@ -317,7 +318,7 @@ export async function downloadTemplate(businessUnit, config, users) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Bulk_Import_Template_${businessUnit.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.download = `Bulk_Import_Template_${String(buLabel).replace(/[^A-Za-z0-9]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

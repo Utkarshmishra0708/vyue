@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { getActivityFeed, getActivityFilters } from '../services/api';
+import useBusinessUnits from '../utils/useBusinessUnits';
 
 // ---------------------------------------------------------------------------
 // ActivityPage — the tool-wide activity feed.
@@ -43,6 +44,7 @@ const EMPTY_FILTERS = { user_id: '', platform: '', type: '', from: '', to: '' };
 export default function ActivityPage() {
   const navigate = useNavigate();
   const { canSeeActivityFeed } = useAuth();
+  const { meta: businessOf } = useBusinessUnits();
   const [entries, setEntries] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [hasMore, setHasMore] = useState(false);
@@ -252,7 +254,7 @@ export default function ActivityPage() {
                     </div>
                     <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 11, color: '#94a3b8' }} title={new Date(e.at).toLocaleString()}>{fmtTimestamp(e.at)}</div>
-                      {e.businessUnit && <div style={{ fontSize: 10, color: '#cbd5e1', marginTop: 2 }}>{e.businessUnit.toUpperCase()}</div>}
+                      {e.businessUnit && <div style={{ fontSize: 10, color: '#cbd5e1', marginTop: 2 }}>{businessOf(e.businessUnit).name}</div>}
                     </div>
                   </div>
                 );

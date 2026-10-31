@@ -310,7 +310,7 @@ async function main() {
   console.log(`  Business Admin: admin.<business>.sample@example.com   e.g. ${summary.map(s => `admin.${s.slug}.sample@example.com`).join('  |  ')}`);
   console.log(`  Manager:        manager.<business>.sample@example.com`);
   console.log(`  Password for both: ${TEST_PASSWORD}`);
-  console.log('  Sales Reps: sign in with their full name and the default password from the seed.');
+  console.log(`  Sales Reps: sign in with their full name (as shown in Settings → Users) and the password ${TEST_PASSWORD}.`);
   if (owner) console.log(`  Owner: ${owner.email} can now also sign in inside every business with the Owner password.`);
   console.log('\nTo remove all sample data later:  npm run sample -- --clear');
 }
