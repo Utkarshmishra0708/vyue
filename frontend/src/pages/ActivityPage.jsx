@@ -159,9 +159,9 @@ export default function ActivityPage() {
           </div>
           {options.platforms.length > 1 && (
             <div>
-              <label className="field-label">Platform</label>
+              <label className="field-label">Business</label>
               <select className="input" style={{ width: 150 }} value={filters.platform} onChange={set('platform')}>
-                <option value="">All platforms</option>
+                <option value="">All businesses</option>
                 {options.platforms.map(p => <option key={p} value={p}>{p.toUpperCase()}</option>)}
               </select>
             </div>

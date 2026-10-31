@@ -6,8 +6,7 @@ import PermissionsModal from '../components/PermissionsModal';
 import SuperAdminsPanel from '../components/SuperAdminsPanel';
 import DropdownManager from '../components/DropdownManager';
 import PermissionMatrix, { PermissionLegend } from '../components/PermissionMatrix';
-import { getManagedUsers, addUser, updateUser, setUserActive, deleteUser, resetBdPassword, getTat, updateTat, setActivityFeedAccess, getBusinessUnits } from '../services/api';
-import { IS_PROD } from '../env';
+import { getManagedUsers, addUser, updateUser, setUserActive, unlockUser, deleteUser, resetBdPassword, getTat, updateTat, setActivityFeedAccess, getBusinessUnits } from '../services/api';
 
 // Dropdown lists a business can manage for its lead form.
 const DROPDOWN_LISTS = [
@@ -270,9 +269,7 @@ export default function SettingsPage() {
         setMsg(`Updated ${data.name}.`);
       } else {
         const created = await addUser(manageBusiness, data);
-        setMsg(IS_PROD
-          ? `Added ${data.name}. They can sign in through the portal (SSO).`
-          : `Added ${data.name}. Starting password is "${created.defaultPassword}" — share it; they can change it under Password after logging in.`);
+        setMsg(`Added ${data.name}. Starting password is "${created.defaultPassword}" — share it; they can change it under Password after logging in.`);
       }
       setModal(null);
       refresh();
@@ -280,6 +277,16 @@ export default function SettingsPage() {
       const m = err.response?.data?.message || 'Error saving user';
       setMsg(m);
       throw new Error(m); // rethrow so the modal can surface it to the user (see UserFormModal.submit)
+    } finally { setBusy(false); }
+  };
+
+  const handleUnlock = async (u) => {
+    setBusy(true); setMsg('');
+    try {
+      await unlockUser(u.id);
+      setMsg(`Unlocked ${u.name}.`); refresh();
+    } catch (err) {
+      setMsg(err.response?.data?.message || 'Error unlocking user');
     } finally { setBusy(false); }
   };
 
@@ -380,8 +387,8 @@ export default function SettingsPage() {
         <div className="card">
           <p className="section-title">Admin Account</p>
           <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 12px' }}>Logged in as <strong>{user.email}</strong></p>
-          {/* Self-service password change is DEV-ONLY; production is SSO-only. */}
-          {!IS_PROD && <button className="btn" onClick={() => navigate('/change-password')}>Change Password</button>}
+          {/* Self-service password change. */}
+          <button className="btn" onClick={() => navigate('/change-password')}>Change Password</button>
         </div>
 
         <div className="card">
@@ -390,7 +397,7 @@ export default function SettingsPage() {
               <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 6px' }}>
                 {isConsoleOnly
                   ? <>Admin — choose a business to manage its users. Create a <b>Business Admin</b> to hand off day-to-day management of that business.</>
-                  : <>You're managing the business selected in the <b>Platform</b> switcher on the left. To manage a different one, switch platform there — the other tabs below are greyed out as a reminder.</>}
+                  : <>You're managing the business selected in the <b>Business</b> switcher on the left. To manage a different one, switch business there — the other tabs below are greyed out as a reminder.</>}
               </p>
               <div style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4, background: '#f1f5f9', borderRadius: 8, padding: 3 }}>
                 {buOptions.length === 0 && <span style={{ fontSize: 12, color: '#94a3b8', padding: '6px 10px' }}>Loading businesses…</span>}
@@ -418,7 +425,7 @@ export default function SettingsPage() {
           </div>
           <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 14px' }}>
             Manager users are admins; Sales Rep users are the sales team. Use Edit to change a user's details.
-            {!IS_PROD && ' If a Sales Rep forgets their password, use Reset Password to set a new one.'}
+            ' If a Sales Rep forgets their password, use Reset Password to set a new one.'
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -432,6 +439,7 @@ export default function SettingsPage() {
                     <div style={{ fontSize: 13, fontWeight: 600 }}>
                       {u.name}
                       {!u.active && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#b45309', background: '#fef3c7', padding: '1px 6px', borderRadius: 6 }}>DISABLED</span>}
+                      {u.locked_until && new Date(u.locked_until) > new Date() && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#b91c1c', background: '#fee2e2', padding: '1px 6px', borderRadius: 6 }}>LOCKED</span>}
                     </div>
                     <div style={{ fontSize: 11, color: '#94a3b8' }}>{ROLE_LABEL[u.role] || u.role}{u.email ? ` · ${u.email}` : ''}{u.mobile ? ` · ${u.mobile}` : ''}</div>
                   </div>
@@ -439,7 +447,7 @@ export default function SettingsPage() {
                     {canAct && (canActOn(u) || u.id === user.id) && (
                       <button className="btn btn-sm" disabled={busy} onClick={() => setModal({ mode: 'edit', user: { name: u.name, email: u.email || '', mobile: u.mobile || '', role: u.role, id: u.id } })}>Edit</button>
                     )}
-                    {!IS_PROD && u.role === 'bd' && u.active && canActOn(u) && (
+                    {u.role === 'bd' && u.active && canActOn(u) && (
                       <button className="btn btn-sm" disabled={busy} onClick={() => openReset(u.id)}>
                         {resetTarget === u.id ? 'Cancel' : 'Reset Password'}
                       </button>
@@ -460,6 +468,9 @@ export default function SettingsPage() {
                         {u.activity_feed_access ? '🕒 Feed: On' : '🕒 Feed: Off'}
                       </button>
                     )}
+                    {u.locked_until && new Date(u.locked_until) > new Date() && canAct && canActOn(u) && (
+                      <button className="btn btn-sm" disabled={busy} onClick={() => handleUnlock(u)}>Unlock</button>
+                    )}
                     {u.id !== user.id && canActOn(u) && (
                       <button className="btn btn-sm" disabled={busy} onClick={() => handleToggleActive(u)}>{u.active ? 'Disable' : 'Enable'}</button>
                     )}
@@ -468,7 +479,7 @@ export default function SettingsPage() {
                     )}
                   </div>
                 </div>
-                {!IS_PROD && resetTarget === u.id && (
+                {resetTarget === u.id && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingLeft: 40 }}>
                     <input className="input" type="text" placeholder="New password (min 6 chars)" value={resetValue} onChange={e => setResetValue(e.target.value)} autoFocus />
                     <button className="btn btn-primary btn-sm" disabled={busy || resetValue.trim().length < 6} onClick={() => handleReset(u.id, u.name)}>

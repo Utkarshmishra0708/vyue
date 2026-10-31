@@ -1,22 +1,14 @@
 import axios from 'axios';
 import { BASE_PATH } from '../env';
 
-// One axios instance for the whole app. In dev, the CRA `proxy` in
-// package.json forwards /api → the Express server. In prod, set
-// REACT_APP_API_BASE if the API sits on a different origin.
-//
-// === JIOAUTIFY INTEGRATION: in production the app is served same-origin under /sales_crm by the
-// STB backend, so its API lives at /sales_crm/api/... — .env.production sets REACT_APP_API_BASE to a
-// relative /sales_crm base. In standalone dev REACT_APP_API_BASE is empty, so /api is used and the
-// CRA proxy forwards it to the local Express server on :4000. ===
+// One axios instance for the whole app. In development, the CRA `proxy` in package.json forwards
+// /api to the Express server on :4000. When the API sits on a different website, set
+// REACT_APP_API_BASE to its address. When it is empty, /api on the same website is used.
 const api = axios.create({
   baseURL: (process.env.REACT_APP_API_BASE || '') + '/api',
 });
 
-// Request interceptor: attach Bearer token from localStorage.
-// === JIOAUTIFY INTEGRATION: use a namespaced key (salescrm_token). The STB portal runs on the SAME
-// origin, and its own JioTCM session lives under localStorage 'Token' — reusing that key here would
-// clobber the portal's session. Mirrors Jio Inventory's jiovit_token / Release Planner's rp_token. ===
+// Request interceptor: attach the sign-in token (kept in the browser under salescrm_token).
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('salescrm_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -24,7 +16,7 @@ api.interceptors.request.use((config) => {
 });
 
 // Response interceptor: bounce to /login on 401 (let 403 through so
-// the UI can render a "not allowed" state). BASE_PATH keeps the redirect inside /sales_crm in prod.
+// the UI can render a "not allowed" state). BASE_PATH keeps the redirect inside the app's address path.
 api.interceptors.response.use(
   (r) => r,
   (err) => {
@@ -43,20 +35,13 @@ api.interceptors.response.use(
 // these; pages never call axios directly.
 // --------------------------------------------------------------------------
 
-// Auth — N1 unified login: { identifier, password, business_unit?, role? }
+// Auth — unified login: { identifier, password, business_unit?, role? }
 export const login          = (identifier, password, businessUnit, role) => api.post('/auth/login', { identifier, password, business_unit: businessUnit, role }).then(r => r.data);
-// Legacy BD login (kept for backward compat; new LoginPage uses unified login)
-export const bdLogin        = (userId, password)              => api.post('/auth/bd-login', { userId, password }).then(r => r.data);
 export const getMe          = ()                              => api.get('/auth/me').then(r => r.data);
 // N1: switch the signed-in Global Admin to their account on another platform, no re-login.
 export const switchPlatform = (businessUnit)                  => api.post('/auth/switch-platform', { business_unit: businessUnit }).then(r => r.data);
 export const changePassword = (currentPassword, newPassword)  => api.post('/auth/change-password', { currentPassword, newPassword }).then(r => r.data);
-// === JIOAUTIFY INTEGRATION: redeem an SSO chooser ticket. Called with just the ticket to list the
-// email's accounts, then with a chosen business_unit to get a token. See routes/auth.js /sso/select. ===
-export const ssoSelect      = (ticket, businessUnit)          => api.post('/auth/sso/select', { ticket, business_unit: businessUnit }).then(r => r.data);
-
-// Business Units — the list powering the login and SSO account-chooser screens (and in-app BU
-// config). Public (no auth): the login screen needs it before anyone is signed in. Pass a status
+// Business Units — the list powering the login screen (and in-app business config). Public (no auth): the login screen needs it before anyone is signed in. Pass a status
 // (e.g. 'active') to filter; omit for all.
 export const getBusinessUnits = (status)                     => api.get('/business-units', { params: status ? { status } : undefined }).then(r => r.data);
 // Management (Global Admin only). getBusinessUnitsManage returns full rows + a usage summary.
@@ -90,6 +75,7 @@ export const getManagedUsers= (businessUnit)                  => api.get('/users
 export const addUser        = (businessUnit, data)            => api.post('/users', { ...data, business_unit: businessUnit }).then(r => r.data);
 export const updateUser     = (id, data)                      => api.put(`/users/${id}`, data).then(r => r.data);
 export const setUserActive  = (id, active)                    => api.put(`/users/${id}/active`, { active }).then(r => r.data);
+export const unlockUser     = (id)                            => api.put(`/users/${id}/unlock`).then(r => r.data);
 export const setForecastAccess = (id, forecastAccess)         => api.put(`/users/${id}/forecast-access`, { forecast_access: forecastAccess }).then(r => r.data);
 // J1: grant/revoke a Manager's platform-wide Activity feed (Global Admin / Business Admin only).
 export const setActivityFeedAccess = (id, on)                 => api.put(`/users/${id}/activity-feed-access`, { activity_feed_access: on }).then(r => r.data);

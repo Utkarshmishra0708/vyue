@@ -1,29 +1,27 @@
-// === JIOAUTIFY INTEGRATION: load THIS app's own .env by absolute path. When this server is
-// `require`d (mounted) inside the STB backend, process.cwd() is the STB root, so a bare
-// dotenv.config() would miss these DB creds / JWT_SECRET. __dirname keeps it correct in both
-// standalone (dev) and mounted (prod) modes. Mirrors JIOINVENTORY/server/server.js and
-// RELEASEPLANNER/backend/server.js. ===
+// Settings come from backend\.env (found by its path, so the server can be started from any folder).
+// On a hosted site the same names are set in the host's own settings instead of a file.
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const { runMigrations } = require('./scripts/migrate');
+const { jwtSecretProblem, corsOptions, corsProblem } = require('./config/security');
 
 const app = express();
 
 // --------------------------------------------------------------------------
 // Global middleware — order matches reference app
 // --------------------------------------------------------------------------
-app.use(cors({ origin: '*' }));
+// Only the websites listed in CORS_ORIGINS (and, while developing, pages on this computer) may call
+// the API from a browser. See config/security.js.
+app.use(cors(corsOptions()));
 app.use(express.json({ limit: '50mb' }));
 
-// Static: uploaded PO documents accessible at /uploads/<file>. When mounted at /sales_crm this
-// resolves to /sales_crm/uploads/<file>, which is what the frontend's fileUrl() builds in prod.
+// Static: uploaded order documents, available at /uploads/<file>.
 app.use('/uploads', express.static(path.join(__dirname, process.env.UPLOAD_DIR || 'uploads')));
 
 // --------------------------------------------------------------------------
-// Routes — one file per resource, mounted at /api/<resource>. When this app is mounted at
-// /sales_crm by the STB backend, these are reached at /sales_crm/api/<resource>.
+// Routes — one file per resource, mounted at /api/<resource>.
 // --------------------------------------------------------------------------
 app.use('/api/auth',          require('./routes/auth'));
 app.use('/api/business-units', require('./routes/businessUnits'));
@@ -54,13 +52,22 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok', at: new Date().toI
 // tracked in schema_migrations. sequelize.sync() is NOT used, so the DB schema always matches
 // what's checked into git.
 //
-// === JIOAUTIFY INTEGRATION: only run migrations + bind a port when run DIRECTLY (standalone/dev).
-// When this file is `require`d by the STB backend it is mounted as a sub-app at /sales_crm and must
-// NOT start its own listener (the STB server owns the port) or block STB boot on a DB migration.
-// In production run `npm run migrate` once during deploy. `module.exports = app` below exposes the
-// app for mounting. Mirrors JIOINVENTORY/server/server.js and RELEASEPLANNER/backend/server.js. ===
+// Migrations run and the port is bound only when this file is started directly (`npm run dev`);
+// `module.exports = app` below lets tests and other tools load the app without starting it.
+// In production, prefer running `npm run migrate` once during deploy.
 // --------------------------------------------------------------------------
 if (require.main === module) {
+  // Refuse to start with an unsafe setup, and say how to fix it.
+  const problems = [
+    jwtSecretProblem(process.env.JWT_SECRET) && `${jwtSecretProblem(process.env.JWT_SECRET)}\n  Fix: run  npm run new-secret  and start the backend again.`,
+    corsProblem(),
+  ].filter(Boolean);
+  if (problems.length) {
+    console.error('\nThe server was not started:\n');
+    problems.forEach(p => console.error(`  - ${p}`));
+    console.error('');
+    process.exit(1);
+  }
   (async () => {
     try {
       await runMigrations();

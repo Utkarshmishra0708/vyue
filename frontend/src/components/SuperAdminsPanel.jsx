@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { getSuperAdmins, setSuperAdmin, getSuperAdminAudit } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import useBusinessUnits from '../utils/useBusinessUnits';
 
 // ---------------------------------------------------------------------------
 // SuperAdminsPanel — the dedicated cross-platform section.
@@ -20,6 +21,7 @@ const SCOPE_STYLE = {
 
 export default function SuperAdminsPanel({ reloadSignal }) {
   const { user, canAct } = useAuth();
+  const { meta: businessOf } = useBusinessUnits();
   const [data, setData] = useState(null);
   const [audit, setAudit] = useState([]);
   const [showAudit, setShowAudit] = useState(false);
@@ -60,7 +62,7 @@ export default function SuperAdminsPanel({ reloadSignal }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.4, color: '#334155', margin: 0 }}>
-            GLOBAL ADMINS — ALL PLATFORMS
+            OWNERS — ALL BUSINESSES
           </p>
           <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0', maxWidth: 620 }}>
             Cross-business access spanning every business at once — and any business
@@ -90,7 +92,7 @@ export default function SuperAdminsPanel({ reloadSignal }) {
                 <span style={{ fontWeight: 600, fontSize: 13 }}>{sa.name}</span>
                 {isSelf && <span style={{ fontSize: 11, color: '#94a3b8' }}> · you</span>}
                 <div style={{ fontSize: 11, color: '#64748b' }}>
-                  {sa.email} · business role: {sa.role} ({sa.business_unit})
+                  {sa.email} · business role: {sa.role} ({businessOf(sa.business_unit).name})
                   {!sa.active && <span style={{ color: '#b91c1c' }}> · disabled</span>}
                 </div>
               </div>
@@ -120,7 +122,7 @@ export default function SuperAdminsPanel({ reloadSignal }) {
             <select className="input" value={addId} onChange={e => setAddId(e.target.value)}>
               <option value="">Select a user…</option>
               {data.candidates.map(c => (
-                <option key={c.id} value={c.id}>{c.name} — {c.role} ({c.business_unit})</option>
+                <option key={c.id} value={c.id}>{c.name} — {c.role} ({businessOf(c.business_unit).name})</option>
               ))}
             </select>
           </div>

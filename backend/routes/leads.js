@@ -535,10 +535,7 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
     if (locPatch) Object.assign(payload, locPatch);
 
     // Use a static UPDATE (not existing.update) so the write does NOT rely on Sequelize's
-    // per-instance dirty-tracking. In the mounted (STB) process that dirty-tracking was flagging
-    // every data field as "unchanged", so instance.update() emitted only `SET updated_at=?` and the
-    // real edits (phase, service fields, etc.) were silently dropped — while the transaction still
-    // committed, so it looked like a no-op. A static update always writes the given columns.
+    // per-instance dirty-tracking: a static update always writes exactly the given columns.
     await Lead.update({ ...payload, updated_by: req.user.id }, { where: { id: existing.id }, transaction: t });
     await ensureSourceNameOptions(payload, t);
 

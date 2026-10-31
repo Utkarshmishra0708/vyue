@@ -78,8 +78,8 @@ function hasTransactionalData(u) {
 
 // Auto-provision every Global Admin as a Business Admin inside a business unit, so a GA can sign into
 // (and switch to) any business. Their name/email/mobile/password are copied so they log in with their
-// usual credentials; any GA who already has an account there is skipped. (Local/dev creates the row
-// directly; the production STB user-sync is intentionally not invoked from here.)
+// usual credentials; any GA who already has an account there is skipped. (Phase 3 release P3-2
+// replaces this with a proper Owner who can enter any business directly.)
 async function ensureGlobalAdminAccounts(slug, t) {
   const gas = await User.findAll({
     where: { super_admin_scope: { [Op.ne]: null }, email: { [Op.ne]: null }, active: true },

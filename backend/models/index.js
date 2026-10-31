@@ -39,6 +39,9 @@ const User = sequelize.define('User', {
   activity_feed_access: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   sort_order:    { type: DataTypes.INTEGER, defaultValue: 0 },
   last_seen:     { type: DataTypes.DATE },
+  // Sign-in lockout (migration 058): consecutive wrong passwords, and when the lock ends.
+  failed_login_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  locked_until:  { type: DataTypes.DATE },
 }, { tableName: 'users', underscored: true });
 
 // --------------------------------------------------------------------------

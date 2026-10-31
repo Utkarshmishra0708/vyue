@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login as apiLogin, getBusinessUnits } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { IS_PROD } from '../env';
 import { APP_NAME } from '../config/brand';
 
 
@@ -75,16 +74,6 @@ export default function LoginPage() {
       setBusy(false);
     }
   };
-
-  // ---- Production: SSO only ----
-  if (IS_PROD) return (
-    <div style={s.wrap}>
-      <div style={s.card}>
-        <h1 style={s.title}>{APP_NAME}</h1>
-        <p style={s.sub}>Please open {APP_NAME} from the portal to sign in.</p>
-      </div>
-    </div>
-  );
 
   // ===========================================================================
   //  STEP 1: Platform selection — 3 business cards + Global Admin (top-right)

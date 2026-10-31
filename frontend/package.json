@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Sales CRM Frontend — React SPA (CRA)",
-  "//homepage": "JIOAUTIFY INTEGRATION: served under /sales_crm by the STB backend in production builds; assets resolve to /sales_crm/static/...",
-  "homepage": "/sales_crm",
+  "homepage": ".",
   "dependencies": {
     "@svg-maps/india": "^2.0.0",
     "axios": "^1.7.2",

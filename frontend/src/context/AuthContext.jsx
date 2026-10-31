@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { getMe } from '../services/api';
-import { IS_PROD } from '../env';
 import { meets } from '../utils/permissions';
 
 const AuthContext = createContext(null);
@@ -13,8 +12,6 @@ export function AuthProvider({ children }) {
   const [consoleMode, setConsoleMode] = useState(() => localStorage.getItem('salescrm_console') === '1');
 
   // On mount, if a token exists, hydrate the user via /api/auth/me.
-  // === JIOAUTIFY INTEGRATION: token is namespaced as salescrm_token to avoid clobbering the STB
-  // portal's own 'Token' (JioTCM) on the shared origin. Mirrors Jio Inventory / Release Planner. ===
   useEffect(() => {
     const token = localStorage.getItem('salescrm_token');
     if (!token) { setLoading(false); return; }
@@ -64,16 +61,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('salescrm_token');
     localStorage.removeItem('salescrm_console');
     setConsoleMode(false);
-    // Also clear the portal's own session key so a shared-origin STB portal login is signed out too.
-    localStorage.removeItem('token');
     setUser(null);
-    // === JIOAUTIFY INTEGRATION: in production Sales CRM runs inside the STB portal window. On sign
-    // out, tell the user they're being redirected and close the window so control returns to the
-    // portal. In standalone dev there's no portal window to close, so fall back to the login route. ===
-    if (IS_PROD) {
-      window.alert('You have been logged out. Redirecting to the portal…');
-      window.close();
-    }
   }, []);
 
   // Permission predicates

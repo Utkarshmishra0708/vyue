@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { switchPlatform } from '../services/api';
 import { ROLE_LABEL } from '../utils/constants';
 import useBusinessUnits from '../utils/useBusinessUnits';
-import { IS_PROD } from '../env';
 import { APP_NAME, APP_LOGO } from '../config/brand';
 
 const NAV_ICONS = {
@@ -27,7 +26,7 @@ export default function Sidebar() {
       login(data.token, data.user);          // updates the stored token
       window.location.reload();              // re-bootstraps the whole app under the new platform
     } catch {
-      window.alert('Could not switch platform. Please try again.');
+      window.alert('Could not switch business. Please try again.');
       setSwitching(false);
     }
   };
@@ -53,7 +52,7 @@ export default function Sidebar() {
     ? [
         { path: '/settings', label: 'Organization Settings' },
         { path: '/business-units', label: 'Businesses' },
-        ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
+        { path: '/change-password', label: 'Password' },
       ]
     : [
         { path: '/leads',     label: 'Leads',     disabled: !canView('leads') },
@@ -76,7 +75,7 @@ export default function Sidebar() {
           : (user.role === 'business_admin'
               ? [{ path: '/business-units', label: 'Business' }]
               : [])),
-        ...(!IS_PROD ? [{ path: '/change-password', label: 'Password' }] : []),
+        { path: '/change-password', label: 'Password' },
       ];
 
   return (
@@ -84,10 +83,8 @@ export default function Sidebar() {
       width: collapsed ? 64 : 220, flexShrink: 0, background: '#0f172a', color: '#cbd5e1',
       display: 'flex', flexDirection: 'column', height: '100vh', transition: 'width .15s',
     }}>
-      {/* Logo → the app's main entry page ("Select your business to continue"). That screen is the
-          pre-login landing, so reaching it ends the current session (same as Sign out): in standalone
-          dev it lands on the business-selection screen; in production it returns to the Jioautify
-          portal. Works for every role and both businesses. */}
+      {/* Logo → the sign-in page ("Select your business to continue"). Reaching it ends the current
+          session, the same as Sign out. Works for every role. */}
       <button
         type="button"
         onClick={logout}
