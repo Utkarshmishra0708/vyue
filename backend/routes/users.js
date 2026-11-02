@@ -2,6 +2,7 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const { User, Lead } = require('../models');
 const { Op } = require('sequelize');
+const { ownerCopyIds } = require('../services/ownerSession');
 const audit = require('../services/audit');
 const { authenticate, adminOnly } = require('../middleware/auth');
 const {
@@ -66,6 +67,9 @@ router.get('/manage', authenticate, adminOnly, async (req, res) => {
     // A cross-platform Super Admin may inspect any platform's user list via ?business_unit=;
     // everyone else is pinned to their own.
     where.business_unit = isSuperAdmin(req.user) ? (req.query.business_unit || req.user.business_unit) : req.user.business_unit;
+    // Leftover copies of an Owner's account (older versions made one per business) are not people to manage.
+    const copies = await ownerCopyIds(User);
+    if (copies.length) where.id = { [Op.notIn]: copies };
     const users = await User.findAll({
       where,
       attributes: { exclude: ['password_hash'] },

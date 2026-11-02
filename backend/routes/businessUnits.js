@@ -76,29 +76,6 @@ function hasTransactionalData(u) {
   return u.users > 0 || u.leads > 0 || u.chains > 0 || u.vocs > 0;
 }
 
-// Auto-provision every Global Admin as a Business Admin inside a business unit, so a GA can sign into
-// (and switch to) any business. Their name/email/mobile/password are copied so they log in with their
-// usual credentials; any GA who already has an account there is skipped. (Phase 3 release P3-2
-// replaces this with a proper Owner who can enter any business directly.)
-async function ensureGlobalAdminAccounts(slug, t) {
-  const gas = await User.findAll({
-    where: { super_admin_scope: { [Op.ne]: null }, email: { [Op.ne]: null }, active: true },
-    transaction: t,
-  });
-  const seen = new Set();
-  for (const g of gas) {
-    if (seen.has(g.email)) continue;
-    seen.add(g.email);
-    const exists = await User.findOne({ where: { email: g.email, business_unit: slug }, transaction: t });
-    if (exists) continue;
-    await User.create({
-      name: g.name, email: g.email, mobile: g.mobile, business_unit: slug,
-      role: 'business_admin', password_hash: g.password_hash, initials: g.initials,
-      color: g.color, active: true, super_admin_scope: g.super_admin_scope,
-    }, { transaction: t });
-  }
-}
-
 // GET /api/business-units[?status=active] — PUBLIC. Non-sensitive presentation fields only.
 router.get('/', async (req, res) => {
   try {
@@ -294,7 +271,6 @@ router.post('/', globalAdminOnly, async (req, res) => {
       }
 
       // Give every Global Admin an account here so they can sign in to / switch to this business.
-      await ensureGlobalAdminAccounts(s, t);
       return bu;
     });
 
@@ -455,7 +431,6 @@ router.post('/:slug/clone', globalAdminOnly, async (req, res) => {
       }
 
       // Global Admins get an account in the clone too.
-      await ensureGlobalAdminAccounts(s, t);
       return bu;
     });
 

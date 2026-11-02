@@ -122,19 +122,13 @@ async function main() {
     bu.changed('config', true);
     await bu.save();
 
-    // 2. Test sign-ins: a Business Admin and a Manager, plus the Owner's own email in this business so
-    //    the Owner can sign in here too.
+    // 2. Test sign-ins: a Business Admin and a Manager.
+    //    (The Owner needs no account here: an Owner can enter every business.)
     const mk = async (where, defaults) => (await User.findOrCreate({ where, defaults: { ...where, ...defaults } }))[0];
     const admin = await mk({ email: `admin.${slug}.sample@example.com`, business_unit: slug },
       { name: `Sample Admin (${bu.name})`, initials: 'SA', color: 'bg-slate-700', role: 'business_admin', password_hash: testHash });
     await mk({ email: `manager.${slug}.sample@example.com`, business_unit: slug },
       { name: `Sample Manager (${bu.name})`, initials: 'SM', color: 'bg-teal-600', role: 'pmo', password_hash: testHash });
-    if (owner && owner.email && owner.business_unit !== slug) {
-      await User.findOrCreate({
-        where: { email: owner.email, business_unit: slug },
-        defaults: { name: owner.name, initials: owner.initials || 'OW', color: owner.color || 'bg-slate-700', role: 'business_admin', password_hash: owner.password_hash },
-      });
-    }
     // Sales reps for this business (seeded ones if present, otherwise two samples).
     let reps = await User.findAll({ where: { business_unit: slug, role: 'bd', active: true }, order: [['id', 'ASC']] });
     if (!reps.length) {
@@ -311,7 +305,7 @@ async function main() {
   console.log(`  Manager:        manager.<business>.sample@example.com`);
   console.log(`  Password for both: ${TEST_PASSWORD}`);
   console.log(`  Sales Reps: sign in with their full name (as shown in Settings → Users) and the password ${TEST_PASSWORD}.`);
-  if (owner) console.log(`  Owner: ${owner.email} can now also sign in inside every business with the Owner password.`);
+  if (owner) console.log(`  Owner: ${owner.email} enters every business with the Owner button, then picks one (or picks a business on the sign-in page and uses the Owner email).`);
   console.log('\nTo remove all sample data later:  npm run sample -- --clear');
 }
 

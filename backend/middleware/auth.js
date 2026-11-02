@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-const { User } = require('../models');
+const { User, BusinessUnit } = require('../models');
+const { sessionBusiness } = require('../services/ownerSession');
 
 // authenticate — reads Bearer token, verifies, loads user, stamps last_seen
 async function authenticate(req, res, next) {
@@ -21,6 +22,15 @@ async function authenticate(req, res, next) {
 
     // Non-blocking last_seen stamp
     user.update({ last_seen: new Date() }).catch(() => {});
+
+    // An Owner's pass can name the business they are working in. Everything downstream (leads, settings,
+    // lists) is scoped by user.business_unit, so it is set here, in memory only (never saved). A pass
+    // from anyone else can't change business, and an unknown or disabled business is ignored.
+    if (payload.bu && user.super_admin_scope) {
+      const active = (await BusinessUnit.findAll({ where: { status: 'active' }, attributes: ['slug'] })).map(b => b.slug);
+      const chosen = sessionBusiness(payload.bu, active);
+      if (chosen) user.setDataValue('business_unit', chosen);
+    }
 
     req.user = user;
 

@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { User, BusinessUnit, ServiceDefinition } = require('../models');
 const { authenticate } = require('../middleware/auth');
 const { lockStatus, afterFailedAttempt, lockedMessage } = require('../services/lockout');
+const { Op } = require('sequelize');
 const {
   effectivePermissions, PERMISSION_MANAGER_ROLES, isSuperAdmin, superAdminScope, canSeeActivityFeed,
   MODULES, moduleEnabledForBu,
@@ -13,18 +14,6 @@ const {
 // client gates its entire navigation on `permissions`, so a login response that omits them makes
 // the app think the user has no modules until the next background refresh.
 async function authUserPayload(user) {
-  // GA scope is email-level: if ANY row sharing this email holds a super_admin_scope grant,
-  // this session inherits it. This covers auto-provisioned accounts that may not have the
-  // column set yet (race with sync, legacy rows, etc.).
-  if (user.email && !user.super_admin_scope) {
-    const { Op } = require('sequelize');
-    const sibling = await User.findOne({
-      where: { email: user.email, super_admin_scope: { [Op.ne]: null } },
-      attributes: ['super_admin_scope'],
-    });
-    if (sibling) user.super_admin_scope = sibling.super_admin_scope;
-  }
-
   const safe = user.toJSON();
   delete safe.password_hash;
   delete safe.module_permissions;          // the resolved map below is the contract
@@ -54,15 +43,15 @@ async function authUserPayload(user) {
   } catch {
     safe.bu_modules = null;
   }
-  // Platforms this person can switch between in-tool (N1): every active account under the same
-  // email. One email holds at most one account per business unit (migration 002), so this is the
-  // set of platforms they may hop to without re-entering credentials. A BD (no email) has just one.
-  if (user.email) {
-    const siblings = await User.findAll({
-      where: { email: user.email, active: true },
-      attributes: ['business_unit'],
-    });
-    safe.platforms = [...new Set(siblings.map(s => s.business_unit))].sort();
+  // Businesses this person can switch between without signing in again. An Owner can enter every active
+  // business. Anyone else can switch only between businesses where they have an account under the same
+  // email (a person with no email has just their own).
+  if (isSuperAdmin(user)) {
+    const all = await BusinessUnit.findAll({ where: { status: 'active' }, attributes: ['slug'], order: [['sort_order', 'ASC'], ['name', 'ASC']] });
+    safe.platforms = all.map(b => b.slug);
+  } else if (user.email) {
+    const siblings = await User.findAll({ where: { email: user.email, active: true }, attributes: ['business_unit'] });
+    safe.platforms = [...new Set(siblings.map(x => x.business_unit))].sort();
   } else {
     safe.platforms = [user.business_unit];
   }
@@ -70,11 +59,19 @@ async function authUserPayload(user) {
 }
 
 
-const signToken = (user) => jwt.sign(
-  { id: user.id, role: user.role },
+// `businessSlug` is only for an Owner: it names the business the session is working in.
+const signToken = (user, businessSlug) => jwt.sign(
+  businessSlug ? { id: user.id, role: user.role, bu: businessSlug } : { id: user.id, role: user.role },
   process.env.JWT_SECRET,
   { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
 );
+
+// An Owner's account, found by email, regardless of which business it is stored under.
+const findOwnerByEmail = (email) => User.findOne({
+  where: { email, super_admin_scope: { [Op.ne]: null } },
+  order: [['id', 'ASC']],
+});
+const activeBusiness = (slug) => BusinessUnit.findOne({ where: { slug, status: 'active' }, attributes: ['slug'] });
 
 // POST /api/auth/login — unified credential login.
 //
@@ -95,20 +92,22 @@ router.post('/login', async (req, res) => {
     if (!ident || !password) return res.status(400).json({ message: 'Credentials required' });
 
     let user;
+    let enterBusiness = null;   // set when an Owner signs in to a particular business
 
     if (role === 'super_admin' || (!role && !business_unit && !legacyEmail)) {
-      // --- Global Admin login: email with a super_admin_scope grant ---
-      const { Op } = require('sequelize');
-      user = await User.findOne({
-        where: { email: ident, super_admin_scope: { [Op.ne]: null } },
-      });
+      // --- Owner button: an email that holds the Owner grant ---
+      user = await findOwnerByEmail(ident);
     } else if (business_unit) {
-      // --- Platform login: find by email first, then by name, on this platform ---
-      // Try email match (covers Business Admin, Manager, and any Team Member with an email)
-      user = await User.findOne({ where: { email: ident, business_unit } });
-      // Fallback: match by full name on this platform (Team Members typically have no email)
-      if (!user) {
-        user = await User.findOne({ where: { name: ident, business_unit } });
+      // --- Business sign-in: an Owner's email works for every business, because an Owner has one
+      // account for the whole company and can enter any business. ---
+      const owner = ident.includes('@') ? await findOwnerByEmail(ident) : null;
+      if (owner) {
+        user = owner;
+        enterBusiness = business_unit;
+      } else {
+        // Everyone else: find by email first, then by full name, within this business
+        user = await User.findOne({ where: { email: ident, business_unit } });
+        if (!user) user = await User.findOne({ where: { name: ident, business_unit } });
       }
     } else {
       // Legacy: email-only lookup (old frontend without business_unit)
@@ -134,7 +133,15 @@ router.post('/login', async (req, res) => {
       await User.update({ failed_login_count: 0, locked_until: null }, { where: { id: user.id } });
     }
 
-    const token = signToken(user);
+    // An Owner signing in to a business: the pass names that business, if it exists and is active.
+    if (enterBusiness) {
+      if (!(await activeBusiness(enterBusiness))) {
+        return res.status(404).json({ message: 'That business does not exist or is not active.' });
+      }
+      user.setDataValue('business_unit', enterBusiness);
+    }
+
+    const token = signToken(user, enterBusiness);
     return res.json({ token, user: await authUserPayload(user) });
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -159,26 +166,38 @@ router.get('/me', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/auth/switch-platform — body { business_unit }  (N1: in-tool platform switching)
-//
-// Hops the signed-in user to their account on another platform WITHOUT re-entering credentials.
-// Safe because the caller is already authenticated, and it only ever issues a token for another
-// account with the SAME email — one email holds at most one account per business unit (migration
-// 002), so the email is the person's identity across platforms. A BD (no email) cannot switch.
-router.post('/switch-platform', authenticate, async (req, res) => {
+// POST /api/auth/enter-business — body { business_unit }. Owner only.
+// An Owner has one account for the whole company. Picking a business issues a new sign-in pass that
+// names it, with no second sign-in and no copy of the account.
+async function enterBusinessHandler(req, res) {
   try {
     const { business_unit } = req.body;
     if (!business_unit) return res.status(400).json({ message: 'business_unit is required' });
-    if (!req.user.email) return res.status(400).json({ message: 'This account is not able to switch platforms.' });
+    if (!isSuperAdmin(req.user)) return res.status(403).json({ message: 'Only an Owner can enter any business.' });
+    if (!(await activeBusiness(business_unit))) return res.status(404).json({ message: 'That business does not exist or is not active.' });
+    req.user.setDataValue('business_unit', business_unit);
+    return res.json({ token: signToken(req.user, business_unit), user: await authUserPayload(req.user) });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+}
+router.post('/enter-business', authenticate, enterBusinessHandler);
+
+// POST /api/auth/switch-platform — body { business_unit }. Switching business without signing in again.
+// An Owner enters any business (see above). Anyone else hops to their account on another business under
+// the same email (one email holds at most one account per business); a person with no email can't switch.
+router.post('/switch-platform', authenticate, async (req, res) => {
+  try {
+    if (isSuperAdmin(req.user)) return enterBusinessHandler(req, res);
+    const { business_unit } = req.body;
+    if (!business_unit) return res.status(400).json({ message: 'business_unit is required' });
+    if (!req.user.email) return res.status(400).json({ message: 'This account is not able to switch businesses.' });
     if (business_unit === req.user.business_unit) {
-      // Already there — hand back a fresh token for the same account rather than erroring.
       return res.json({ token: signToken(req.user), user: await authUserPayload(req.user) });
     }
-
     const target = await User.findOne({ where: { email: req.user.email, business_unit } });
-    if (!target)         return res.status(404).json({ message: 'You do not have an account on that platform.' });
-    if (!target.active)  return res.status(403).json({ message: 'Your account on that platform is disabled.' });
-
+    if (!target)         return res.status(404).json({ message: 'You do not have an account in that business.' });
+    if (!target.active)  return res.status(403).json({ message: 'Your account in that business is disabled.' });
     return res.json({ token: signToken(target), user: await authUserPayload(target) });
   } catch (err) {
     return res.status(500).json({ message: err.message });
