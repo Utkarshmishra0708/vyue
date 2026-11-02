@@ -496,7 +496,7 @@ export default function LeadsPage() {
               <>
                 <select className="input" style={{ width: 160 }} value={bulkValue} onChange={e => setBulkValue(e.target.value)}>
                   <option value="">Select…</option>
-                  {(bulkAction === 'reassign' ? bds.map(b => ({ id: b.id, label: b.name })) : PHASES.map(p => ({ id: p, label: p })))
+                  {(bulkAction === 'reassign' ? bds.map(b => ({ id: b.id, label: b.label || b.name })) : PHASES.map(p => ({ id: p, label: p })))
                     .map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                 </select>
                 <button className="btn btn-sm btn-primary" onClick={executeBulk}>Apply</button>

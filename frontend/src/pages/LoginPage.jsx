@@ -12,7 +12,7 @@ export default function LoginPage() {
   // Steps: 'platform' → 'credentials' | 'ga-credentials'
   const [step, setStep]         = useState('platform');
   const [bu, setBu]             = useState(null);     // selected business
-  const [identifier, setIdent]  = useState('');        // email or name
+  const [identifier, setIdent]  = useState('');        // email or username
   const [password, setPassword] = useState('');
   const [busy, setBusy]         = useState(false);
   const [error, setError]       = useState('');
@@ -155,10 +155,10 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <label style={s.label}>Email or Full Name</label>
+          <label style={s.label}>Email or Username</label>
           <input type="text" value={identifier} onChange={e => setIdent(e.target.value)}
             required autoFocus style={s.input}
-            placeholder="your.email@company.com or Your Full Name" />
+            placeholder="your.email@company.com or Your.Username" />
           <label style={s.label}>Password</label>
           <input type="password" value={password} onChange={e => setPassword(e.target.value)}
             required style={s.input} placeholder="••••••••" />

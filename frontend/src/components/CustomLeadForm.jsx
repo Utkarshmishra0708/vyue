@@ -420,7 +420,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
             <label className="field-label">Lead Owner *</label>
             <select className="input" value={form.owner_id} onChange={e => setF('owner_id', e.target.value)}>
               <option value="">Select owner</option>
-              {bds.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              {bds.map(b => <option key={b.id} value={b.id}>{b.label || b.name}</option>)}
             </select>
             {bds.length === 0 && (
               <p style={{ fontSize: 11.5, color: '#b45309', marginTop: 4 }}>

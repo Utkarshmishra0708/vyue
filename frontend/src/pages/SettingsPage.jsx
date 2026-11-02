@@ -95,7 +95,7 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
     // Await the save so a server error (e.g. duplicate email) is shown INSIDE the modal rather than on
     // the page behind it — otherwise a failed add looks like nothing happened.
     try {
-      await onSubmit({ name, email, mobile, role: form.role, ...(isAdd ? { permissions: perms } : {}) });
+      await onSubmit({ name, email, mobile, role: form.role, ...(isAdd ? { permissions: perms } : { username: String(form.username || '').trim() }) });
     } catch (er) {
       setErr(er.message || 'Could not save user. Please try again.');
     }
@@ -142,6 +142,13 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
               <label className="field-label">Email *</label>
               <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="name@company.com" required />
             </div>
+            {mode === 'edit' && (
+              <div>
+                <label className="field-label">Username</label>
+                <input className="input" value={form.username || ''} onChange={set('username')} placeholder="First.Last" pattern="[A-Za-z0-9][A-Za-z0-9._\-]{1,62}" title="Letters, digits, dots, hyphens and underscores, no spaces" />
+                <p style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 0' }}>Used to sign in, along with the email.</p>
+              </div>
+            )}
             <div>
               <label className="field-label">Mobile *</label>
               <input className="input" value={form.mobile} onChange={set('mobile')} placeholder="10-digit mobile number" inputMode="numeric" maxLength={10} required />
@@ -269,7 +276,7 @@ export default function SettingsPage() {
         setMsg(`Updated ${data.name}.`);
       } else {
         const created = await addUser(manageBusiness, data);
-        setMsg(`Added ${data.name}. Starting password is "${created.defaultPassword}" — share it; they can change it under Password after logging in.`);
+        setMsg(`Added ${data.name}. Username: ${created.username}. Starting password is "${created.defaultPassword}" — share it; they can change it under Password after logging in.`);
       }
       setModal(null);
       refresh();
@@ -441,11 +448,11 @@ export default function SettingsPage() {
                       {!u.active && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#b45309', background: '#fef3c7', padding: '1px 6px', borderRadius: 6 }}>DISABLED</span>}
                       {u.locked_until && new Date(u.locked_until) > new Date() && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#b91c1c', background: '#fee2e2', padding: '1px 6px', borderRadius: 6 }}>LOCKED</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{ROLE_LABEL[u.role] || u.role}{u.email ? ` · ${u.email}` : ''}{u.mobile ? ` · ${u.mobile}` : ''}</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{ROLE_LABEL[u.role] || u.role}{u.username ? ` · ${u.username}` : ''}{u.email ? ` · ${u.email}` : ''}{u.mobile ? ` · ${u.mobile}` : ''}</div>
                   </div>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                     {canAct && (canActOn(u) || u.id === user.id) && (
-                      <button className="btn btn-sm" disabled={busy} onClick={() => setModal({ mode: 'edit', user: { name: u.name, email: u.email || '', mobile: u.mobile || '', role: u.role, id: u.id } })}>Edit</button>
+                      <button className="btn btn-sm" disabled={busy} onClick={() => setModal({ mode: 'edit', user: { name: u.name, email: u.email || '', mobile: u.mobile || '', role: u.role, id: u.id, username: u.username || '' } })}>Edit</button>
                     )}
                     {u.role === 'bd' && u.active && canActOn(u) && (
                       <button className="btn btn-sm" disabled={busy} onClick={() => openReset(u.id)}>

@@ -715,11 +715,17 @@ router.post('/bulk', adminOnly, async (req, res) => {
     return res.status(400).json({ message: 'Maximum 500 rows per upload.' });
   }
 
-  const users = await User.findAll({ where: { business_unit: bu, active: true }, attributes: ['id', 'email', 'name'] });
-  // Leads are assigned by owner NAME in the import. Names can repeat, so map each name to the list of
-  // matching users and disambiguate per row (a single match assigns; zero or many is a row error).
+  const users = await User.findAll({ where: { business_unit: bu, active: true }, attributes: ['id', 'email', 'name', 'username'] });
+  // Leads are assigned by the Lead Owner column: a username (Priya1.Nair), an email, or a full name that
+  // only one person has. Names can repeat, so a name shared by several people is a row error that asks
+  // for the username instead.
   const usersByName = {};
-  users.forEach(u => { if (u.name) { const k = u.name.toLowerCase().trim(); (usersByName[k] = usersByName[k] || []).push(u); } });
+  const usersByLogin = {};   // username and email: each belongs to exactly one person
+  users.forEach(u => {
+    if (u.name) { const k = u.name.toLowerCase().trim(); (usersByName[k] = usersByName[k] || []).push(u); }
+    if (u.username) usersByLogin[u.username.toLowerCase()] = u;
+    if (u.email) usersByLogin[u.email.toLowerCase()] = u;
+  });
   // This business's service catalog — drives how the svc:* columns are parsed into services_json.
   const catalog = await ServiceDefinition.findAll({ where: { business_unit: bu, active: true }, order: [['sort_order', 'ASC']] });
   // Contacts are required on import only if the template marks a contact field mandatory (same rule
@@ -747,10 +753,11 @@ router.post('/bulk', adminOnly, async (req, res) => {
 
     let ownerId = null;
     if (ownerName) {
-      const matches = usersByName[ownerName.toLowerCase()] || [];
+      const byLogin = usersByLogin[ownerName.toLowerCase()];
+      const matches = byLogin ? [byLogin] : (usersByName[ownerName.toLowerCase()] || []);
       if (matches.length === 1) ownerId = matches[0].id;
       else if (matches.length === 0) errs.push({ field: 'Lead Owner', message: `No active user "${ownerName}" in this business` });
-      else errs.push({ field: 'Lead Owner', message: `Multiple active users named "${ownerName}" — cannot assign by name. Rename one or assign manually after import.` });
+      else errs.push({ field: 'Lead Owner', message: `More than one active person is named "${ownerName}". Use their username in the Lead Owner column (for example ${matches.map(m => m.username).filter(Boolean).slice(0, 2).join(' or ')}).` });
     }
 
     if (phase && !VALID_PHASES.includes(phase)) {

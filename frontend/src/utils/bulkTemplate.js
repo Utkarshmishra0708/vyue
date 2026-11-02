@@ -161,7 +161,8 @@ export async function downloadTemplate(businessUnit, config, users, businessName
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
   const columns = getTemplateColumns(businessUnit, config);
-  const ownerNames = users.map(u => u.name).filter(Boolean);
+  // Active people, listed by username (full names can repeat, usernames can't).
+  const ownerNames = users.filter(u => u.active !== false).map(u => u.username || u.name).filter(Boolean);
   // Whether the template marks a contact field mandatory (drives the Instructions wording).
   const contactsSecForInstr = (config && config.formSchema && Array.isArray(config.formSchema.sections))
     ? config.formSchema.sections.find(s => s.key === 'contacts') : null;
@@ -289,7 +290,7 @@ export async function downloadTemplate(businessUnit, config, users, businessName
     ['Order End Date', 'YYYY-MM-DD. When the order/service contract ends.'],
     [],
     ['— OWNER & CONTACTS —', ''],
-    ['Lead Owner *', `Required (dropdown). The salesperson/Sales Rep who will OWN each lead — the import assigns the lead to that user. Pick from the list. Must match an active user in this business. Available: ${ownerNames.join(', ')}`],
+    ['Lead Owner *', `Required (dropdown). The salesperson/Sales Rep who will OWN each lead — the import assigns the lead to that user. Pick a username from the list (the email also works). Available: ${ownerNames.join(', ')}`],
     (contactsMandatory
       ? ['Contact 1 Name / Email *', 'Required — at least one contact with both Name and Email.']
       : ['Contact 1 Name / Email', 'Optional. If you fill a contact Name you must also fill its Email (and vice-versa).']),

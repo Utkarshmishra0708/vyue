@@ -9,6 +9,9 @@ const sequelize = require('../config/database');
 const User = sequelize.define('User', {
   id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name:          { type: DataTypes.STRING(255), allowNull: false },
+  // Sign-in name, made from the full name (Priya.Nair, Priya1.Nair...) and unique within a business. See
+  // services/username.js. Several people may share a full name; nobody shares a username.
+  username:      { type: DataTypes.STRING(64), allowNull: true },
   // email is unique PER business unit (composite key email_business_unit — see migration 002), so
   // one corporate email may hold both a signage and a jhes account. NULL emails (BDs) are exempt.
   email:         { type: DataTypes.STRING(255), unique: 'email_business_unit', allowNull: true },
@@ -360,6 +363,14 @@ const DropdownOption = sequelize.define('DropdownOption', {
 // ENUM('signage','jhes','surveillance'). users/leads/global_pos.business_unit are
 // slug FKs into this table, so a new BU needs no schema change. status gates
 // login/new-records (active | disabled | archived).
+// A new person gets their username automatically, unless one was given.
+User.addHook('beforeCreate', async (user, options) => {
+  if (!user.username) {
+    const { nextUsername } = require('../services/username');
+    user.username = await nextUsername(User, user.name, user.business_unit, options && options.transaction);
+  }
+});
+
 // --------------------------------------------------------------------------
 const BusinessUnit = sequelize.define('BusinessUnit', {
   id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },

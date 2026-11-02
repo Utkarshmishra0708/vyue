@@ -72,6 +72,11 @@ if (require.main === module) {
     try {
       await runMigrations();
 
+      // People created before usernames existed get theirs now (in the order they were created).
+      const { User: UserModel } = require('./models');
+      const madeUsernames = await require('./services/username').ensureUsernames(UserModel, await require('./services/ownerSession').ownerCopyIds(UserModel));
+      if (madeUsernames) console.log(`[usernames] created ${madeUsernames} username(s)`);
+
       // Assign customer_code / lead_ref to any leads missing them (one-time, idempotent).
       const { backfillLeadCodes } = require('./services/leadCodes');
       await backfillLeadCodes();

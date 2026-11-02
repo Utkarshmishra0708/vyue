@@ -38,26 +38,37 @@ async function getOrCreateUnassignedBd(businessUnit) {
 // GET /api/users — list users. Used by the login page to show BD cards.
 // Query params: role, business_unit
 // Public-ish read (no auth) so the login screen can render BDs.
-router.get('/', async (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
     const where = { active: true };
-    if (req.query.role)          where.role = req.query.role;
-    if (req.query.business_unit) where.business_unit = req.query.business_unit;
+    if (req.query.role) where.role = req.query.role;
+    // Everyone sees their own business's people; an Owner may ask for any business.
+    where.business_unit = isSuperAdmin(req.user) ? (req.query.business_unit || req.user.business_unit) : req.user.business_unit;
 
     const users = await User.findAll({
       where,
-      attributes: { exclude: ['password_hash', 'email'] }, // never leak these to unauthenticated callers
+      // Contact details and sign-in details are not for colleagues' lists (admins use /manage).
+      attributes: { exclude: ['password_hash', 'email', 'mobile', 'failed_login_count', 'locked_until'] },
       order: [['sort_order', 'ASC'], ['name', 'ASC']],
     });
-    return res.json(users);
+    // Names can repeat. For each person, `label` is their name, with their username added in brackets
+    // only when someone else in the list has the same name, so dropdowns can tell them apart.
+    const seen = {};
+    users.forEach(u => { const k = String(u.name).trim().toLowerCase(); seen[k] = (seen[k] || 0) + 1; });
+    return res.json(users.map(u => {
+      const o = u.toJSON();
+      o.label = seen[String(u.name).trim().toLowerCase()] > 1 ? `${u.name} (${u.username})` : u.name;
+      delete o.username;
+      return o;
+    }));
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
 });
 
 // GET /api/users/manage — admin/PMO only. Full user records (BD + PMO) for a business unit, used by
-// the Settings page to list, edit and manage the team. Unlike the public GET /, this includes email
-// and mobile because the caller is an authenticated admin.
+// the Settings page to list, edit and manage the team. Unlike GET /, this includes email, mobile and
+// username because the caller is an authenticated admin.
 router.get('/manage', authenticate, adminOnly, async (req, res) => {
   try {
     // Include inactive (disabled) users too, so the Settings page can re-enable them.
@@ -84,13 +95,14 @@ router.get('/manage', authenticate, adminOnly, async (req, res) => {
 // Validate the add/edit payload shared by POST and PUT. Returns an error string or null.
 // Roles that can be created/edited through the UI (super_admin is set up out-of-band — one for now).
 const VALID_ROLES = ['business_admin', 'pmo', 'bd', 'forecast'];
-function validateUserPayload({ name, email, mobile, role }) {
+function validateUserPayload({ name, email, mobile, role }, currentRole) {
   if (!name || !name.trim())   return 'Name is required';
   if (!email || !email.trim()) return 'Email is required';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Enter a valid email';
   if (!mobile || !mobile.trim()) return 'Mobile is required';
   if (!/^\d{10}$/.test(mobile.trim())) return 'Mobile must be exactly 10 digits';
-  if (!VALID_ROLES.includes(role)) return 'Role must be Business Admin, Manager, Sales Rep or Forecast';
+  // A person's own current role is always acceptable (an Owner's role is super_admin, which can't be assigned).
+  if (!VALID_ROLES.includes(role) && role !== currentRole) return 'Role must be Business Admin, Manager, Sales Rep or Forecast';
   return null;
 }
 
@@ -113,6 +125,10 @@ const canManageRole = (actor, targetRole) => {
 // to their own.
 const resolveBusinessUnit = (actor, requestedBu) => (isSuperAdmin(actor) ? (requestedBu || actor.business_unit) : actor.business_unit);
 
+// A username: letters, digits, dots, hyphens or underscores, starting with a letter or digit. No spaces and
+// no @, so it can never be mistaken for an email.
+const USERNAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{1,62}$/;
+
 // Can `actor` manage the existing `target` user? Must be allowed by the role hierarchy AND (unless the
 // actor is super_admin) within the actor's own business.
 function canActOn(actor, target) {
@@ -132,9 +148,10 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
     if (invalid) return res.status(400).json({ message: invalid });
     if (!canManageRole(req.user, role)) return res.status(403).json({ message: `You are not allowed to create a ${role} account.` });
 
-    // Email is unique per business unit (see migration 002).
+    // Email is unique per business (see migration 002). Full names may repeat: each person gets their own
+    // username (Priya.Nair, Priya1.Nair...), which is made when the account is created.
     const clash = await User.findOne({ where: { email: email.trim(), business_unit } });
-    if (clash) return res.status(409).json({ message: `A ${business_unit} user with email ${email.trim()} already exists` });
+    if (clash) return res.status(409).json({ message: `Someone in this business already uses the email ${email.trim()}.` });
 
     const count = await User.count({ where: { business_unit, role } });
     const initials = name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
@@ -169,11 +186,10 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
 router.put('/:id', authenticate, adminOnly, async (req, res) => {
   try {
     const { name, email, mobile, role } = req.body;
-    const invalid = validateUserPayload({ name, email, mobile, role });
-    if (invalid) return res.status(400).json({ message: invalid });
-
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
+    const invalid = validateUserPayload({ name, email, mobile, role }, user.role);
+    if (invalid) return res.status(400).json({ message: invalid });
     const isSelf = String(user.id) === String(req.user.id);
     // Anyone can edit their own profile (but not their own role, below); managing others follows the
     // role hierarchy.
@@ -185,16 +201,29 @@ router.put('/:id', authenticate, adminOnly, async (req, res) => {
       return res.status(400).json({ message: 'You cannot change your own role' });
     }
 
-    // Email stays unique per business unit — reject a clash with a *different* user.
+    // Email stays unique per business — reject a clash with a *different* user. The username is not
+    // changed when someone is renamed, so their sign-in keeps working.
     const clash = await User.findOne({ where: { email: email.trim(), business_unit: user.business_unit } });
     if (clash && clash.id !== user.id) {
-      return res.status(409).json({ message: `Another ${user.business_unit} user already uses ${email.trim()}` });
+      return res.status(409).json({ message: `Someone in this business already uses the email ${email.trim()}.` });
+    }
+
+    // The username can be changed (it is what the person signs in with). It must be well formed and
+    // unused by anyone else in the same business.
+    let newUsername = null;
+    if (req.body.username !== undefined && String(req.body.username).trim() !== String(user.username || '')) {
+      newUsername = String(req.body.username).trim();
+      if (!USERNAME_RE.test(newUsername)) {
+        return res.status(400).json({ message: 'A username can use letters, digits, dots, hyphens and underscores, with no spaces (at least 2 characters).' });
+      }
+      const taken = await User.findOne({ where: { username: newUsername, business_unit: user.business_unit } });
+      if (taken && taken.id !== user.id) return res.status(409).json({ message: `The username ${newUsername} is already used by someone in this business.` });
     }
 
     // Persist via an explicit UPDATE.
     const initials = name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
     await User.update(
-      { name: name.trim(), email: email.trim(), mobile: mobile.trim(), role, initials },
+      { name: name.trim(), email: email.trim(), mobile: mobile.trim(), role, initials, ...(newUsername ? { username: newUsername } : {}) },
       { where: { id: user.id } },
     );
 

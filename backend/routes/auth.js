@@ -5,6 +5,7 @@ const { User, BusinessUnit, ServiceDefinition } = require('../models');
 const { authenticate } = require('../middleware/auth');
 const { lockStatus, afterFailedAttempt, lockedMessage } = require('../services/lockout');
 const { Op } = require('sequelize');
+const { ownerCopyIds } = require('../services/ownerSession');
 const {
   effectivePermissions, PERMISSION_MANAGER_ROLES, isSuperAdmin, superAdminScope, canSeeActivityFeed,
   MODULES, moduleEnabledForBu,
@@ -71,6 +72,13 @@ const findOwnerByEmail = (email) => User.findOne({
   where: { email, super_admin_scope: { [Op.ne]: null } },
   order: [['id', 'ASC']],
 });
+// An Owner found by email, or by username (the Owner's username is on their own account). A username that
+// two Owners share can't pick one, so it finds nobody.
+const findOwnerByLogin = async (ident) => {
+  if (ident.includes('@')) return findOwnerByEmail(ident);
+  const rows = await User.findAll({ where: { username: ident, super_admin_scope: { [Op.ne]: null } } });
+  return rows.length === 1 ? rows[0] : null;
+};
 const activeBusiness = (slug) => BusinessUnit.findOne({ where: { slug, status: 'active' }, attributes: ['slug'] });
 
 // POST /api/auth/login — unified credential login.
@@ -96,7 +104,7 @@ router.post('/login', async (req, res) => {
 
     if (role === 'super_admin' || (!role && !business_unit && !legacyEmail)) {
       // --- Owner button: an email that holds the Owner grant ---
-      user = await findOwnerByEmail(ident);
+      user = await findOwnerByLogin(ident);
     } else if (business_unit) {
       // --- Business sign-in: an Owner's email works for every business, because an Owner has one
       // account for the whole company and can enter any business. ---
@@ -105,9 +113,18 @@ router.post('/login', async (req, res) => {
         user = owner;
         enterBusiness = business_unit;
       } else {
-        // Everyone else: find by email first, then by full name, within this business
-        user = await User.findOne({ where: { email: ident, business_unit } });
-        if (!user) user = await User.findOne({ where: { name: ident, business_unit } });
+        // Everyone else: by email or username, within this business
+        // (Leftover, disabled copies of an Owner's account are ignored: the Owner is found below.)
+        const copies = await ownerCopyIds(User);
+        const notCopy = copies.length ? { id: { [Op.notIn]: copies } } : {};
+        user = await User.findOne({ where: { email: ident, business_unit, ...notCopy } });
+        // Otherwise by username (never by full name, because several people can share one).
+        if (!user) user = await User.findOne({ where: { username: ident, business_unit, ...notCopy } });
+        // Nobody here has that username: it may be an Owner's, and an Owner can enter any business.
+        if (!user && !ident.includes('@')) {
+          const ownerByName = await findOwnerByLogin(ident);
+          if (ownerByName) { user = ownerByName; enterBusiness = business_unit; }
+        }
       }
     } else {
       // Legacy: email-only lookup (old frontend without business_unit)

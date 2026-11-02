@@ -304,7 +304,7 @@ async function main() {
   console.log(`  Business Admin: admin.<business>.sample@example.com   e.g. ${summary.map(s => `admin.${s.slug}.sample@example.com`).join('  |  ')}`);
   console.log(`  Manager:        manager.<business>.sample@example.com`);
   console.log(`  Password for both: ${TEST_PASSWORD}`);
-  console.log(`  Sales Reps: sign in with their full name (as shown in Settings → Users) and the password ${TEST_PASSWORD}.`);
+  console.log(`  Sales Reps: sign in with their username (shown in Settings → Users, for example Riya.Shah) and the password ${TEST_PASSWORD}.`);
   if (owner) console.log(`  Owner: ${owner.email} enters every business with the Owner button, then picks one (or picks a business on the sign-in page and uses the Owner email).`);
   console.log('\nTo remove all sample data later:  npm run sample -- --clear');
 }
