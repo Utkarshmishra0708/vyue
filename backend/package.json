@@ -12,6 +12,8 @@
     "reset": "node scripts/reset.js",
     "backup": "node scripts/backup.js",
     "new-secret": "node scripts/new_secret.js",
+    "unlock": "node scripts/unlock.js",
+    "set-password": "node scripts/set_password.js",
     "migrate": "node scripts/migrate.js",
     "recompute": "node scripts/recompute.js",
     "test": "node --test"
