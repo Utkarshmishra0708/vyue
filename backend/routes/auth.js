@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User, BusinessUnit, ServiceDefinition } = require('../models');
+const { User, BusinessUnit, ServiceDefinition, Setting } = require('../models');
 const { authenticate } = require('../middleware/auth');
 const { lockStatus, afterFailedAttempt, lockedMessage } = require('../services/lockout');
 const { Op } = require('sequelize');
@@ -98,6 +98,54 @@ const findCompanyAccount = async (ident, password) => {
   return active.find(r => !lockStatus(r).locked) || active[0];
 };
 const activeBusiness = (slug) => BusinessUnit.findOne({ where: { slug, status: 'active' }, attributes: ['slug'] });
+
+// GET /api/auth/setup-status — is this a fresh install that needs first-run registration?
+// Public (no auth): the login page checks this before anyone is signed in.
+router.get('/setup-status', async (req, res) => {
+  try {
+    const owner = await User.findOne({ where: { super_admin_scope: { [Op.ne]: null } } });
+    const companyRow = await Setting.findByPk('company_name');
+    return res.json({ needsSetup: !owner, companyName: companyRow?.value || null });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/auth/setup — first-run registration: create the company's first Owner and business.
+// Public (no auth), one-time: refuses if any Owner already exists.
+router.post('/setup', async (req, res) => {
+  try {
+    const existing = await User.findOne({ where: { super_admin_scope: { [Op.ne]: null } } });
+    if (existing) return res.status(409).json({ message: 'This app is already set up. Please sign in.' });
+
+    const { ownerName, email, password, companyName } = req.body;
+    if (!ownerName || !email || !password || !companyName) {
+      return res.status(400).json({ message: 'All fields are required: name, email, password, and company name.' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters.' });
+    }
+
+    await Setting.findOrCreate({ where: { key_name: 'company_name' }, defaults: { value: companyName.trim(), updated_at: new Date() } });
+
+    const user = await User.create({
+      name: ownerName.trim(),
+      email: email.trim().toLowerCase(),
+      password_hash: await bcrypt.hash(password, 10),
+      role: 'super_admin',
+      super_admin_scope: 'write',
+      active: true,
+    });
+
+    const token = signToken(user, null);
+    return res.json({ token, user: await authUserPayload(user) });
+  } catch (err) {
+    if (err.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ message: 'That business name or email is already taken.' });
+    }
+    return res.status(500).json({ message: err.message });
+  }
+});
 
 // POST /api/auth/login — unified credential login.
 //

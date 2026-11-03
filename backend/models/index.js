@@ -22,7 +22,7 @@ const User = sequelize.define('User', {
   role:          { type: DataTypes.ENUM('super_admin', 'business_admin', 'pmo', 'bd', 'forecast'), allowNull: false, defaultValue: 'bd' },
   // business_unit is a slug FK into business_units (migration 029). Was an ENUM; now a plain
   // VARCHAR so a new business unit needs no DDL. Still part of the email_business_unit composite key.
-  business_unit: { type: DataTypes.STRING(32), unique: 'email_business_unit', allowNull: false },
+  business_unit: { type: DataTypes.STRING(32), unique: 'email_business_unit', allowNull: true },
   initials:      { type: DataTypes.STRING(8) },
   color:         { type: DataTypes.STRING(32), defaultValue: 'bg-indigo-500' },
   active:        { type: DataTypes.BOOLEAN, defaultValue: true },

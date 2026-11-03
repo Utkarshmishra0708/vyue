@@ -1,12 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login as apiLogin } from '../services/api';
+import { login as apiLogin, getSetupStatus, setupCompany } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { APP_NAME } from '../config/brand';
 
-// Sign in first, businesses after. One form for everyone: an email or a username, and a password.
-// Nobody is asked which business they work in. After signing in, someone who works in one business
-// goes straight into it. The Owner, and anyone who works in several businesses, picks one.
 const TEXT = {
   subtitle: 'Sign in to continue',
   identifier: 'Email or Username',
@@ -15,31 +12,57 @@ const TEXT = {
   signIn: 'Sign In',
   signingIn: 'Signing in…',
   failed: 'Login failed',
+  setupTitle: 'Register your company',
+  setupSubtitle: "You're the first person here. Set up your company and you'll be the Owner.",
+  yourName: 'Your name',
+  email: 'Email',
+  companyName: 'Company name',
+  getStarted: 'Get started',
+  settingUp: 'Setting up…',
+  setupError: 'Could not complete setup. Please try again.',
 };
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login, user, isAuthenticated, loading } = useAuth();
+
+  // null = checking, true = fresh install, false = normal sign-in
+  const [needsSetup, setNeedsSetup] = useState(null);
+
+  // Sign-in form state
   const [identifier, setIdent]  = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy]         = useState(false);
   const [error, setError]       = useState('');
 
-  // Already signed in? Go to the app (the Owner's picker if they have not opened a business).
+  // Registration form state
+  const [ownerName, setOwnerName]       = useState('');
+  const [setupEmail, setSetupEmail]     = useState('');
+  const [setupPass, setSetupPass]       = useState('');
+  const [companyName, setCompanyName]   = useState('');
+
+  // Check whether this is a fresh install.
+  useEffect(() => {
+    getSetupStatus()
+      .then(r => setNeedsSetup(r.needsSetup))
+      .catch(() => setNeedsSetup(false));
+  }, []);
+
+  // Already signed in? Go to the app.
   useEffect(() => {
     if (!loading && isAuthenticated && user) {
       navigate(localStorage.getItem('salescrm_console') === '1' ? '/choose-business' : '/leads', { replace: true });
     }
   }, [loading, isAuthenticated, user, navigate]);
 
-  const handleSubmit = async (e) => {
+  // --- Sign-in handler (existing) ---
+  const handleLogin = async (e) => {
     e.preventDefault();
     setBusy(true); setError('');
     try {
       const data = await apiLogin(identifier.trim(), password);
       const u = data.user;
       const several = !!u.is_super_admin || (Array.isArray(u.platforms) && u.platforms.length > 1);
-      // Someone who has not opened a business yet is shown the picker (and an Owner is kept to it).
       if (several) localStorage.setItem('salescrm_console', '1'); else localStorage.removeItem('salescrm_console');
       login(data.token, u);
       navigate(several ? '/choose-business?auto=1' : '/leads', { replace: true });
@@ -50,29 +73,83 @@ export default function LoginPage() {
     }
   };
 
+  // --- Registration handler (P3-3) ---
+  const handleSetup = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError('');
+    try {
+      const data = await setupCompany({ ownerName: ownerName.trim(), email: setupEmail.trim(), password: setupPass, companyName: companyName.trim() });
+      localStorage.setItem('salescrm_console', '1');
+      login(data.token, data.user);
+      navigate('/choose-business', { replace: true });
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || TEXT.setupError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // While checking setup status, show the card shell with the title so the page isn't blank.
+  if (needsSetup === null) {
+    return (
+      <div style={s.wrap}>
+        <div style={s.card}>
+          <h1 style={s.title}>{APP_NAME}</h1>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={s.wrap}>
       <div style={s.card}>
         <h1 style={s.title}>{APP_NAME}</h1>
-        <p style={s.sub}>{TEXT.subtitle}</p>
-        <form onSubmit={handleSubmit}>
-          <label style={s.label}>{TEXT.identifier}</label>
-          <input type="text" value={identifier} onChange={e => setIdent(e.target.value)}
-            required autoFocus style={s.input} placeholder={TEXT.identifierHint} autoComplete="username" />
-          <label style={s.label}>{TEXT.password}</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-            required style={s.input} placeholder="••••••••" autoComplete="current-password" />
-          {error && <div style={s.error}>{error}</div>}
-          <button type="submit" disabled={busy || !identifier || !password} style={s.submit}>
-            {busy ? TEXT.signingIn : TEXT.signIn}
-          </button>
-        </form>
+
+        {needsSetup ? (
+          <>
+            <p style={s.sub}>{TEXT.setupTitle}</p>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: '-16px 0 20px' }}>{TEXT.setupSubtitle}</p>
+            <form onSubmit={handleSetup}>
+              <label style={s.label}>{TEXT.yourName}</label>
+              <input type="text" value={ownerName} onChange={e => setOwnerName(e.target.value)}
+                required autoFocus style={s.input} placeholder="e.g. Anand Shukla" autoComplete="name" />
+              <label style={s.label}>{TEXT.email}</label>
+              <input type="email" value={setupEmail} onChange={e => setSetupEmail(e.target.value)}
+                required style={s.input} placeholder="you@company.com" autoComplete="email" />
+              <label style={s.label}>{TEXT.password}</label>
+              <input type="password" value={setupPass} onChange={e => setSetupPass(e.target.value)}
+                required minLength={8} style={s.input} placeholder="Minimum 8 characters" autoComplete="new-password" />
+              <label style={s.label}>{TEXT.companyName}</label>
+              <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)}
+                required style={s.input} placeholder="e.g. Acme Corp" autoComplete="organization" />
+              {error && <div style={s.error}>{error}</div>}
+              <button type="submit" disabled={busy || !ownerName || !setupEmail || !setupPass || !companyName} style={s.submit}>
+                {busy ? TEXT.settingUp : TEXT.getStarted}
+              </button>
+            </form>
+          </>
+        ) : (
+          <>
+            <p style={s.sub}>{TEXT.subtitle}</p>
+            <form onSubmit={handleLogin}>
+              <label style={s.label}>{TEXT.identifier}</label>
+              <input type="text" value={identifier} onChange={e => setIdent(e.target.value)}
+                required autoFocus style={s.input} placeholder={TEXT.identifierHint} autoComplete="username" />
+              <label style={s.label}>{TEXT.password}</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                required style={s.input} placeholder="••••••••" autoComplete="current-password" />
+              {error && <div style={s.error}>{error}</div>}
+              <button type="submit" disabled={busy || !identifier || !password} style={s.submit}>
+                {busy ? TEXT.signingIn : TEXT.signIn}
+              </button>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-// Inline styles — matches the app convention (no CSS framework).
 const s = {
   wrap:    { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', padding: 16, fontFamily: 'Inter, system-ui, sans-serif' },
   card:    { background: '#fff', borderRadius: 16, padding: 32, width: '100%', maxWidth: 420, boxShadow: '0 10px 30px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' },

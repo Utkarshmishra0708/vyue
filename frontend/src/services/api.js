@@ -45,6 +45,9 @@ export const getMe          = ()                              => api.get('/auth/
 export const enterBusiness  = (businessUnit)                  => api.post('/auth/enter-business', { business_unit: businessUnit }).then(r => r.data);
 export const switchPlatform = (businessUnit)                  => api.post('/auth/switch-platform', { business_unit: businessUnit }).then(r => r.data);
 export const changePassword = (currentPassword, newPassword)  => api.post('/auth/change-password', { currentPassword, newPassword }).then(r => r.data);
+// P3-3: first-run registration — check if setup is needed, then create the first Owner + business.
+export const getSetupStatus = ()                              => api.get('/auth/setup-status').then(r => r.data);
+export const setupCompany   = (data)                          => api.post('/auth/setup', data).then(r => r.data);
 // Business Units — the list powering the login screen (and in-app business config). Public (no auth): the login screen needs it before anyone is signed in. Pass a status
 // (e.g. 'active') to filter; omit for all.
 export const getBusinessUnits = (status)                     => api.get('/business-units', { params: status ? { status } : undefined }).then(r => r.data);
