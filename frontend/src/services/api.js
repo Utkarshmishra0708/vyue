@@ -20,7 +20,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response && err.response.status === 401) {
+    // A wrong password on the sign-in form is also a 401. It must show its message on that form, not
+    // reload the page, so the sign-in call itself is left alone.
+    const isSignIn = String((err.config && err.config.url) || '').includes('/auth/login');
+    if (err.response && err.response.status === 401 && !isSignIn) {
       localStorage.removeItem('salescrm_token');
       if (!window.location.pathname.startsWith(BASE_PATH + '/login')) {
         window.location.href = BASE_PATH + '/login';
@@ -39,6 +42,7 @@ api.interceptors.response.use(
 export const login          = (identifier, password, businessUnit, role) => api.post('/auth/login', { identifier, password, business_unit: businessUnit, role }).then(r => r.data);
 export const getMe          = ()                              => api.get('/auth/me').then(r => r.data);
 // N1: switch the signed-in Global Admin to their account on another platform, no re-login.
+export const enterBusiness  = (businessUnit)                  => api.post('/auth/enter-business', { business_unit: businessUnit }).then(r => r.data);
 export const switchPlatform = (businessUnit)                  => api.post('/auth/switch-platform', { business_unit: businessUnit }).then(r => r.data);
 export const changePassword = (currentPassword, newPassword)  => api.post('/auth/change-password', { currentPassword, newPassword }).then(r => r.data);
 // Business Units — the list powering the login screen (and in-app business config). Public (no auth): the login screen needs it before anyone is signed in. Pass a status

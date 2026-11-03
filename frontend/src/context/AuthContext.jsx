@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { getMe } from '../services/api';
 import { meets } from '../utils/permissions';
+import { BASE_PATH } from '../env';
 
 const AuthContext = createContext(null);
 
@@ -19,6 +20,26 @@ export function AuthProvider({ children }) {
       .then(setUser)
       .catch(() => { localStorage.removeItem('salescrm_token'); setUser(null); })
       .finally(() => setLoading(false));
+  }, []);
+
+  // The sign-in pass is shared by every tab of the browser, so every tab follows what another tab does:
+  //   signed out there  -> this tab goes to the sign-in page
+  //   picking a business -> a tab on the picker goes into that business; any other tab reloads on it
+  //   Switch business there -> this tab goes to the picker
+  // A tab therefore never shows one business's data under the name of another.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== 'salescrm_token' && e.key !== 'salescrm_console') return;
+      const signedIn = !!localStorage.getItem('salescrm_token');
+      const pickerMode = localStorage.getItem('salescrm_console') === '1';
+      const here = window.location.pathname.slice(BASE_PATH.length) || '/';
+      if (!signedIn) window.location.assign(`${BASE_PATH}/login`);
+      else if (pickerMode) window.location.assign(`${BASE_PATH}/choose-business`);
+      else if (here === '/' || here.startsWith('/login') || here.startsWith('/choose-business')) window.location.assign(`${BASE_PATH}/leads`);
+      else window.location.reload();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   // Per-module permissions must take effect WITHOUT the user re-logging in. They live on the user

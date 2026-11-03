@@ -47,9 +47,8 @@ export const PROPERTY_CATEGORIES = [
   'IT/ITES', 'Education', 'Bank', 'Corporate Office', 'Restaurants', 'Other',
 ];
 
-// --- VOC (Voice of Customer) — Surveillance only ---
+// --- Customer Feedback lists. (The product list is not here: it comes from each business's own service catalog.) ---
 export const VOC_SEGMENTS = ['Enterprise', 'SMB', 'Government', 'Residential', 'Other'];
-export const VOC_PRODUCTS = ['Camera', 'VMS', 'Cloud Storage', 'Analytics', 'NVR', 'Other'];
 export const VOC_TYPES = ['Feature Gap', 'Configuration Mismatch', 'Integration Requirement', 'Performance Issue', 'Enhancement Request', 'Commercial Gap', 'Other'];
 export const VOC_IMPACTS = ['Deal Blocker', 'Deal Delay', 'Competitive Gap', 'Nice to Have'];
 export const VOC_PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];

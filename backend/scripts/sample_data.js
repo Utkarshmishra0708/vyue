@@ -261,6 +261,7 @@ async function main() {
     }
 
     // 6. Customer feedback entries
+    const catalogLabels = defs.map(d => d.label);   // feedback names products from this business's own services
     let vocNo = ((await Voc.max('voc_no')) || 0) + 1;
     const VOCS = [
       ['Acme Traders', 'Feature Gap', 'Deal Blocker', 'Critical', 'New', 'Needs a bulk export option.'],
@@ -274,7 +275,7 @@ async function main() {
       const v = await Voc.create({
         voc_no: vocNo++, business_unit: slug, date_of_entry: dateOnly(5 + k * 4), customer_name: cust, total_account_value_lakhs: 10 + k * 3,
         bd_owner_id: reps[k % reps.length].id, pmo_owner: 'Sample Manager', region_state: 'Maharashtra', customer_segment: 'SMB',
-        product_solution: 'Analytics', voc_type: type, description: `${TAG} ${desc}`, business_impact: impact, revenue_impact_lakhs: 2 + k,
+        product_solution: (catalogLabels[k % Math.max(catalogLabels.length, 1)] || 'Other'), voc_type: type, description: `${TAG} ${desc}`, business_impact: impact, revenue_impact_lakhs: 2 + k,
         priority: prio, status, created_by: reps[k % reps.length].id, updated_by: reps[k % reps.length].id,
       });
       await VocActivity.create({ voc_id: v.id, user_name: reps[k % reps.length].name, action_type: 'created', note: 'Feedback logged' });
@@ -300,12 +301,12 @@ async function main() {
 
   console.log('\nSample data created:');
   for (const s of summary) console.log(`  ${s.name}: ${s.leads} leads, ${s.chains} master orders, ${s.contacts} contacts, ${s.campaigns} campaigns, ${s.vocs} feedback entries, ${s.cards} task cards, ${s.hw} hardware service(s) in the catalog`);
-  console.log('\nTest sign-ins (business login screen):');
+  console.log('\nTest sign-ins (the sign-in page has one form: an email or a username, and a password):');
   console.log(`  Business Admin: admin.<business>.sample@example.com   e.g. ${summary.map(s => `admin.${s.slug}.sample@example.com`).join('  |  ')}`);
   console.log(`  Manager:        manager.<business>.sample@example.com`);
   console.log(`  Password for both: ${TEST_PASSWORD}`);
   console.log(`  Sales Reps: sign in with their username (shown in Settings → Users, for example Riya.Shah) and the password ${TEST_PASSWORD}.`);
-  if (owner) console.log(`  Owner: ${owner.email} enters every business with the Owner button, then picks one (or picks a business on the sign-in page and uses the Owner email).`);
+  if (owner) console.log(`  Owner: ${owner.email} (or the Owner's username) signs in once, then picks a business.`);
   console.log('\nTo remove all sample data later:  npm run sample -- --clear');
 }
 

@@ -385,7 +385,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
           For Additional/Renewal flows, parent account mapping is inherited from the source lead. */}
       {poEnabled && !expansionFrom && (
       <div>
-        <p className="section-title">CHAIN MAPPING</p>
+        <p className="section-title">PARENT ACCOUNT</p>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#334155' }}>
           <input type="checkbox" checked={linkToChain} onChange={e => { setLinkToChain(e.target.checked); if (!e.target.checked) setF('global_po_id', ''); }} />
           This customer belongs to a parent account
@@ -404,7 +404,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
       )}
       {poEnabled && expansionFrom && linkToChain && (
       <div>
-        <p className="section-title">CHAIN MAPPING</p>
+        <p className="section-title">PARENT ACCOUNT</p>
         <p style={{ fontSize: 13, color: '#334155' }}>
           Linked to chain: <strong>{chains.find(c => String(c.id) === String(form.global_po_id))?.chain_name || '—'}</strong>
           <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 6 }}>(inherited from source order)</span>

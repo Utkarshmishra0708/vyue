@@ -1,7 +1,9 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { PrivateRoute, AdminRoute, ModuleRoute, BusinessUnitRoute } from './components/PrivateRoute';
+import { PrivateRoute, AdminRoute, ModuleRoute, BusinessUnitRoute, SuperAdminRoute, PickerRoute } from './components/PrivateRoute';
+import BusinessPickerPage from './pages/BusinessPickerPage';
+import OrganizationSettingsPage from './pages/OrganizationSettingsPage';
 import LoginPage from './pages/LoginPage';
 import BusinessUnitsPage from './pages/BusinessUnitsPage';
 import LeadsPage from './pages/LeadsPage';
@@ -63,6 +65,9 @@ export default function App() {
             <Route path="/reports"          element={<PrivateRoute><ModuleRoute module="reports"><ReportsPage /></ModuleRoute></PrivateRoute>} />
             {/* Admin/PMO only */}
             <Route path="/settings"         element={<AdminRoute><SettingsPage /></AdminRoute>} />
+            {/* The business picker (the Owner's home, and for anyone in several businesses) and the Owner's company-wide settings. */}
+            <Route path="/choose-business"  element={<PickerRoute><BusinessPickerPage /></PickerRoute>} />
+            <Route path="/organization"     element={<SuperAdminRoute><OrganizationSettingsPage /></SuperAdminRoute>} />
             {/* Global Admin manages all business units; a Business Admin can reach the same page but
                 sees only their own BU (scoped server-side) and can only Edit / Edit template. */}
             <Route path="/business-units"   element={<BusinessUnitRoute><BusinessUnitsPage /></BusinessUnitRoute>} />

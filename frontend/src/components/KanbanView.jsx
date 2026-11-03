@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PHASE_BADGE } from '../utils/constants';
-import { hasConfidence, confidenceTrend, stageAging } from '../utils/leadHelpers';
+import { hasConfidence, confidenceTrend, stageAging, hasMoney } from '../utils/leadHelpers';
 import { sortByPriority } from '../utils/leadPriority';
 
 // Small confidence chip for a Kanban card: coloured by score band with a week-over-week trend mark.
@@ -110,7 +110,7 @@ export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap }) {
                         <ConfChip lead={l} />
                       </span>
                     </div>
-                    <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{l.owner?.name?.split(' ')[0]} · ₹{l.potential_tcv_lakhs}L</p>
+                    <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{l.owner?.name?.split(' ')[0]} · {hasMoney(l.potential_tcv_lakhs) ? `₹${l.potential_tcv_lakhs}L` : '—'}</p>
                   </div>
                 );
               })}

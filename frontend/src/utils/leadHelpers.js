@@ -60,6 +60,12 @@ export function formatOtherContacts(lead) {
   return list.map(formatContact).filter(Boolean).join('\n');
 }
 
+// True when a money value is really there (an empty value shows a dash, never a bare rupee sign; a real
+// zero still counts).
+export function hasMoney(v) {
+  return v !== null && v !== undefined && String(v).trim() !== '' && Number.isFinite(parseFloat(v));
+}
+
 export function fmtDate(d) {
   if (!d) return '';
   const dt = new Date(d);

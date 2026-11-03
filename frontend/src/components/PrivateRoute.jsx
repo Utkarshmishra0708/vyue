@@ -44,7 +44,7 @@ export function ModuleRoute({ module, minLevel = 'read', children }) {
 
   if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (isConsoleOnly) return <Navigate to="/settings" replace />;
+  if (isConsoleOnly) return <Navigate to="/choose-business" replace />;
   if (buHasModule && !buHasModule(module)) return <ModuleNoAccess module={module} />;
   if (meets(permissions, module, minLevel)) return children;
   return <ModuleNoAccess module={module} />;
@@ -58,8 +58,10 @@ export function PrivateRoute({ children }) {
 
   if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
-  // Console-only GA session → confined to Admin Console; password change is the only other page.
-  if (isConsoleOnly && location.pathname !== '/change-password') return <Navigate to="/settings" replace />;
+  // An Owner who has not opened a business yet (the picker) is kept to the picker, Organization
+  // Settings and Businesses (their own guards allow them) plus Password; every business screen
+  // sends them to the picker.
+  if (isConsoleOnly && location.pathname !== '/change-password') return <Navigate to="/choose-business" replace />;
   return children;
 }
 
@@ -73,6 +75,21 @@ export function SuperAdminRoute({ children }) {
   if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   if (!isSuperAdmin) return <Navigate to="/leads" replace />;
+  return children;
+}
+
+// PickerRoute — the business picker is for the Owner and for anyone who works in several businesses
+// (an account under the same email in more than one). Everyone else goes back to Leads.
+export function PickerRoute({ children }) {
+  const { isAuthenticated, isSuperAdmin, loading, user } = useAuth();
+  const location = useLocation();
+  if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
+  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
+  const several = isSuperAdmin || (Array.isArray(user?.platforms) && user.platforms.length > 1);
+  if (!several) return <Navigate to="/leads" replace />;
+  // The picker is only shown when no business is open (right after signing in, or after Switch
+  // business). Inside a business, a typed address or the browser's back arrow goes to that business.
+  if (localStorage.getItem('salescrm_console') !== '1') return <Navigate to="/leads" replace />;
   return children;
 }
 
@@ -94,8 +111,8 @@ export function AdminRoute({ children }) {
   if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   if (!isAdmin) return <Navigate to="/leads" replace />;
-  // Console-only GA → only Settings, not Reports or other admin pages.
-  if (isConsoleOnly && location.pathname !== '/settings') return <Navigate to="/settings" replace />;
+  // An Owner who has not opened a business yet has no business Settings: back to the picker.
+  if (isConsoleOnly) return <Navigate to="/choose-business" replace />;
   return children;
 }
 

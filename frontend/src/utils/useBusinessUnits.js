@@ -38,5 +38,6 @@ export default function useBusinessUnits() {
     loadBusinessUnits().then(l => { if (alive) setList(l); }).catch(() => {});
     return () => { alive = false; listeners.delete(setList); };
   }, []);
-  return { list, meta: (slug) => businessMeta(list, slug) };
+  // Until the list has loaded, the name is left blank rather than showing the internal ID (the slug).
+  return { list, meta: (slug) => (list.length ? businessMeta(list, slug) : { slug, name: '', color: DEFAULT_BUSINESS_COLOR, description: '' }) };
 }

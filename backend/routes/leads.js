@@ -46,7 +46,7 @@ const FIELD_LABELS = {
   po_expected_date: 'Order Expected Date', service_start_date: 'Service Start Date', service_end_date: 'Service End Date',
   po_number: 'Order Number', lost_reason: 'Lost Reason', po_actual_value_lakhs: 'Actual Order Value (L)',
   device_requested_date: 'Delivery Requested Date',
-  jhes_product: 'JHES Product', additional_notes: 'Additional Notes',
+  jhes_product: 'Product (free text)', additional_notes: 'Additional Notes',
 };
 
 function localDateString(d = new Date()) {

@@ -1,34 +1,24 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { switchPlatform } from '../services/api';
+import { BASE_PATH } from '../env';
 import { ROLE_LABEL } from '../utils/constants';
 import useBusinessUnits from '../utils/useBusinessUnits';
 import { APP_NAME, APP_LOGO } from '../config/brand';
 
 const NAV_ICONS = {
-  leads: '📋', dashboard: '📊', forecast: '🚚', reports: '📁', campaigns: '📢', customers: '👥', activity: '🕒', settings: '⚙️', 'change-password': '🔒', voc: '🗣️', 'business-units': '🏢', activities: '📌',
+  leads: '📋', dashboard: '📊', forecast: '🚚', reports: '📁', campaigns: '📢', customers: '👥', activity: '🕒', settings: '⚙️', 'change-password': '🔒', voc: '🗣️', 'business-units': '🏢', activities: '📌', organization: '🏛️', 'choose-business': '🏢',
 };
 
 export default function Sidebar() {
-  const { user, login, logout, isAdmin, isSuperAdmin, isCrossPlatform, isConsoleOnly, canView, canSeeActivityFeed, buHasModule } = useAuth();
-  const [switching, setSwitching] = useState(false);
+  const { user, logout, isAdmin, isSuperAdmin, isConsoleOnly, canView, canSeeActivityFeed, buHasModule } = useAuth();
 
-  // N1: hop to another platform's account in the same session. We swap the token via login(), then
-  // hard-reload — a platform switch changes every page's data (leads, dashboard, forecast, activity)
-  // and the user's permissions, so a reload re-fetches everything cleanly under the new account
-  // rather than trying to invalidate each mounted page's state individually.
-  const onSwitchPlatform = async (bu) => {
-    if (bu === user.business_unit || switching) return;
-    setSwitching(true);
-    try {
-      const data = await switchPlatform(bu);
-      login(data.token, data.user);          // updates the stored token
-      window.location.reload();              // re-bootstraps the whole app under the new platform
-    } catch {
-      window.alert('Could not switch business. Please try again.');
-      setSwitching(false);
-    }
+  // The Owner moves between businesses through the business picker: "Switch business" returns to it
+  // without signing out. A full page load gives every screen a clean start.
+  const several = isSuperAdmin || (Array.isArray(user.platforms) && user.platforms.length > 1);
+  const goToPicker = () => {
+    localStorage.setItem('salescrm_console', '1');
+    window.location.assign(`${BASE_PATH}/choose-business`);
   };
   const navigate = useNavigate();
   const location = useLocation();
@@ -50,8 +40,8 @@ export default function Sidebar() {
   // pages. Business logins get the full operational nav for their platform.
   const navItems = isConsoleOnly
     ? [
-        { path: '/settings', label: 'Organization Settings' },
-        { path: '/business-units', label: 'Businesses' },
+        { path: '/choose-business', label: 'Select business' },
+        { path: '/organization', label: 'Organization Settings' },
         { path: '/change-password', label: 'Password' },
       ]
     : [
@@ -67,14 +57,12 @@ export default function Sidebar() {
         // when the BU disables it keeps other businesses' nav uncluttered.
         ...(buHasModule('activities') ? [{ path: '/activities', label: 'Task Board', disabled: !canView('activities') }] : []),
         ...(canSeeActivityFeed ? [{ path: '/activity', label: 'Activity Feed' }] : []),
-        ...(isAdmin ? [{ path: '/settings', label: isSuperAdmin ? 'Organization Settings' : 'Settings' }] : []),
-        // Global Admin (cross-platform) can manage every business unit. A Business Admin reaches the
-        // same page but it's scoped server-side to only their OWN BU, so the nav label is singular.
-        ...(isSuperAdmin
-          ? [{ path: '/business-units', label: 'Businesses' }]
-          : (user.role === 'business_admin'
-              ? [{ path: '/business-units', label: 'Business' }]
-              : [])),
+        // "Settings" is always the open business's own (its people, lists and stage targets). The Owner's
+        // company-wide settings (Owners, creating and managing businesses) are a separate link.
+        ...(isAdmin ? [{ path: '/settings', label: 'Settings' }] : []),
+        ...(isSuperAdmin ? [{ path: '/organization', label: 'Organization Settings' }] : []),
+        // A Business Admin manages only their own business's template, so the label is singular.
+        ...(!isSuperAdmin && user.role === 'business_admin' ? [{ path: '/business-units', label: 'Business' }] : []),
         { path: '/change-password', label: 'Password' },
       ];
 
@@ -139,36 +127,21 @@ export default function Sidebar() {
       </nav>
 
       <div style={{ padding: 12, borderTop: '1px solid #1e293b' }}>
-        {/* Platform switcher: ONLY for Global Admins (isCrossPlatform). Business Admin, Manager,
-            and Team Member see only their own business — no switcher, even if their email happens
-            to exist on another platform under a different role. */}
-        {!collapsed && !isConsoleOnly && isCrossPlatform && Array.isArray(user.platforms) && user.platforms.length > 1 && (
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: '#64748b', marginBottom: 4 }}>BUSINESS</div>
-            <select
-              value={user.business_unit}
-              disabled={switching}
-              onChange={(e) => onSwitchPlatform(e.target.value)}
-              style={{
-                width: '100%', padding: '7px 8px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', cursor: 'pointer',
-              }}>
-              {user.platforms.map(bu => (
-                <option key={bu} value={bu}>{businessOf(bu).name}</option>
-              ))}
-            </select>
-          </div>
-        )}
         {!collapsed && (
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{user.name}</div>
             <div style={{ fontSize: 11, color: '#64748b' }}>{isSuperAdmin ? 'Owner' : (ROLE_LABEL[user.role] || user.role)}{isConsoleOnly ? ' · All businesses' : ` · ${bu.name}`}</div>
           </div>
         )}
-        {/* Returns to the main page (business selection). Reaching the pre-login landing ends the
-            session, so this uses the same action as sign-out — just labelled "Back". */}
+        {/* Two clear exits. Switch business (stays signed in) is for the Owner and for anyone who works in
+            several businesses. Sign out ends the session and returns to the sign-in page. */}
+        {several && !isConsoleOnly && (
+          <button onClick={goToPicker} className="btn btn-sm" style={{ width: '100%', justifyContent: 'center', marginBottom: 6, background: '#1e293b', borderColor: '#334155', color: '#e2e8f0' }}>
+            {collapsed ? '⇄' : 'Switch business'}
+          </button>
+        )}
         <button onClick={logout} className="btn btn-sm" style={{ width: '100%', justifyContent: 'center', background: '#1e293b', borderColor: '#334155', color: '#e2e8f0' }}>
-          {collapsed ? '←' : '← Back'}
+          {collapsed ? '⏻' : 'Sign out'}
         </button>
         <button onClick={toggle} className="btn btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 6, background: 'transparent', borderColor: '#1e293b', color: '#64748b' }}>
           {collapsed ? '»' : '« Collapse'}

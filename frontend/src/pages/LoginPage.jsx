@@ -1,170 +1,70 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login as apiLogin, getBusinessUnits } from '../services/api';
+import { login as apiLogin } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { APP_NAME } from '../config/brand';
 
+// Sign in first, businesses after. One form for everyone: an email or a username, and a password.
+// Nobody is asked which business they work in. After signing in, someone who works in one business
+// goes straight into it. The Owner, and anyone who works in several businesses, picks one.
+const TEXT = {
+  subtitle: 'Sign in to continue',
+  identifier: 'Email or Username',
+  identifierHint: 'your.email@company.com or Your.Username',
+  password: 'Password',
+  signIn: 'Sign In',
+  signingIn: 'Signing in…',
+  failed: 'Login failed',
+};
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login, user, isAuthenticated, loading } = useAuth();
-
-  // Steps: 'platform' → 'credentials' | 'ga-credentials'
-  const [step, setStep]         = useState('platform');
-  const [bu, setBu]             = useState(null);     // selected business
-  const [identifier, setIdent]  = useState('');        // email or username
+  const [identifier, setIdent]  = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy]         = useState(false);
   const [error, setError]       = useState('');
-  const [businessUnits, setBusinessUnits] = useState(null);  // live list from the API (null until loaded)
 
-  // Already signed in? Go to the app.
+  // Already signed in? Go to the app (the Owner's picker if they have not opened a business).
   useEffect(() => {
     if (!loading && isAuthenticated && user) {
-      navigate(localStorage.getItem('salescrm_console') === '1' ? '/settings' : '/leads', { replace: true });
+      navigate(localStorage.getItem('salescrm_console') === '1' ? '/choose-business' : '/leads', { replace: true });
     }
   }, [loading, isAuthenticated, user, navigate]);
 
-  // Load the selectable businesses from the database. The code knows no business names, so if the list
-  // can't load, the page says so instead of showing a fixed list.
-  const [listError, setListError] = useState(false);
-  useEffect(() => {
-    getBusinessUnits('active')
-      .then(list => { setBusinessUnits(Array.isArray(list) ? list : []); setListError(false); })
-      .catch(() => { setBusinessUnits([]); setListError(true); });
-  }, []);
-
-  // The cards to render, and the presentation for the currently-selected slug.
-  const buList = businessUnits || [];
-  const buMeta = (slug) => (businessUnits || []).find(b => b.slug === slug) || { slug, name: slug, color: '#6366f1', description: '' };
-
-  const goBack = (target) => {
-    setError(''); setPassword(''); setIdent('');
-    if (target === 'platform') { setBu(null); setStep('platform'); }
-    else setStep(target);
-  };
-
-  // ------ Credential submission ------
   const handleSubmit = async (e) => {
     e.preventDefault();
     setBusy(true); setError('');
     try {
-      if (step === 'ga-credentials') {
-        // Global Admin login — straight to Admin Console (Settings)
-        const data = await apiLogin(identifier, password, null, 'super_admin');
-        if (!data.user.is_super_admin) {
-          setError('This is not an Owner account.');
-          return;
-        }
-        localStorage.setItem('salescrm_console', '1');
-        login(data.token, data.user);
-        navigate('/settings', { replace: true });
-        return;
-      }
-
-      // Platform login — the backend determines the role from the credentials.
-      // Clear the console flag: a business login enters the full app, not the admin console.
-      localStorage.removeItem('salescrm_console');
-      const data = await apiLogin(identifier, password, bu);
-      login(data.token, data.user);
-      navigate('/leads', { replace: true });
+      const data = await apiLogin(identifier.trim(), password);
+      const u = data.user;
+      const several = !!u.is_super_admin || (Array.isArray(u.platforms) && u.platforms.length > 1);
+      // Someone who has not opened a business yet is shown the picker (and an Owner is kept to it).
+      if (several) localStorage.setItem('salescrm_console', '1'); else localStorage.removeItem('salescrm_console');
+      login(data.token, u);
+      navigate(several ? '/choose-business?auto=1' : '/leads', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Login failed');
+      setError(err.response?.data?.message || err.message || TEXT.failed);
     } finally {
       setBusy(false);
     }
   };
 
-  // ===========================================================================
-  //  STEP 1: Platform selection — 3 business cards + Global Admin (top-right)
-  // ===========================================================================
-  if (step === 'platform') return (
-    <div style={s.wrap}>
-      <div style={{ ...s.card, position: 'relative' }}>
-        {/* Global Admin — small button in the top-right corner, separate from the business cards */}
-        <button type="button" onClick={() => { setStep('ga-credentials'); setError(''); }}
-          title="Owner Login" style={s.adminLogin}>
-          <span style={{ fontSize: 13 }}>🛡️</span> Owner
-        </button>
-
-        <h1 style={s.title}>{APP_NAME}</h1>
-        <p style={s.sub}>Select your business to continue</p>
-
-        {businessUnits === null && <p style={s.sub}>Loading businesses…</p>}
-        {listError && <p style={{ ...s.sub, color: '#dc2626' }}>Couldn't load the list of businesses. Check that the server is running, then refresh the page.</p>}
-        {businessUnits !== null && !listError && buList.length === 0 && <p style={s.sub}>No businesses have been set up yet. Sign in as Owner to create one.</p>}
-        {buList.map(b => (
-          <button key={b.slug} onClick={() => { setBu(b.slug); setStep('credentials'); setError(''); }}
-            style={{ ...s.buButton, borderColor: b.color }}>
-            <div style={{ ...s.buIcon, background: b.color }}>{(b.name || b.slug || '?')[0]}</div>
-            <div style={{ textAlign: 'left' }}>
-              <div style={s.buName}>{b.name}</div>
-              <div style={s.buDesc}>{b.description}</div>
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
-  // ===========================================================================
-  //  STEP 2a: Global Admin credential form
-  // ===========================================================================
-  if (step === 'ga-credentials') return (
-    <div style={s.wrap}>
-      <div style={s.card}>
-        <button onClick={() => goBack('platform')} style={s.back}>← Back</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <div style={{ ...s.buIcon, background: '#7c3aed', width: 48, height: 48, fontSize: 20 }}>🛡️</div>
-          <div>
-            <h2 style={{ ...s.h2, margin: 0 }}>Owner</h2>
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>Cross-business administration</div>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          <label style={s.label}>Email</label>
-          <input type="email" value={identifier} onChange={e => setIdent(e.target.value)}
-            required autoFocus style={s.input} placeholder="admin@company.com" />
-          <label style={s.label}>Password</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-            required style={s.input} placeholder="••••••••" />
-          {error && <div style={s.error}>{error}</div>}
-          <button type="submit" disabled={busy || !identifier || !password} style={s.submit}>
-            {busy ? 'Signing in…' : 'Sign In'}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-
-  // ===========================================================================
-  //  STEP 2c: Business platform — credential form (email or name + password)
-  //  The backend determines the user's role from the credentials. No role selection.
-  // ===========================================================================
   return (
     <div style={s.wrap}>
       <div style={s.card}>
-        <button onClick={() => goBack('platform')} style={s.back}>← Back</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <div style={{ ...s.buIcon, background: buMeta(bu).color, width: 36, height: 36, fontSize: 14 }}>{(buMeta(bu).name || bu || '?')[0]}</div>
-          <div>
-            <h2 style={{ ...s.h2, margin: 0 }}>{buMeta(bu).name}</h2>
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>{buMeta(bu).description}</div>
-          </div>
-        </div>
-
+        <h1 style={s.title}>{APP_NAME}</h1>
+        <p style={s.sub}>{TEXT.subtitle}</p>
         <form onSubmit={handleSubmit}>
-          <label style={s.label}>Email or Username</label>
+          <label style={s.label}>{TEXT.identifier}</label>
           <input type="text" value={identifier} onChange={e => setIdent(e.target.value)}
-            required autoFocus style={s.input}
-            placeholder="your.email@company.com or Your.Username" />
-          <label style={s.label}>Password</label>
+            required autoFocus style={s.input} placeholder={TEXT.identifierHint} autoComplete="username" />
+          <label style={s.label}>{TEXT.password}</label>
           <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-            required style={s.input} placeholder="••••••••" />
+            required style={s.input} placeholder="••••••••" autoComplete="current-password" />
           {error && <div style={s.error}>{error}</div>}
           <button type="submit" disabled={busy || !identifier || !password} style={s.submit}>
-            {busy ? 'Signing in…' : 'Sign In'}
+            {busy ? TEXT.signingIn : TEXT.signIn}
           </button>
         </form>
       </div>

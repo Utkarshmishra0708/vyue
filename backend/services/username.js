@@ -1,10 +1,13 @@
-// Usernames: every person gets a readable, unique sign-in name made from their full name.
+// Usernames: every person gets a readable sign-in name made from their full name, unique across the
+// whole company (people sign in without naming a business).
 //   first person called "Priya Nair"   -> Priya.Nair
 //   second                              -> Priya1.Nair
 //   third                               -> Priya2.Nair
 // The number goes after the first name (name(n-1).surname). Anyone can sign in with their email or their
 // username, never with their full name, so any number of people can share a name.
 // A username is made once and then kept: renaming a person does not change it, so nobody gets locked out.
+// The same EMAIL means the same person: someone with accounts in several businesses has the same username
+// in each of them. Two different people never share a username.
 const { Op } = require('sequelize');
 
 const MAX_PART = 30;
@@ -40,14 +43,23 @@ function pickUsername(fullName, taken) {
   throw new Error('Could not make a username');
 }
 
-async function takenUsernames(User, businessUnit, transaction) {
-  const rows = await User.findAll({ where: { business_unit: businessUnit, username: { [Op.ne]: null } }, attributes: ['username'], transaction });
+async function takenUsernames(User, transaction) {
+  const rows = await User.findAll({ where: { username: { [Op.ne]: null } }, attributes: ['username'], transaction });
   return new Set(rows.map(r => r.username.toLowerCase()));
 }
 
-// Used when a person is created.
-async function nextUsername(User, fullName, businessUnit, transaction) {
-  return pickUsername(fullName, await takenUsernames(User, businessUnit, transaction));
+// The username already given to the person with this email in another business, if any.
+async function usernameForEmail(User, email, transaction) {
+  if (!email) return null;
+  const row = await User.findOne({ where: { email, username: { [Op.ne]: null } }, attributes: ['username'], order: [['id', 'ASC']], transaction });
+  return row ? row.username : null;
+}
+
+// Used when an account is created: the same person keeps their username, a new person gets a new one.
+async function nextUsername(User, fullName, _businessUnit, transaction, email) {
+  const same = await usernameForEmail(User, email, transaction);
+  if (same) return same;
+  return pickUsername(fullName, await takenUsernames(User, transaction));
 }
 
 // Gives a username to everyone who has none (accounts made before usernames existed), in the order the
@@ -57,17 +69,24 @@ async function ensureUsernames(User, skipIds = []) {
   if (skipIds.length) await User.update({ username: null }, { where: { id: skipIds, username: { [Op.ne]: null } } });
   const where = { username: null };
   if (skipIds.length) where.id = { [Op.notIn]: skipIds };
-  const missing = await User.findAll({ where, attributes: ['id', 'name', 'business_unit'], order: [['id', 'ASC']] });
+  const missing = await User.findAll({ where, attributes: ['id', 'name', 'email', 'business_unit'], order: [['id', 'ASC']] });
   if (!missing.length) return 0;
-  const taken = new Map();
+  const set = await takenUsernames(User);
+  // Usernames people already have, by email, so a person's other accounts reuse theirs.
+  const byEmail = new Map();
+  const have = await User.findAll({ where: { username: { [Op.ne]: null }, email: { [Op.ne]: null } }, attributes: ['email', 'username'], order: [['id', 'ASC']] });
+  have.forEach(h => { const k = h.email.toLowerCase(); if (!byEmail.has(k)) byEmail.set(k, h.username); });
   for (const u of missing) {
-    if (!taken.has(u.business_unit)) taken.set(u.business_unit, await takenUsernames(User, u.business_unit));
-    const set = taken.get(u.business_unit);
-    const username = pickUsername(u.name, set);
-    set.add(username.toLowerCase());
+    const key = u.email ? u.email.toLowerCase() : null;
+    let username = key && byEmail.get(key);
+    if (!username) {
+      username = pickUsername(u.name, set);
+      set.add(username.toLowerCase());
+      if (key) byEmail.set(key, username);
+    }
     await User.update({ username }, { where: { id: u.id } });
   }
   return missing.length;
 }
 
-module.exports = { nameParts, pickUsername, nextUsername, ensureUsernames };
+module.exports = { nameParts, pickUsername, nextUsername, usernameForEmail, ensureUsernames };

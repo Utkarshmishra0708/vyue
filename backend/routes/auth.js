@@ -79,6 +79,24 @@ const findOwnerByLogin = async (ident) => {
   const rows = await User.findAll({ where: { username: ident, super_admin_scope: { [Op.ne]: null } } });
   return rows.length === 1 ? rows[0] : null;
 };
+// Several accounts can share an email (one per business, for a person who works in more than one), so
+// a company-wide sign-in may match more than one. Prefer an active account whose password matches; if
+// none matches, return the first one that is not locked, so a wrong password is counted against it.
+// A username belongs to a single account. Leftover Owner copies are ignored.
+const findCompanyAccount = async (ident, password) => {
+  const copies = await ownerCopyIds(User);
+  const where = ident.includes('@') ? { email: ident } : { username: ident };
+  if (copies.length) where.id = { [Op.notIn]: copies };
+  const rows = await User.findAll({ where, order: [['id', 'ASC']] });
+  if (!rows.length) return null;
+  const active = rows.filter(r => r.active);
+  if (!active.length) return rows[0];                    // only a disabled account: it gets its own message
+  for (const r of active) {
+    if (!r.password_hash || lockStatus(r).locked) continue;
+    if (await bcrypt.compare(password, r.password_hash)) return r;
+  }
+  return active.find(r => !lockStatus(r).locked) || active[0];
+};
 const activeBusiness = (slug) => BusinessUnit.findOne({ where: { slug, status: 'active' }, attributes: ['slug'] });
 
 // POST /api/auth/login — unified credential login.
@@ -102,9 +120,15 @@ router.post('/login', async (req, res) => {
     let user;
     let enterBusiness = null;   // set when an Owner signs in to a particular business
 
-    if (role === 'super_admin' || (!role && !business_unit && !legacyEmail)) {
-      // --- Owner button: an email that holds the Owner grant ---
+    if (role === 'super_admin') {
+      // --- Owner only: an email or username that holds the Owner grant ---
       user = await findOwnerByLogin(ident);
+    } else if (!business_unit) {
+      // --- Sign in first, businesses after: no business is named. The person is found by email or
+      // username across the whole company (a username belongs to one person company-wide). An Owner
+      // comes first; otherwise one of the accounts with that email or username. ---
+      user = await findOwnerByLogin(ident);
+      if (!user) user = await findCompanyAccount(ident, password);
     } else if (business_unit) {
       // --- Business sign-in: an Owner's email works for every business, because an Owner has one
       // account for the whole company and can enter any business. ---
@@ -126,9 +150,6 @@ router.post('/login', async (req, res) => {
           if (ownerByName) { user = ownerByName; enterBusiness = business_unit; }
         }
       }
-    } else {
-      // Legacy: email-only lookup (old frontend without business_unit)
-      user = await User.findOne({ where: { email: ident } });
     }
 
     if (!user)                return res.status(401).json({ message: 'Invalid credentials' });

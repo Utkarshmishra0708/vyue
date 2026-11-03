@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import BuWizard from '../components/BuWizard';
@@ -36,6 +37,11 @@ export default function BusinessUnitsPage() {
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);   // { mode: 'edit'|'clone', bu }
   const [wizard, setWizard] = useState(false); // guided creation wizard
+  // The business picker's "Create business" card links here with ?new=1: open Guided setup straight away.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('new') === '1' && canAct) { setWizard(true); setSearchParams({}, { replace: true }); }
+  }, []); // eslint-disable-line
   const [editTpl, setEditTpl] = useState(null); // { slug, name } — template editor target
   const [confirmDel, setConfirmDel] = useState(null); // { bu, usage, deletable }
 

@@ -367,7 +367,7 @@ const DropdownOption = sequelize.define('DropdownOption', {
 User.addHook('beforeCreate', async (user, options) => {
   if (!user.username) {
     const { nextUsername } = require('../services/username');
-    user.username = await nextUsername(User, user.name, user.business_unit, options && options.transaction);
+    user.username = await nextUsername(User, user.name, user.business_unit, options && options.transaction, user.email);
   }
 });
 

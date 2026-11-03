@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import PermissionsModal from '../components/PermissionsModal';
-import SuperAdminsPanel from '../components/SuperAdminsPanel';
 import DropdownManager from '../components/DropdownManager';
 import PermissionMatrix, { PermissionLegend } from '../components/PermissionMatrix';
-import { getManagedUsers, addUser, updateUser, setUserActive, unlockUser, deleteUser, resetBdPassword, getTat, updateTat, setActivityFeedAccess, getBusinessUnits } from '../services/api';
+import { getManagedUsers, addUser, updateUser, setUserActive, unlockUser, deleteUser, resetBdPassword, getTat, updateTat, setActivityFeedAccess } from '../services/api';
+import useBusinessUnits from '../utils/useBusinessUnits';
 
 // Dropdown lists a business can manage for its lead form.
 const DROPDOWN_LISTS = [
@@ -38,7 +38,7 @@ const ASSIGNABLE = {
 const ACCOUNT_TYPES = {
   bd: {
     label: 'Sales Rep',
-    blurb: 'Sees only their own leads · own activity only',
+    blurb: 'Sees only their own leads',
     primary: true,
     perms: { leads: 'full', dashboard: 'read', forecast: 'none', reports: 'none' },
   },
@@ -212,15 +212,9 @@ export default function SettingsPage() {
   // greyed out — to manage another, they switch platform on the left. The console-only Global Admin
   // (logged in via the Global Admin button, no platform switcher) keeps the manual business picker.
   const [manageBusiness, setManageBusiness] = useState((isSuperAdmin && isConsoleOnly) ? null : user.business_unit);
-  // Business tabs come from the live business_units table (not hardcoded), so a unit created in the
-  // Business Units page shows up here immediately and the Global Admin can add users to it.
-  const [buOptions, setBuOptions] = useState([]);
-  useEffect(() => {
-    if (!isSuperAdmin) return;
-    getBusinessUnits('active').then(setBuOptions).catch(() => setBuOptions([]));
-  }, [isSuperAdmin]);
+  // The business's name for the page title comes from the shared list (never the internal ID).
+  const { meta: businessOf } = useBusinessUnits();
   // Bumped whenever the user list changes, so the Global Admins panel refreshes its grant candidates.
-  const [saReload, setSaReload] = useState(0);
 
   // Stage TAT (days-per-stage) editor for the Lead Confidence Scoring engine — per platform. Only a
   // business's PMO / Business Admin may edit; the per-stage weightage is a fixed constant (read-only).
@@ -235,7 +229,6 @@ export default function SettingsPage() {
   const canEditTat = canAct && (isSuperAdmin || user.role === 'pmo' || user.role === 'business_admin');
 
   const refresh = () => {
-    setSaReload(x => x + 1);   // keep the Owners grant candidates in sync with the user list
     if (!manageBusiness) { setUsers([]); return; }
     getManagedUsers(manageBusiness).then(setUsers).catch(() => setUsers([]));
   };
@@ -377,17 +370,16 @@ export default function SettingsPage() {
     } finally { setBusy(false); }
   };
 
-  const isSuper = isSuperAdmin;
   const effectiveRole = isSuperAdmin ? 'super_admin' : user.role;
   const buLabel = manageBusiness
-    ? (buOptions.find(b => b.slug === manageBusiness)?.name || manageBusiness)
+    ? businessOf(manageBusiness).name
     : '';
 
   return (
     <Layout>
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px' }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{isSuper ? 'Organization Settings' : 'Settings'}</h1>
-        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{isSuper ? 'Manage users and roles across all businesses' : 'Manage your team and account'}</p>
+        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Settings{buLabel ? ` — ${buLabel}` : ''}</h1>
+        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Manage this business's team, lists and account</p>
       </div>
 
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -399,44 +391,15 @@ export default function SettingsPage() {
         </div>
 
         <div className="card">
-          {isSuper && (
-            <div style={{ marginBottom: 12 }}>
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 6px' }}>
-                {isConsoleOnly
-                  ? <>Admin — choose a business to manage its users. Create a <b>Business Admin</b> to hand off day-to-day management of that business.</>
-                  : <>You're managing the business selected in the <b>Business</b> switcher on the left. To manage a different one, switch business there — the other tabs below are greyed out as a reminder.</>}
-              </p>
-              <div style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4, background: '#f1f5f9', borderRadius: 8, padding: 3 }}>
-                {buOptions.length === 0 && <span style={{ fontSize: 12, color: '#94a3b8', padding: '6px 10px' }}>Loading businesses…</span>}
-                {buOptions.map(b => {
-                  const on = manageBusiness === b.slug;
-                  // Console-only GA picks any business; a business-session GA is locked to the current
-                  // platform (others greyed + disabled — switch platform on the left to change).
-                  const locked = !isConsoleOnly && !on;
-                  return (
-                    <button key={b.slug} type="button" disabled={locked}
-                      onClick={isConsoleOnly ? () => setManageBusiness(b.slug) : undefined}
-                      title={locked ? 'Switch to this business on the left to manage it' : undefined}
-                      style={{ border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: locked ? 'not-allowed' : (on ? 'default' : 'pointer'),
-                        background: on ? '#fff' : 'transparent', color: on ? '#0f172a' : (locked ? '#cbd5e1' : '#64748b'), boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none', opacity: locked ? 0.7 : 1 }}>
-                      {b.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, gap: 10, flexWrap: 'wrap' }}>
             <p className="section-title" style={{ margin: 0 }}>Manage Users{buLabel ? ` — ${buLabel}` : ''}</p>
             {canAct && <button className="btn btn-primary btn-sm" disabled={busy || !manageBusiness} onClick={() => setModal({ mode: 'add' })}>+ Add User</button>}
           </div>
           <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 14px' }}>
-            Manager users are admins; Sales Rep users are the sales team. Use Edit to change a user's details.
-            ' If a Sales Rep forgets their password, use Reset Password to set a new one.'
+            Manager users are admins; Sales Rep users are the sales team. Use Edit to change a user's details. If a Sales Rep forgets their password, use Reset Password to set a new one.
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {!manageBusiness && <p style={{ fontSize: 13, color: '#94a3b8' }}>Select a business above to manage its users.</p>}
             {manageBusiness && users.length === 0 && <p style={{ fontSize: 13, color: '#94a3b8' }}>No users yet — add one above.</p>}
             {users.map(u => (
               <div key={u.id} style={{ paddingBottom: 8, borderBottom: '1px solid #f1f5f9', opacity: u.active ? 1 : 0.55 }}>
@@ -499,10 +462,6 @@ export default function SettingsPage() {
           </div>
           {msg && <p style={{ fontSize: 12, marginTop: 12, color: msg.toLowerCase().includes('error') ? '#dc2626' : '#059669' }}>{msg}</p>}
         </div>
-
-        {/* Cross-platform Super Admins — its own section, outside any single platform's user list,
-            because the grant spans every business at once. Visible only to Super Admins. */}
-        {isCrossPlatform && <SuperAdminsPanel reloadSignal={saReload} />}
 
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>

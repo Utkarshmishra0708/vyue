@@ -76,11 +76,21 @@ function hasTransactionalData(u) {
   return u.users > 0 || u.leads > 0 || u.chains > 0 || u.vocs > 0;
 }
 
-// GET /api/business-units[?status=active] — PUBLIC. Non-sensitive presentation fields only.
-router.get('/', async (req, res) => {
+// GET /api/business-units[?status=active] — needs a sign-in. Presentation fields only. An Owner sees every
+// business. Anyone else sees only their own business, plus the businesses where the same email has an
+// account (so a person who works in several can pick one).
+router.get('/', authenticate, async (req, res) => {
   try {
     const where = {};
     if (req.query.status) where.status = req.query.status;
+    if (!isSuperAdmin(req.user)) {
+      const mine = new Set([req.user.business_unit]);
+      if (req.user.email) {
+        const siblings = await User.findAll({ where: { email: req.user.email, active: true }, attributes: ['business_unit'] });
+        siblings.forEach(x => mine.add(x.business_unit));
+      }
+      where.slug = [...mine];
+    }
     const rows = await BusinessUnit.findAll({
       where,
       attributes: ['slug', 'name', 'description', 'color', 'status', 'sort_order'],

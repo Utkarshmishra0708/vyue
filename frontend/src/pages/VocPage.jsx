@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Layout from '../components/Layout';
 import MultiSelect from '../components/MultiSelect';
 import { useAuth } from '../context/AuthContext';
-import { getVocs, getVoc, createVoc, updateVoc, addVocComment, deleteVoc, getBds } from '../services/api';
+import { getVocs, getVoc, createVoc, updateVoc, addVocComment, deleteVoc, getBds, getBusinessUnitConfig } from '../services/api';
 import {
-  VOC_SEGMENTS, VOC_PRODUCTS, VOC_TYPES, VOC_IMPACTS, VOC_PRIORITIES, VOC_STATUSES, VOC_OPEN_STATUSES,
+  VOC_SEGMENTS, VOC_TYPES, VOC_IMPACTS, VOC_PRIORITIES, VOC_STATUSES, VOC_OPEN_STATUSES,
   VOC_STATUS_BADGE, VOC_PRIORITY_BADGE, INDIAN_STATES, UNION_TERRITORIES,
 } from '../utils/constants';
 import { fmtDate } from '../utils/leadHelpers';
@@ -71,6 +71,20 @@ export default function VocPage() {
   }, []);
   useEffect(() => { if (allowed) fetchAll(); }, [allowed, fetchAll]);
   useEffect(() => { getBds(user.business_unit).then(setBds).catch(() => setBds([])); }, [user.business_unit]);
+
+  // The products people can give feedback on are this business's own services (its service catalog),
+  // plus "Other", plus any product already named on saved feedback so older entries stay filterable.
+  const [catalog, setCatalog] = useState([]);
+  useEffect(() => {
+    getBusinessUnitConfig(user.business_unit)
+      .then(cfg => setCatalog((cfg.services || []).map(sv => sv.label).filter(Boolean)))
+      .catch(() => setCatalog([]));
+  }, [user.business_unit]);
+  const productOptions = useMemo(() => {
+    const saved = vocs.flatMap(v => (v.product_solution ? v.product_solution.split(',') : []).map(x => x.trim()).filter(Boolean));
+    const seen = new Set();
+    return [...catalog, ...saved, 'Other'].filter(x => { const k = x.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+  }, [catalog, vocs]);
 
   const filtered = useMemo(() => vocs.filter(v => {
     const s = search.toLowerCase();
@@ -170,8 +184,8 @@ export default function VocPage() {
           <input className="input" style={{ width: 220 }} placeholder="Search customer, description…" value={search} onChange={e => setSearch(e.target.value)} />
           <MultiSelect label="Status" options={VOC_STATUSES} selected={fStatus} onChange={setFStatus} />
           <MultiSelect label="Priority" options={VOC_PRIORITIES} selected={fPriority} onChange={setFPriority} />
-          <MultiSelect label="Product" options={VOC_PRODUCTS} selected={fProduct} onChange={setFProduct} />
-          <MultiSelect label="Type" options={VOC_TYPES} selected={fType} onChange={setFType} />
+          <MultiSelect label="Product" options={productOptions} selected={fProduct} onChange={setFProduct} />
+          <MultiSelect label="Feedback Type" options={VOC_TYPES} selected={fType} onChange={setFType} />
           {canReview && <MultiSelect label="Sales Rep" options={bdNames} selected={fBd} onChange={setFBd} />}
           <label style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>From <input type="date" className="input" style={{ width: 140 }} value={fFrom} onChange={e => setFFrom(e.target.value)} /></label>
           <label style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>To <input type="date" className="input" style={{ width: 140 }} value={fTo} onChange={e => setFTo(e.target.value)} /></label>
@@ -212,6 +226,7 @@ export default function VocPage() {
           mode={modal.mode}
           voc={modal.voc}
           bds={bds}
+          productOptions={productOptions}
           canReview={canReview}
           user={user}
           onClose={() => setModal(null)}
@@ -239,7 +254,7 @@ export default function VocPage() {
 }
 
 // ---- Create / Edit modal ------------------------------------------------
-function VocModal({ mode, voc, bds, canReview, user, onClose, onSaved, onDelete }) {
+function VocModal({ mode, voc, bds, productOptions, canReview, user, onClose, onSaved, onDelete }) {
   const isEdit = mode === 'edit';
   const [form, setForm] = useState({ ...EMPTY, date_of_entry: today(), bd_owner_id: user.role === 'bd' ? user.id : '' });
   const [tab, setTab] = useState('form');
@@ -358,9 +373,9 @@ function VocModal({ mode, voc, bds, canReview, user, onClose, onSaved, onDelete 
                   </div>
                   <Sel label="Customer Segment" k="customer_segment" opts={VOC_SEGMENTS} />
                   <div>
-                    <label className="field-label">Product / Solution</label>
+                    <label className="field-label">Product</label>
                     {canEdit ? (
-                      <MultiSelect label="Select products" options={VOC_PRODUCTS} selected={form.product_solution} onChange={sel => setForm(f => ({ ...f, product_solution: sel }))} width="100%" />
+                      <MultiSelect label="Select products" options={productOptions} selected={form.product_solution} onChange={sel => setForm(f => ({ ...f, product_solution: sel }))} width="100%" />
                     ) : (
                       <input className="input" readOnly disabled value={(form.product_solution || []).join(', ')} />
                     )}

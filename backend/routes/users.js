@@ -216,16 +216,24 @@ router.put('/:id', authenticate, adminOnly, async (req, res) => {
       if (!USERNAME_RE.test(newUsername)) {
         return res.status(400).json({ message: 'A username can use letters, digits, dots, hyphens and underscores, with no spaces (at least 2 characters).' });
       }
-      const taken = await User.findOne({ where: { username: newUsername, business_unit: user.business_unit } });
-      if (taken && taken.id !== user.id) return res.status(409).json({ message: `The username ${newUsername} is already used by someone in this business.` });
+      // Free unless a DIFFERENT person has it. The same email means the same person, so their accounts
+      // in other businesses may (and do) share it.
+      const others = await User.findAll({ where: { username: newUsername }, attributes: ['id', 'email'] });
+      const takenByAnother = others.some(o => o.id !== user.id && !(user.email && o.email && String(o.email).toLowerCase() === String(user.email).toLowerCase()));
+      if (takenByAnother) return res.status(409).json({ message: `The username ${newUsername} is already taken. Please choose another.` });
     }
 
     // Persist via an explicit UPDATE.
     const initials = name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    const oldUsername = user.username;
     await User.update(
       { name: name.trim(), email: email.trim(), mobile: mobile.trim(), role, initials, ...(newUsername ? { username: newUsername } : {}) },
       { where: { id: user.id } },
     );
+    // One person, one username: the person's accounts in other businesses follow the change.
+    if (newUsername && user.email && oldUsername) {
+      await User.update({ username: newUsername }, { where: { email: user.email, username: oldUsername } });
+    }
 
     const updated = await User.findByPk(user.id);
     const safe = updated.toJSON();

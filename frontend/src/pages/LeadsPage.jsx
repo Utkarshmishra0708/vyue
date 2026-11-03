@@ -14,7 +14,7 @@ import { parseServiceLines } from '../components/ServicesOffered';
 import { useAuth } from '../context/AuthContext';
 import { getLeads, getLead, deleteLead, updateLead, getBds, bulkUpdateLeads, getStageHistory, getDropdowns, getBusinessUnitConfig, getTat } from '../services/api';
 import { PHASE_BADGE } from '../utils/constants';
-import { fmtDate, isTATBreached, isOverdue, hasConfidence, confidenceTrend, buildRotMetrics, getRotState, stripHtml, primaryContact, formatOtherContacts, stageAging, renewalStatus, renewalLabel, RENEWAL_BAND_STYLE, buildRenewedSet } from '../utils/leadHelpers';
+import { hasMoney, fmtDate, isTATBreached, isOverdue, hasConfidence, confidenceTrend, buildRotMetrics, getRotState, stripHtml, primaryContact, formatOtherContacts, stageAging, renewalStatus, renewalLabel, RENEWAL_BAND_STYLE, buildRenewedSet } from '../utils/leadHelpers';
 import { sortWithWonLast } from '../utils/leadPriority';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import { writeFormattedSheet } from '../utils/excelExport';
@@ -430,7 +430,7 @@ export default function LeadsPage() {
           <NotificationBell />
         </div>
         <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-          {leadsCanFull && <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} onClick={() => setShowChains(true)}>🏢 Chains</button>}
+          {leadsCanFull && <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} onClick={() => setShowChains(true)}>🏢 Master Orders</button>}
           <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} onClick={exportExcel}>Export Excel</button>
           <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} onClick={exportPdf}>Export PDF</button>
           <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
@@ -579,7 +579,7 @@ export default function LeadsPage() {
                       </td>
                       <td>{l.state || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
                       <td style={{ textAlign: 'right' }}>{l.quantity || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700 }}>₹{l.potential_tcv_lakhs}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{hasMoney(l.potential_tcv_lakhs) ? `₹${l.potential_tcv_lakhs}` : '—'}</td>
                       <td>
                         {conf === null ? <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>—</span> : (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
