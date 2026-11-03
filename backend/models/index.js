@@ -18,7 +18,8 @@ const User = sequelize.define('User', {
   // mobile contact number. Nullable in the DB so pre-existing rows are unaffected; the Settings
   // add/edit modal makes it mandatory for users created or edited through the app.
   mobile:        { type: DataTypes.STRING(32), allowNull: true },
-  password_hash: { type: DataTypes.STRING(255), allowNull: true },
+  password_hash:        { type: DataTypes.STRING(255), allowNull: true },
+  must_change_password: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   role:          { type: DataTypes.ENUM('super_admin', 'business_admin', 'pmo', 'bd', 'forecast'), allowNull: false, defaultValue: 'bd' },
   // business_unit is a slug FK into business_units (migration 029). Was an ENUM; now a plain
   // VARCHAR so a new business unit needs no DDL. Still part of the email_business_unit composite key.

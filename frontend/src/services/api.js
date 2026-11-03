@@ -74,7 +74,7 @@ export const getLeadCustomers       = ()                     => api.get('/leads/
 export const getBds         = (businessUnit)                  => api.get('/users', { params: { role: 'bd', business_unit: businessUnit } }).then(r => r.data);
 // All active members of a business (any role) — used by the Task Board owner picker.
 export const getBusinessMembers = (businessUnit)              => api.get('/users', { params: { business_unit: businessUnit } }).then(r => r.data);
-export const resetBdPassword= (id, newPassword)               => api.put(`/users/${id}/reset-password`, { newPassword }).then(r => r.data);
+export const resetPassword  = (id)                             => api.put(`/users/${id}/reset-password`).then(r => r.data);
 // Full user management (admin only). getManagedUsers lists BD + PMO (including disabled) with
 // email/mobile for the Settings page; addUser/updateUser take { name, email, mobile, role }
 // (role: 'bd' | 'pmo'). setUserActive enable/disables (soft); deleteUser permanently removes.

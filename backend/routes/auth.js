@@ -305,6 +305,7 @@ router.post('/change-password', authenticate, async (req, res) => {
     if (!ok) return res.status(401).json({ message: 'Current password is wrong' });
 
     user.password_hash = await bcrypt.hash(newPassword, 10);
+    user.must_change_password = false;
     await user.save();
     return res.json({ message: 'Password updated' });
   } catch (err) {

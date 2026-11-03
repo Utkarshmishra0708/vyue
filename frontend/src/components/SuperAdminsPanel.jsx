@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { getSuperAdmins, setSuperAdmin, getSuperAdminAudit } from '../services/api';
+import { getSuperAdmins, setSuperAdmin, getSuperAdminAudit, resetPassword } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import useBusinessUnits from '../utils/useBusinessUnits';
 
@@ -46,6 +46,17 @@ export default function SuperAdminsPanel({ reloadSignal }) {
       if (showAudit) getSuperAdminAudit().then(setAudit).catch(() => {});
     } catch (e) {
       setMsg(e.response?.data?.message || 'Could not update Owner access');
+    } finally { setBusy(false); }
+  };
+
+  const handleResetPassword = async (sa) => {
+    if (!window.confirm(`Reset password for ${sa.name}? This generates a new temporary password. They'll be asked to choose their own at next sign-in.`)) return;
+    setBusy(true); setMsg('');
+    try {
+      const res = await resetPassword(sa.id);
+      setMsg(`Password reset for ${sa.name}. Temporary password: ${res.tempPassword} — give this to them once. They'll set their own at next sign-in.`);
+    } catch (e) {
+      setMsg(e.response?.data?.message || 'Could not reset password');
     } finally { setBusy(false); }
   };
 
@@ -105,6 +116,8 @@ export default function SuperAdminsPanel({ reloadSignal }) {
                     onClick={() => change(sa.id, sa.scope === 'write' ? 'read' : 'write', sa.name)}>
                     {sa.scope === 'write' ? '→ Read-only' : '→ Read + Write'}
                   </button>
+                  <button className="btn btn-sm" disabled={busy}
+                    onClick={() => handleResetPassword(sa)}>Reset Password</button>
                   <button className="btn btn-sm btn-danger" disabled={busy}
                     onClick={() => change(sa.id, null, sa.name)}>Revoke</button>
                 </>

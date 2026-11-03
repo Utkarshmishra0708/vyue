@@ -53,11 +53,12 @@ export function ModuleRoute({ module, minLevel = 'read', children }) {
 export { MODULES };
 
 export function PrivateRoute({ children }) {
-  const { isAuthenticated, isConsoleOnly, loading } = useAuth();
+  const { isAuthenticated, isConsoleOnly, mustChangePassword, loading } = useAuth();
   const location = useLocation();
 
   if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (mustChangePassword && location.pathname !== '/change-password') return <Navigate to="/change-password" replace />;
   // An Owner who has not opened a business yet (the picker) is kept to the picker, Organization
   // Settings and Businesses (their own guards allow them) plus Password; every business screen
   // sends them to the picker.
@@ -81,10 +82,11 @@ export function SuperAdminRoute({ children }) {
 // PickerRoute — the business picker is for the Owner and for anyone who works in several businesses
 // (an account under the same email in more than one). Everyone else goes back to Leads.
 export function PickerRoute({ children }) {
-  const { isAuthenticated, isSuperAdmin, loading, user } = useAuth();
+  const { isAuthenticated, isSuperAdmin, mustChangePassword, loading, user } = useAuth();
   const location = useLocation();
   if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (mustChangePassword) return <Navigate to="/change-password" replace />;
   const several = isSuperAdmin || (Array.isArray(user?.platforms) && user.platforms.length > 1);
   if (!several) return <Navigate to="/leads" replace />;
   // The picker is only shown when no business is open (right after signing in, or after Switch

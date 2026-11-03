@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getBusinessUnits, enterBusiness, switchPlatform } from '../services/api';
+import { getBusinessUnits, enterBusiness, switchPlatform, getSuperAdmins } from '../services/api';
 import { APP_NAME } from '../config/brand';
 import { BASE_PATH } from '../env';
 
@@ -27,11 +27,15 @@ export default function BusinessPickerPage() {
   const [list, setList] = useState(null);      // null until loaded
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');        // slug being opened
+  const [onlyOneOwner, setOnlyOneOwner] = useState(false);
 
   useEffect(() => {
     getBusinessUnits('active')
       .then(l => setList(Array.isArray(l) ? l : []))
       .catch(() => { setList([]); setError(TEXT.loadError); });
+    getSuperAdmins()
+      .then(d => setOnlyOneOwner(Array.isArray(d.superAdmins) && d.superAdmins.length === 1))
+      .catch(() => {});
   }, []);
 
   const enter = async (slug) => {
@@ -63,6 +67,11 @@ export default function BusinessPickerPage() {
         <h1 style={s.title}>{APP_NAME}</h1>
         <p style={s.sub}>{TEXT.title}</p>
 
+        {onlyOneOwner && (
+          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12.5, color: '#92400e', lineHeight: 1.5 }}>
+            You're the only Owner. Consider adding a second one from <b>Organization Settings</b> so you're never locked out.
+          </div>
+        )}
         {list === null && <p style={s.sub}>{TEXT.loading}</p>}
         {list && list.length === 0 && !error && <p style={s.sub}>{TEXT.none}</p>}
         {error && <div style={s.error}>{error}</div>}

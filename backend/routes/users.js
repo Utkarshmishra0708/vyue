@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { User, Lead } = require('../models');
 const { Op } = require('sequelize');
@@ -19,7 +20,7 @@ function superAdminOnly(req, res, next) {
 }
 
 const COLOR_ROTATION = ['bg-violet-500', 'bg-sky-500', 'bg-emerald-500', 'bg-amber-500', 'bg-orange-500', 'bg-teal-500', 'bg-rose-500', 'bg-indigo-500'];
-const DEFAULT_BD_PASSWORD = '123456'; // system default — the Sales Rep is expected to change it after first login
+const generateTempPassword = () => crypto.randomBytes(5).toString('base64url').slice(0, 8);
 
 // The "Unassigned" placeholder BD holds leads orphaned when a BD is deleted. One per business unit,
 // created on demand. It has no password (cannot log in) and is inactive, so it stays out of the login
@@ -157,7 +158,20 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
     const initials = name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
     const color = COLOR_ROTATION[count % COLOR_ROTATION.length];
     const maxOrder = (await User.max('sort_order', { where: { business_unit, role } })) || 0;
-    const password_hash = await bcrypt.hash(DEFAULT_BD_PASSWORD, 10);
+
+    // Same email in another business = same person. Reuse their existing password so they
+    // don't get a temp password they don't need.
+    const existing = await User.findOne({ where: { email: email.trim(), password_hash: { [Op.ne]: null } }, attributes: ['password_hash', 'must_change_password'] });
+    let password_hash, tempPassword, must_change_password;
+    if (existing) {
+      password_hash = existing.password_hash;
+      must_change_password = existing.must_change_password;
+      tempPassword = null;
+    } else {
+      tempPassword = generateTempPassword();
+      password_hash = await bcrypt.hash(tempPassword, 10);
+      must_change_password = true;
+    }
 
     // Module access is chosen in the same dialog as the account. When the caller supplies a map we
     // store it verbatim; otherwise the role-derived default applies (services/permissions.js), so an
@@ -171,11 +185,15 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
 
     const created = await User.create({
       name: name.trim(), email: email.trim(), mobile: mobile.trim(), business_unit, role,
-      initials, color, sort_order: maxOrder + 1, active: true, password_hash, module_permissions,
+      initials, color, sort_order: maxOrder + 1, active: true, password_hash,
+      must_change_password, module_permissions,
     });
     const safe = created.toJSON();
     delete safe.password_hash;
-    return res.status(201).json({ ...safe, defaultPassword: DEFAULT_BD_PASSWORD });
+    if (tempPassword) {
+      return res.status(201).json({ ...safe, tempPassword });
+    }
+    return res.status(201).json(safe);
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -244,23 +262,31 @@ router.put('/:id', authenticate, adminOnly, async (req, res) => {
   }
 });
 
-// PUT /api/users/:id/reset-password — admin/PMO only. Resets a BD's forgotten
-// password to a value PMO chooses. Body: { newPassword }
-router.put('/:id/reset-password', authenticate, adminOnly, async (req, res) => {
+// PUT /api/users/:id/reset-password — generates a temporary password and forces the
+// person to choose their own at next sign-in. An admin can reset anyone they manage;
+// an Owner can also reset another Owner.
+router.put('/:id/reset-password', authenticate, async (req, res) => {
   try {
-    const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 6) return res.status(400).json({ message: 'New password must be at least 6 characters' });
-
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
-    if (user.role !== 'bd') return res.status(400).json({ message: 'Only Sales Rep accounts can be reset here' });
-    if (!canActOn(req.user, user)) return res.status(403).json({ message: 'You are not allowed to manage this user.' });
 
-    user.password_hash = await bcrypt.hash(newPassword, 10);
-    user.failed_login_count = 0;   // a reset also lifts any sign-in lock
+    const actorIsOwner = isSuperAdminWrite(req.user);
+    const targetIsOwner = isSuperAdmin(user);
+
+    if (targetIsOwner) {
+      if (!actorIsOwner) return res.status(403).json({ message: 'Only an Owner can reset another Owner.' });
+      if (user.id === req.user.id) return res.status(400).json({ message: 'You cannot reset your own password here. Use the Password page.' });
+    } else {
+      if (!canActOn(req.user, user)) return res.status(403).json({ message: 'You are not allowed to manage this user.' });
+    }
+
+    const tempPassword = generateTempPassword();
+    user.password_hash = await bcrypt.hash(tempPassword, 10);
+    user.must_change_password = true;
+    user.failed_login_count = 0;
     user.locked_until = null;
     await user.save();
-    return res.json({ message: `Password reset for ${user.name}` });
+    return res.json({ message: `Password reset for ${user.name}`, tempPassword });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }

@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import PermissionsModal from '../components/PermissionsModal';
 import DropdownManager from '../components/DropdownManager';
 import PermissionMatrix, { PermissionLegend } from '../components/PermissionMatrix';
-import { getManagedUsers, addUser, updateUser, setUserActive, unlockUser, deleteUser, resetBdPassword, getTat, updateTat, setActivityFeedAccess } from '../services/api';
+import { getManagedUsers, addUser, updateUser, setUserActive, unlockUser, deleteUser, resetPassword, getTat, updateTat, setActivityFeedAccess } from '../services/api';
 import useBusinessUnits from '../utils/useBusinessUnits';
 
 // Dropdown lists a business can manage for its lead form.
@@ -203,8 +203,6 @@ export default function SettingsPage() {
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState(null); // null | { mode: 'add' } | { mode: 'edit', user }
-  const [resetTarget, setResetTarget] = useState(null); // user id currently showing the reset form
-  const [resetValue, setResetValue] = useState('');
   const [transferFor, setTransferFor] = useState(null); // { user, leadCount } — Sales Rep delete needs lead transfer
   const [transferTo, setTransferTo] = useState('unassigned');
   // The Admin Console follows the sidebar Platform selection: a Global Admin in a business session
@@ -269,7 +267,11 @@ export default function SettingsPage() {
         setMsg(`Updated ${data.name}.`);
       } else {
         const created = await addUser(manageBusiness, data);
-        setMsg(`Added ${data.name}. Username: ${created.username}. Starting password is "${created.defaultPassword}" — share it; they can change it under Password after logging in.`);
+        if (created.tempPassword) {
+          setMsg(`Added ${data.name}. Username: ${created.username}. Temporary password: ${created.tempPassword} — give this to them once. They'll be asked to set their own password at first sign-in.`);
+        } else {
+          setMsg(`Added ${data.name}. Username: ${created.username}. They already have an account in another business, so they sign in with their existing password.`);
+        }
       }
       setModal(null);
       refresh();
@@ -355,16 +357,12 @@ export default function SettingsPage() {
   };
 
 
-  const openReset = (id) => { setResetTarget(id === resetTarget ? null : id); setResetValue(''); };
-
   const handleReset = async (id, name) => {
-    const pwd = resetValue.trim();
-    if (pwd.length < 6) { setMsg('New password must be at least 6 characters'); return; }
+    if (!window.confirm(`Reset password for ${name}? This generates a new temporary password that you must give them once. They'll be asked to choose their own at next sign-in.`)) return;
     setBusy(true); setMsg('');
     try {
-      await resetBdPassword(id, pwd);
-      setMsg(`Password reset for ${name}. Share "${pwd}" with them — they can change it themselves under Password after logging in.`);
-      setResetTarget(null); setResetValue('');
+      const res = await resetPassword(id);
+      setMsg(`Password reset for ${name}. Temporary password: ${res.tempPassword} — give this to them once. They'll set their own at next sign-in.`);
     } catch (err) {
       setMsg(err.response?.data?.message || 'Error resetting password');
     } finally { setBusy(false); }
@@ -417,9 +415,9 @@ export default function SettingsPage() {
                     {canAct && (canActOn(u) || u.id === user.id) && (
                       <button className="btn btn-sm" disabled={busy} onClick={() => setModal({ mode: 'edit', user: { name: u.name, email: u.email || '', mobile: u.mobile || '', role: u.role, id: u.id, username: u.username || '' } })}>Edit</button>
                     )}
-                    {u.role === 'bd' && u.active && canActOn(u) && (
-                      <button className="btn btn-sm" disabled={busy} onClick={() => openReset(u.id)}>
-                        {resetTarget === u.id ? 'Cancel' : 'Reset Password'}
+                    {u.active && canActOn(u) && (
+                      <button className="btn btn-sm" disabled={busy} onClick={() => handleReset(u.id, u.name)}>
+                        Reset Password
                       </button>
                     )}
                     {/* Forecast is one of the four modules in the Access editor now, so a separate
@@ -449,14 +447,6 @@ export default function SettingsPage() {
                     )}
                   </div>
                 </div>
-                {resetTarget === u.id && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingLeft: 40 }}>
-                    <input className="input" type="text" placeholder="New password (min 6 chars)" value={resetValue} onChange={e => setResetValue(e.target.value)} autoFocus />
-                    <button className="btn btn-primary btn-sm" disabled={busy || resetValue.trim().length < 6} onClick={() => handleReset(u.id, u.name)}>
-                      {busy ? '…' : 'Set'}
-                    </button>
-                  </div>
-                )}
               </div>
             ))}
           </div>

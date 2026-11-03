@@ -146,6 +146,7 @@ export function AuthProvider({ children }) {
     isBusinessAdmin, isBD, isForecastOnly, canManageUsers, canManageDropdowns, canForecast,
     permissions, can, canView, canEdit, canFull, canManagePermissions,
     superAdminScope, isCrossPlatform, isReadOnlyAdmin, canAct, canSeeActivityFeed,
+    mustChangePassword: !!user?.must_change_password,
     buModules, buHasModule, refreshUser,
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
