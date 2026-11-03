@@ -45,7 +45,7 @@ router.get('/devices', authenticate, requireModule('forecast', 'read'), async (r
     ];
 
     const includeRels = [
-      { model: User, as: 'owner', attributes: ['name'] },
+      { model: User, as: 'owner', attributes: ['id', 'name', 'username'] },
       ...(hasLevel(req.user, 'leads', 'read')
         ? [{ model: LeadContact, as: 'contacts', attributes: ['name', 'phone', 'email', 'designation'] }]
         : []),

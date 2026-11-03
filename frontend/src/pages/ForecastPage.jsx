@@ -5,6 +5,7 @@ import Layout from '../components/Layout';
 import useBusinessUnits from '../utils/useBusinessUnits';
 import { getForecastDevices, setSentToScm, getBusinessUnitConfig } from '../services/api';
 import { fmtDate, fmtMonthYear, primaryContact, formatOtherContacts } from '../utils/leadHelpers';
+import { buildNameCount, bdLabel, ownerLabel } from '../utils/nameLabels';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import ColumnPicker, { useColumnPreference } from '../components/ColumnPicker';
 import ColumnFilter from '../components/ColumnFilter';
@@ -46,6 +47,12 @@ export default function ForecastPage() {
 
   useEffect(() => { getForecastDevices().then(setLeads).catch(() => {}).finally(() => setLoading(false)); }, []);
 
+  // Stamp disambiguated owner labels so forecastColumns can display them without a BD list.
+  const labelledLeads = useMemo(() => {
+    const nc = buildNameCount(leads.map(l => l.owner).filter(Boolean));
+    return leads.map(l => ({ ...l, _ownerFull: bdLabel(l.owner, nc), _ownerCompact: ownerLabel(l.owner, nc) }));
+  }, [leads]);
+
   // 'Sent to SCM' is a manual, shared marker — no automation reads or resets it. Updated
   // optimistically so the checkbox responds instantly, then reconciled with the server's
   // authoritative timestamp/author (or rolled back if the call fails). Tracked per HARDWARE LINE:
@@ -75,8 +82,8 @@ export default function ForecastPage() {
   // see utils/leadPriority.js. Re-derived on every render, so the ranking always
   // reflects current confidence scores and a freshly computed TCV.
   const allLeads = useMemo(
-    () => sortWithWonLast(leads.filter(l => bu === 'all' || l.business_unit === bu)),
-    [leads, bu],
+    () => sortWithWonLast(labelledLeads.filter(l => bu === 'all' || l.business_unit === bu)),
+    [labelledLeads, bu],
   );
   const units = forecastUnits;
 

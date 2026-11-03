@@ -60,8 +60,9 @@ export const FORECAST_COLUMNS = [
     cell: (l) => l.business_name || l.business_unit || '—', excel: (l) => l.business_name || l.business_unit || '',
     filter: 'multi', filterValue: (l) => l.business_name || l.business_unit || '' },
   { key: 'owner', label: 'Sales Rep', default: true,
-    cell: (l) => l.owner?.name?.split(' ')[0] || '—', excel: (l) => l.owner?.name || '',
-    filter: 'multi', filterValue: (l) => l.owner?.name || '' },
+    cell: (l) => l._ownerCompact || l.owner?.name?.split(' ')[0] || '—',
+    excel: (l) => l._ownerFull || l.owner?.name || '',
+    filter: 'multi', filterValue: (l) => l._ownerFull || l.owner?.name || '' },
 
   // --- Hardware ---
   { key: 'hw_service', label: 'Hardware Item', default: true,

@@ -9,6 +9,7 @@ import { exportRowsToPdf } from '../utils/pdfExport';
 import { writeFormattedSheet } from '../utils/excelExport';
 import { APP_NAME } from '../config/brand';
 import useBusinessUnits from '../utils/useBusinessUnits';
+import { buildNameCount, bdLabel as _bdLabel, ownerLabel as _ownerLabel } from '../utils/nameLabels';
 
 const CHART_COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
@@ -44,6 +45,9 @@ export default function ReportsPage() {
   const [buConfig, setBuConfig] = useState(null);
   const [dropdowns, setDropdowns] = useState({});
   useEffect(() => { getBds(user.business_unit).then(setBds); }, [user.business_unit]);
+  const bdNameCount = useMemo(() => buildNameCount(bds), [bds]);
+  const bdLabel = (b) => _bdLabel(b, bdNameCount);
+  const ownerLabel = (owner) => _ownerLabel(owner, bdNameCount);
   useEffect(() => { getBusinessUnitConfig(user.business_unit).then(setBuConfig).catch(() => {}); }, [user.business_unit]);
   useEffect(() => { getDropdowns().then(setDropdowns).catch(() => {}); }, []);
 
@@ -92,7 +96,7 @@ export default function ReportsPage() {
   const filtered = useMemo(() => allLeads.filter(l => {
     if (dateFrom && new Date(l.createdAt) < new Date(dateFrom)) return false;
     if (dateTo && new Date(l.createdAt) > new Date(dateTo + 'T23:59:59')) return false;
-    if (selBDs.length && !selBDs.includes(l.owner?.name)) return false;
+    if (selBDs.length && !selBDs.includes(String(l.owner?.id))) return false;
     if (selPhases.length && !selPhases.includes(l.phase)) return false;
     if (selSources.length && !selSources.includes(l.lead_source)) return false;
     if (selRenewals.length && !selRenewals.includes(l.new_or_renewal)) return false;
@@ -124,12 +128,12 @@ export default function ReportsPage() {
     const rows = view === 'customers'
       ? filtered.map(l => ({
           Customer: l.customer_name, 'Business': businessOf(l.business_unit).name,
-          City: l.city || '', State: l.state || '', Owner: l.owner?.name || '',
+          City: l.city || '', State: l.state || '', Owner: bdLabel(l.owner) || '',
           'Contact Name': pc(l).name || '', Phone: pc(l).phone || '', Email: pc(l).email || '', Designation: pc(l).designation || '',
         }))
       : filtered.map(l => ({
           'Sr No': l.sr_no, 'Business': businessOf(l.business_unit).name, Customer: l.customer_name,
-          State: l.state || '', 'Sales Rep': l.owner?.name || '', 'Lead Source': l.lead_source, 'Account Manager': l.kam_name || '',
+          State: l.state || '', 'Sales Rep': bdLabel(l.owner) || '', 'Lead Source': l.lead_source, 'Account Manager': l.kam_name || '',
           'New/Renewal': l.new_or_renewal, 'Deal Value (₹L)': l.potential_tcv_lakhs, 'Order Expected': l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '',
           Phase: l.phase, 'Created At': fmtDate(l.createdAt),
         }));
@@ -141,11 +145,11 @@ export default function ReportsPage() {
     const table = view === 'customers'
       ? {
           columns: ['Customer', 'Business', 'City', 'State', 'Owner', 'Contact', 'Phone', 'Email', 'Designation'],
-          rows: filtered.map(l => [l.customer_name, businessOf(l.business_unit).name, l.city || '—', l.state || '—', l.owner?.name || '', pc(l).name || '—', pc(l).phone || '—', pc(l).email || '—', pc(l).designation || '—']),
+          rows: filtered.map(l => [l.customer_name, businessOf(l.business_unit).name, l.city || '—', l.state || '—', bdLabel(l.owner) || '', pc(l).name || '—', pc(l).phone || '—', pc(l).email || '—', pc(l).designation || '—']),
         }
       : {
           columns: ['Sr', 'Customer', 'State', 'Sales Rep', 'Phase', 'New/Renewal', 'Deal Value (₹L)', 'Order Expected', 'Source', 'Created'],
-          rows: filtered.map(l => [l.sr_no, l.customer_name, l.state || '—', l.owner?.name?.split(' ')[0] || '', l.phase, l.new_or_renewal, l.potential_tcv_lakhs, l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '—', l.lead_source, fmtDate(l.createdAt)]),
+          rows: filtered.map(l => [l.sr_no, l.customer_name, l.state || '—', ownerLabel(l.owner) || '', l.phase, l.new_or_renewal, l.potential_tcv_lakhs, l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '—', l.lead_source, fmtDate(l.createdAt)]),
         };
     exportRowsToPdf({
       title: view === 'customers' ? `${APP_NAME} — Customer Details` : `${APP_NAME} — Custom Report`,
@@ -189,7 +193,7 @@ export default function ReportsPage() {
             <input type="date" className="input" style={{ marginBottom: 6 }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
             <input type="date" className="input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
-          <MultiSelect label="Sales Rep" options={bds.map(b => b.name)} selected={selBDs} onChange={setSelBDs} width={200} />
+          <MultiSelect label="Sales Rep" options={bds.map(b => ({ value: String(b.id), label: b.label || b.name }))} selected={selBDs} onChange={setSelBDs} width={200} />
           <MultiSelect label="Phase" options={PHASES} selected={selPhases} onChange={setSelPhases} width={200} />
           <MultiSelect label="Lead Source" options={sourceOpts} selected={selSources} onChange={setSelSources} width={200} />
           <MultiSelect label="New/Renewal" options={renewalOpts} selected={selRenewals} onChange={setSelRenewals} width={200} />
@@ -288,7 +292,7 @@ export default function ReportsPage() {
                     <tbody>
                       {filtered.map(l => (
                         <tr key={l.id}>
-                          <td>{l.sr_no}</td><td>{l.customer_name}</td><td>{l.state || '—'}</td><td>{l.owner?.name?.split(' ')[0]}</td>
+                          <td>{l.sr_no}</td><td>{l.customer_name}</td><td>{l.state || '—'}</td><td>{ownerLabel(l.owner)}</td>
                           <td>{l.phase}</td><td>{l.new_or_renewal}</td><td style={{textAlign:'right', fontWeight:700}}>{'₹'}{l.potential_tcv_lakhs}</td>
                           <td>{l.po_expected_date ? fmtMonthYear(l.po_expected_date) : '—'}</td><td>{l.lead_source}</td><td>{fmtDate(l.createdAt)}</td>
                         </tr>
@@ -302,7 +306,7 @@ export default function ReportsPage() {
                       {filtered.map(l => (
                         <tr key={l.id}>
                           <td>{l.customer_name}</td><td>{businessOf(l.business_unit).name}</td><td>{l.city || '—'}</td><td>{l.state || '—'}</td>
-                          <td>{l.owner?.name || '—'}</td><td>{pc(l).name || '—'}</td><td>{pc(l).phone || '—'}</td><td>{pc(l).email || '—'}</td><td>{pc(l).designation || '—'}</td>
+                          <td>{bdLabel(l.owner) || '—'}</td><td>{pc(l).name || '—'}</td><td>{pc(l).phone || '—'}</td><td>{pc(l).email || '—'}</td><td>{pc(l).designation || '—'}</td>
                         </tr>
                       ))}
                     </tbody>

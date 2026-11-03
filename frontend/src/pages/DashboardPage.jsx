@@ -7,6 +7,7 @@ import { getLeads, getStageHistory, getSettings, setSetting, getBds, getBusiness
 import { STAGE_ORDER, STAGE_WIN_PCT, PHASE_BADGE } from '../utils/constants';
 import { fmtDate, isOverdue, daysBetween, calcLeadScore, dealSizeThresholds, renewalStatus, renewalLabel, RENEWAL_BAND_STYLE, buildRenewedSet } from '../utils/leadHelpers';
 import IndiaMap from '../components/IndiaMap';
+import { buildNameCount, bdLabel as _bdLabel, ownerLabel as _ownerLabel } from '../utils/nameLabels';
 
 function Kpi({ icon, label, value, sub, onClick }) {
   return (
@@ -64,9 +65,9 @@ export default function DashboardPage() {
   const [stageHistory, setStageHistory] = useState([]);
   const [bds, setBds] = useState([]);
   const [settings, setSettings] = useState({});
-  const [filterBD, setFilterBD] = useState('');
+  const [filterBD, setFilterBD] = useState(''); // user id (string) or ''
   const [loading, setLoading] = useState(true);
-  const [editingTarget, setEditingTarget] = useState(null); // bd name or 'weekly'
+  const [editingTarget, setEditingTarget] = useState(null); // bd id (string) or 'weekly'
   const [targetInput, setTargetInput] = useState('');
   const [tab, setTab] = useState(() => dashSearchParams.get('tab') || 'overview');
   const [datePreset, setDatePreset] = useState('all'); // all | week | month | quarter | year | custom
@@ -91,21 +92,28 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [user.business_unit]);
 
+  // Name-duplication lookup: when two BDs share a name, show "Name (username)" to disambiguate.
+  const bdNameCount = useMemo(() => buildNameCount(bds), [bds]);
+  const bdLabel = (b) => _bdLabel(b, bdNameCount);
+  const ownerLabel = (owner) => _ownerLabel(owner, bdNameCount);
+
   const weeklyTarget = parseFloat(settings.weekly_target_lakhs) || 5.3;
   const bdTargets = useMemo(() => { try { return JSON.parse(settings.bd_weekly_targets || '{}'); } catch { return {}; } }, [settings]);
 
   // The weekly target that applies to the CURRENT view: a BD sees their own target; an admin viewing
   // one BD sees that BD's; an admin viewing everyone sees the team total (sum of each BD's target).
   // A BD with no individually-set target falls back to the business-wide default.
-  const scopedBdName = !isAdmin ? user.name : (filterBD || null);
+  const scopedBdId = !isAdmin ? String(user.id) : (filterBD || null);
   const scopedWeeklyTarget = useMemo(() => {
-    if (scopedBdName) return Number(bdTargets[scopedBdName]) || weeklyTarget;
-    if (bds.length) return bds.reduce((s, b) => s + (Number(bdTargets[b.name]) || weeklyTarget), 0);
+    if (scopedBdId) return Number(bdTargets[scopedBdId]) || weeklyTarget;
+    if (bds.length) return bds.reduce((s, b) => s + (Number(bdTargets[String(b.id)]) || weeklyTarget), 0);
     return weeklyTarget;
-  }, [scopedBdName, bdTargets, weeklyTarget, bds]);
+  }, [scopedBdId, bdTargets, weeklyTarget, bds]);
+  const scopedBdObj = scopedBdId ? bds.find(b => String(b.id) === scopedBdId) || { name: user.name } : null;
+  const scopedBdDisplay = scopedBdObj ? ownerLabel(scopedBdObj) : null;
 
   // BD-filtered base (used by widgets that have their own time axis, e.g. Inventory Trend).
-  const bdFiltered = useMemo(() => isAdmin && filterBD ? leads.filter(l => l.owner?.name === filterBD) : leads, [leads, isAdmin, filterBD]);
+  const bdFiltered = useMemo(() => isAdmin && filterBD ? leads.filter(l => String(l.owner?.id) === filterBD) : leads, [leads, isAdmin, filterBD]);
 
   // Header date-range filter — bounds leads by creation date. "all" = no restriction (default), so
   // the dashboard behaves exactly as before until the user narrows the window.
@@ -314,17 +322,17 @@ export default function DashboardPage() {
 
   // Annual BD performance — BDs see only their own; admin sees all BDs, or just the selected one.
   const currentYear = new Date().getFullYear();
-  const bdsToShow = isAdmin ? (filterBD ? [filterBD] : bds.map(b => b.name)) : [user.name];
+  const bdsToShow = isAdmin ? (filterBD ? bds.filter(b => String(b.id) === filterBD) : bds) : bds.filter(b => String(b.id) === String(user.id));
   // BD cards (weekly targets) follow the same selection.
-  const bdCards = isAdmin && filterBD ? bds.filter(b => b.name === filterBD) : bds;
-  const annualBDPerf = bdsToShow.map(name => {
-    const bdLeads = leads.filter(l => l.owner?.name === name);
+  const bdCards = isAdmin && filterBD ? bds.filter(b => String(b.id) === filterBD) : bds;
+  const annualBDPerf = bdsToShow.map(bd => {
+    const bdLeads = leads.filter(l => l.owner?.id === bd.id);
     const wonThisYear = bdLeads.filter(l => l.phase === 'Won' && new Date(l.po_received_date || l.phase_changed_at).getFullYear() === currentYear);
     const closedThisYear = bdLeads.filter(l => ['Won','Lost'].includes(l.phase) && new Date(l.po_received_date || l.phase_changed_at || l.createdAt).getFullYear() === currentYear);
     const wonTCVYear = wonThisYear.reduce((s,l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
     const convRate = closedThisYear.length ? Math.round((wonThisYear.length / closedThisYear.length) * 100) : 0;
     const activeNow = bdLeads.filter(l => !['Lost','On Hold','Won'].includes(l.phase));
-    return { name, totalLeads: bdLeads.length, wonDeals: wonThisYear.length, wonTCV: wonTCVYear, convRate, activeLeads: activeNow.length };
+    return { id: bd.id, name: bd.name, label: bdLabel(bd), totalLeads: bdLeads.length, wonDeals: wonThisYear.length, wonTCV: wonTCVYear, convRate, activeLeads: activeNow.length };
   });
 
   // Won Trend — year-over-year month-by-month comparison.
@@ -477,10 +485,10 @@ export default function DashboardPage() {
     setSettings(s => ({ ...s, weekly_target_lakhs: String(v) }));
     setEditingTarget(null);
   };
-  const saveBdTarget = async (bdName) => {
+  const saveBdTarget = async (bdId) => {
     const v = parseFloat(targetInput);
     if (isNaN(v) || v <= 0) return;
-    const next = { ...bdTargets, [bdName]: v };
+    const next = { ...bdTargets, [String(bdId)]: v };
     await setSetting('bd_weekly_targets', JSON.stringify(next));
     setSettings(s => ({ ...s, bd_weekly_targets: JSON.stringify(next) }));
     setEditingTarget(null);
@@ -515,7 +523,7 @@ export default function DashboardPage() {
             {isAdmin && (
               <select className="input" style={{ width: 160 }} value={filterBD} onChange={e => setFilterBD(e.target.value)}>
                 <option value="">All Sales Reps</option>
-                {bds.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+                {bds.map(b => <option key={b.id} value={String(b.id)}>{bdLabel(b)}</option>)}
               </select>
             )}
           </div>
@@ -539,7 +547,7 @@ export default function DashboardPage() {
         {tab === 'overview' && (<>
         {overdueForTicker.length > 0 && (() => {
           const text = overdueForTicker
-            .map(l => `${l.customer_name} · ${l.owner?.name?.split(' ')[0]} · Due ${fmtDate(l.next_followup_date)}`)
+            .map(l => `${l.customer_name} · ${ownerLabel(l.owner)} · Due ${fmtDate(l.next_followup_date)}`)
             .join('     •     ');
           // Speed scales with content so the pace stays even regardless of how many items there are.
           const duration = Math.max(18, overdueForTicker.length * 6);
@@ -559,7 +567,7 @@ export default function DashboardPage() {
         {/* On-Hold ticker — any On Hold lead is surfaced team-wide (Section 7.2 of the scoring spec). */}
         {onHoldForTicker.length > 0 && (() => {
           const text = onHoldForTicker
-            .map(l => `${l.customer_name} · ${l.owner?.name?.split(' ')[0]}${l.hold_end_date ? ` · Resume ${fmtDate(l.hold_end_date)}` : ''}`)
+            .map(l => `${l.customer_name} · ${ownerLabel(l.owner)}${l.hold_end_date ? ` · Resume ${fmtDate(l.hold_end_date)}` : ''}`)
             .join('     •     ');
           const duration = Math.max(18, onHoldForTicker.length * 6);
           return (
@@ -643,26 +651,27 @@ export default function DashboardPage() {
           {isAdmin && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16, borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
               {bdCards.map(b => {
-                const bdWeeklyTarget = bdTargets[b.name] ?? weeklyTarget;
+                const bdWeeklyTarget = bdTargets[String(b.id)] ?? weeklyTarget;
                 const bdTarget = bdWeeklyTarget * pipeWeeks;
-                const bdWonLeads = filtered.filter(l => l.owner?.name === b.name && l.phase === 'Won').filter(l => {
+                const bdWonLeads = filtered.filter(l => l.owner?.id === b.id && l.phase === 'Won').filter(l => {
                   const d = new Date(l.po_received_date || l.phase_changed_at); return d >= pipeStart && d <= pipeEnd;
                 });
                 const bdWon = bdWonLeads.reduce((s,l) => s + (parseFloat(l.po_actual_value_lakhs) || parseFloat(l.potential_tcv_lakhs) || 0), 0);
                 const bdLic = hasHardware ? bdWonLeads.reduce((s,l) => s + (parseInt(l.quantity, 10) || 0), 0) : 0;
                 const bdCust = hasHardware ? new Set(bdWonLeads.map(l => l.customer_name).filter(Boolean)).size : 0;
                 const pct = Math.min(100, Math.round((bdWon / bdTarget) * 100));
+                const bKey = String(b.id);
                 return (
                   <div key={b.id}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
-                      <span style={{ fontWeight: 700 }}>{b.name.split(' ')[0]}</span>
-                      {editingTarget === b.name ? (
+                      <span style={{ fontWeight: 700 }}>{bdLabel(b)}</span>
+                      {editingTarget === bKey ? (
                         <span style={{ display: 'flex', gap: 4 }}>
                           <input className="input" style={{ width: 70 }} type="number" step="0.1" value={targetInput} onChange={e => setTargetInput(e.target.value)} />
-                          <button className="btn btn-sm btn-primary" onClick={() => saveBdTarget(b.name)}>✓</button>
+                          <button className="btn btn-sm btn-primary" onClick={() => saveBdTarget(b.id)}>✓</button>
                         </span>
                       ) : (
-                        <span style={{ color: '#64748b' }}>₹{bdWon.toFixed(1)}L / ₹{bdTarget.toFixed(1)}L <button className="btn btn-sm" style={{ marginLeft: 6, padding: '2px 6px' }} onClick={() => { setEditingTarget(b.name); setTargetInput(String(bdWeeklyTarget)); }}>✏️</button></span>
+                        <span style={{ color: '#64748b' }}>₹{bdWon.toFixed(1)}L / ₹{bdTarget.toFixed(1)}L <button className="btn btn-sm" style={{ marginLeft: 6, padding: '2px 6px' }} onClick={() => { setEditingTarget(bKey); setTargetInput(String(bdWeeklyTarget)); }}>✏️</button></span>
                       )}
                     </div>
                     <div style={{ height: 6, background: '#f1f5f9', borderRadius: 99, marginTop: 4 }}>
@@ -693,10 +702,10 @@ export default function DashboardPage() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
-            <div className="card-sm" style={{ textAlign: 'center' }} title={`${scopedBdName ? (isAdmin ? scopedBdName + "'s" : 'Your') : 'Team'} weekly target ₹${Number(scopedWeeklyTarget).toFixed(1)}L × this ${attCfg.unit}`}>
+            <div className="card-sm" style={{ textAlign: 'center' }} title={`${scopedBdDisplay ? (isAdmin ? scopedBdDisplay + "'s" : 'Your') : 'Team'} weekly target ₹${Number(scopedWeeklyTarget).toFixed(1)}L × this ${attCfg.unit}`}>
               <div style={{ fontSize: 11, color: '#94a3b8' }}>Target</div>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>₹{attainment.target.toFixed(1)}L</div>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>{scopedBdName ? (isAdmin ? `${scopedBdName.split(' ')[0]}'s` : 'your') : 'team'} · this {attCfg.unit}</div>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>{scopedBdDisplay ? (isAdmin ? `${scopedBdDisplay}'s` : 'your') : 'team'} · this {attCfg.unit}</div>
             </div>
             <div className={`card-sm ${attainment.expectedIds.length ? 'clickable' : ''}`} style={{ textAlign: 'center', cursor: attainment.expectedIds.length ? 'pointer' : 'default' }}
               onClick={() => navigateWithIds(attainment.expectedIds, `Expected · this ${attCfg.unit}`)}
@@ -726,7 +735,7 @@ export default function DashboardPage() {
                   <div key={l.id} className="card-sm" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', borderLeft: `3px solid ${s.border}` }}>
                     <div>
                       <p style={{ fontSize: 12, fontWeight: 700, margin: 0 }}>{l.customer_name}{l.city ? ` · ${l.city}` : ''}</p>
-                      <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{l.owner?.name?.split(' ')[0]} · {l.lead_ref || `₹${l.potential_tcv_lakhs}L`} · ends {l.service_end_date ? fmtDate(l.service_end_date) : '—'}</p>
+                      <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{ownerLabel(l.owner)} · {l.lead_ref || `₹${l.potential_tcv_lakhs}L`} · ends {l.service_end_date ? fmtDate(l.service_end_date) : '—'}</p>
                     </div>
                     <span style={{ background: s.bg, color: s.fg, border: `1px solid ${s.border}`, borderRadius: 999, padding: '2px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
                       {renewalLabel(l.renewal)}
@@ -970,10 +979,10 @@ export default function DashboardPage() {
           <p className="section-title">🏅 Annual Sales Rep Performance — {currentYear}</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {annualBDPerf.map(bd => (
-              <div key={bd.name} className="card-sm">
+              <div key={bd.id} className="card-sm">
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div>
-                    <p style={{ fontWeight: 700, margin: 0, fontSize: 13 }}>{bd.name}</p>
+                    <p style={{ fontWeight: 700, margin: 0, fontSize: 13 }}>{bd.label}</p>
                     <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>{bd.totalLeads} total leads</p>
                   </div>
                   <div style={{ textAlign: 'right' }}>

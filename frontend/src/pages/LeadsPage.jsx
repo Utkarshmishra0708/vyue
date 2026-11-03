@@ -18,6 +18,7 @@ import { hasMoney, fmtDate, isTATBreached, isOverdue, hasConfidence, confidenceT
 import { sortWithWonLast } from '../utils/leadPriority';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import { writeFormattedSheet } from '../utils/excelExport';
+import { buildNameCount, bdLabel as _bdLabel, ownerLabel as _ownerLabel } from '../utils/nameLabels';
 import { APP_NAME } from '../config/brand';
 import useBusinessUnits from '../utils/useBusinessUnits';
 
@@ -157,6 +158,9 @@ export default function LeadsPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { getBds(user.business_unit).then(setBds); }, [user.business_unit]);
+  const bdNameCount = useMemo(() => buildNameCount(bds), [bds]);
+  const bdLabel = (b) => _bdLabel(b, bdNameCount);
+  const ownerLabel = (owner) => _ownerLabel(owner, bdNameCount);
   useEffect(() => { getBusinessUnitConfig(user.business_unit).then(setBuConfig).catch(() => {}); }, [user.business_unit]);
   // Per-stage TAT days (SLA target), used to colour the Aging column against each stage's own target.
   useEffect(() => {
@@ -233,7 +237,7 @@ export default function LeadsPage() {
       && (!filterTemps.length || filterTemps.includes(l.lead_temperature))
       && (!filterScores.length || filterScores.includes(scoreBandOf(l)))
       && (!filterSources.length || filterSources.includes(l.lead_source))
-      && (!filterBDs.length || filterBDs.includes(l.owner?.name))
+      && (!filterBDs.length || filterBDs.includes(String(l.owner?.id)))
       && (!filterCustomers.length || filterCustomers.includes(l.customer_name))
       && (!filterOverdue || isOverdue(l))
       && followOk
@@ -366,7 +370,7 @@ export default function LeadsPage() {
       const row = {
         'Sr No': l.sr_no, 'Lead Ref': l.lead_ref || '', 'Customer Code': l.customer_code || '',
         'Business': businessOf(l.business_unit).name, 'Customer': l.customer_name,
-        'City': l.city || '', 'State': l.state || '', 'Lead Owner': l.owner?.name || '',
+        'City': l.city || '', 'State': l.state || '', 'Lead Owner': bdLabel(l.owner) || '',
         // Contact / POC details (primary contact; any additional POCs listed in "Other Contacts").
         'Contact Name': poc.name, 'Contact Phone': poc.phone, 'Contact Email': poc.email, 'Contact Designation': poc.designation,
         'Other Contacts': formatOtherContacts(l),
@@ -402,7 +406,7 @@ export default function LeadsPage() {
       tables: [{
         columns: ['Sr', 'Customer', 'Sales Rep', 'Phase', 'Rating', 'Deal Value (₹L)', 'Conf %', 'Source', 'Next Follow-Up'],
         rows: toExport.map(l => [
-          l.sr_no, l.customer_name, l.owner?.name?.split(' ')[0] || '', l.phase, l.lead_temperature,
+          l.sr_no, l.customer_name, ownerLabel(l.owner) || '', l.phase, l.lead_temperature,
           l.potential_tcv_lakhs, hasConfidence(l) ? `${Math.round(Number(l.confidence_score))}%` : '—', l.lead_source,
           ['On Hold', 'Lost', 'Won'].includes(l.phase) ? '—' : (l.next_followup_date ? fmtDate(l.next_followup_date) : '—'),
         ]),
@@ -411,7 +415,7 @@ export default function LeadsPage() {
     });
   };
 
-  const bdNames = bds.map(b => b.name);
+  const bdOpts = bds.map(b => ({ value: String(b.id), label: b.label || b.name }));
   const customerNames = useMemo(() => [...new Set(leads.map(l => l.customer_name).filter(Boolean))].sort(), [leads]);
   // Filter options come from the per-business dropdowns, unioned with any values present in the data.
   const sourceOpts = [...new Set([...(dropdowns.lead_source || SOURCES), ...leads.map(l => l.lead_source).filter(Boolean)])];
@@ -458,7 +462,7 @@ export default function LeadsPage() {
           <MultiSelect label="Scoring" options={SCORE_BANDS} selected={filterScores} onChange={setFilterScores} />
           <MultiSelect label="Source" options={sourceOpts} selected={filterSources} onChange={setFilterSources} />
           <MultiSelect label="Customer" options={customerNames} selected={filterCustomers} onChange={setFilterCustomers} />
-          {isAdmin && <MultiSelect label="Sales Rep" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
+          {isAdmin && <MultiSelect label="Sales Rep" options={bdOpts} selected={filterBDs} onChange={setFilterBDs} />}
           {/* Follow-up date range — single button with dropdown */}
           <FollowUpDatePicker from={filterFollowFrom} to={filterFollowTo}
             onFromChange={setFilterFollowFrom} onToChange={setFilterFollowTo} />
@@ -508,7 +512,7 @@ export default function LeadsPage() {
         )}
 
         {loading ? <p style={{ color: '#94a3b8' }}>Loading…</p> : view === 'kanban' ? (
-          <KanbanView leads={filtered} onOpen={openEdit} onPhaseChange={handlePhaseChangeKanban} tatMap={tatMap} />
+          <KanbanView leads={filtered} onOpen={openEdit} onPhaseChange={handlePhaseChangeKanban} tatMap={tatMap} bds={bds} />
         ) : (
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
             <table className="data-table">
@@ -565,7 +569,7 @@ export default function LeadsPage() {
                           </span>
                         )}
                       </td>
-                      {isAdmin && <td>{l.owner?.name?.split(' ')[0]}</td>}
+                      {isAdmin && <td>{ownerLabel(l.owner)}</td>}
                       <td><span className={`badge ${PHASE_BADGE[l.phase]}`}>{l.phase}</span></td>
                       <td>
                         {(() => {

@@ -72,6 +72,35 @@ if (require.main === module) {
     try {
       await runMigrations();
 
+      // One-time: convert bd_weekly_targets from name-keyed to id-keyed (P3-2c, issue 39).
+      const { Setting, User: UserBoot } = require('./models');
+      const bdtRow = await Setting.findByPk('bd_weekly_targets');
+      if (bdtRow && bdtRow.value && bdtRow.value !== '{}') {
+        try {
+          const obj = JSON.parse(bdtRow.value);
+          const keys = Object.keys(obj);
+          const hasNameKey = keys.some(k => !/^\d+$/.test(k));
+          if (hasNameKey) {
+            const allUsers = await UserBoot.findAll({ attributes: ['id', 'name'], where: { active: true } });
+            const nameToId = {};
+            for (const u of allUsers) {
+              const n = String(u.name).trim();
+              if (!nameToId[n]) nameToId[n] = String(u.id);
+            }
+            const converted = {};
+            for (const [k, v] of Object.entries(obj)) {
+              if (/^\d+$/.test(k)) { converted[k] = v; continue; }
+              const uid = nameToId[k];
+              if (uid) { converted[uid] = v; }
+              else { console.log(`[bd_targets] no active user found for name "${k}" — target dropped`); }
+            }
+            bdtRow.value = JSON.stringify(converted);
+            await bdtRow.save();
+            console.log(`[bd_targets] converted name-keyed targets to id-keyed`);
+          }
+        } catch (e) { console.error('[bd_targets] conversion error:', e.message); }
+      }
+
       // People created before usernames existed get theirs now (in the order they were created).
       const { User: UserModel } = require('./models');
       const madeUsernames = await require('./services/username').ensureUsernames(UserModel, await require('./services/ownerSession').ownerCopyIds(UserModel));

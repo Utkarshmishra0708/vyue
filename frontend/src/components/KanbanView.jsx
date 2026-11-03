@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { PHASE_BADGE } from '../utils/constants';
 import { hasConfidence, confidenceTrend, stageAging, hasMoney } from '../utils/leadHelpers';
 import { sortByPriority } from '../utils/leadPriority';
+import { buildNameCount, ownerLabel as _ownerLabel } from '../utils/nameLabels';
 
 // Small confidence chip for a Kanban card: coloured by score band with a week-over-week trend mark.
 function ConfChip({ lead }) {
@@ -52,9 +53,11 @@ const COLUMN_STYLE = {
   'On Hold':     { bg: '#f1f5f9', accent: '#64748b' },
 };
 
-export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap }) {
+export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap, bds }) {
   const [dragId, setDragId] = useState(null);
   const [overCol, setOverCol] = useState(null);
+  const bdNameCount = useMemo(() => buildNameCount(bds), [bds]);
+  const ownerLabel = (owner) => _ownerLabel(owner, bdNameCount);
 
   return (
     <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12 }}>
@@ -110,7 +113,7 @@ export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap }) {
                         <ConfChip lead={l} />
                       </span>
                     </div>
-                    <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{l.owner?.name?.split(' ')[0]} · {hasMoney(l.potential_tcv_lakhs) ? `₹${l.potential_tcv_lakhs}L` : '—'}</p>
+                    <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{ownerLabel(l.owner)} · {hasMoney(l.potential_tcv_lakhs) ? `₹${l.potential_tcv_lakhs}L` : '—'}</p>
                   </div>
                 );
               })}

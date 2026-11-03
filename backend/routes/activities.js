@@ -148,7 +148,7 @@ router.get('/', requireModule('activities', 'read'), async (req, res) => {
     await ensureDefaultTab(req.user.business_unit);
     const rows = await Activity.findAll({
       where: { business_unit: req.user.business_unit },
-      include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] }],
+      include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'username', 'color', 'initials'] }],
       order: [['status', 'ASC'], ['sort_order', 'ASC'], ['created_at', 'DESC']],
     });
     return res.json(rows);
@@ -177,7 +177,7 @@ router.post('/', requireModule('activities', 'full'), async (req, res) => {
       created_by_name: req.user.name,
     });
     const full = await Activity.findByPk(card.id, {
-      include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] }],
+      include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'username', 'color', 'initials'] }],
     });
 
     if (payload.owner_name) {
@@ -217,7 +217,7 @@ router.patch('/:id', requireModule('activities', 'edit'), async (req, res) => {
     if (payload.status !== oldStatus) payload.status_changed_at = new Date();
     await card.update(payload);
     const full = await Activity.findByPk(card.id, {
-      include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] }],
+      include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'username', 'color', 'initials'] }],
     });
 
     const { onTaskStatusChange, onTaskAssigned } = require('../services/notifications/rules/teamRules');

@@ -5,6 +5,7 @@ import MultiSelect from '../components/MultiSelect';
 import { useAuth } from '../context/AuthContext';
 import { getLeads, getBds, getDropdowns, getContacts, createContact, updateContact as updateContactApi, deleteContact as deleteContactApi } from '../services/api';
 import { isOverdue, fmtDate, stripHtml, renewalStatus, renewalLabel, RENEWAL_BAND_STYLE, buildRenewedSet } from '../utils/leadHelpers';
+import { buildNameCount, bdLabel as _bdLabel } from '../utils/nameLabels';
 
 // Small renewal badge used in the Customers list and on PO cards.
 function RenewalBadge({ status, showOk = false }) {
@@ -239,6 +240,9 @@ export default function CustomersPage() {
     getDropdowns().then(setDropdowns).catch(() => {});
   }, [user.business_unit]);
 
+  const bdNameCount = useMemo(() => buildNameCount(bds), [bds]);
+  const bdLabel = (b) => _bdLabel(b, bdNameCount);
+
   // ---- Filter bar state (independent of Leads page) ----
   const [search, setSearch] = useState('');
   const [filterPhases, setFilterPhases] = useState([]);
@@ -249,7 +253,7 @@ export default function CustomersPage() {
   const [filterRenewal, setFilterRenewal] = useState([]);
   const [filterOverdue, setFilterOverdue] = useState(false);
 
-  const bdNames = bds.map(b => b.name);
+  const bdOpts = bds.map(b => ({ value: String(b.id), label: b.label || b.name }));
   const customerNames = useMemo(() => [...new Set((leads || []).map(l => l.customer_name).filter(Boolean))].sort(), [leads]);
   const sourceOpts = [...new Set([...(dropdowns.lead_source || SOURCES), ...(leads || []).map(l => l.lead_source).filter(Boolean)])];
 
@@ -278,7 +282,7 @@ export default function CustomersPage() {
         && (!filterPhases.length  || filterPhases.includes(l.phase))
         && (!filterScores.length  || filterScores.includes(scoreBandOf(l)))
         && (!filterSources.length || filterSources.includes(l.lead_source))
-        && (!filterBDs.length     || filterBDs.includes(l.owner?.name))
+        && (!filterBDs.length     || filterBDs.includes(String(l.owner?.id)))
         && (!filterCustomers.length || filterCustomers.includes(l.customer_name))
         && (!filterRenewal.length || filterRenewal.includes(renewalBandMatch(l)))
         && (!filterOverdue        || isOverdue(l));
@@ -394,7 +398,7 @@ export default function CustomersPage() {
           <MultiSelect label="Source" options={sourceOpts} selected={filterSources} onChange={setFilterSources} />
           <MultiSelect label="Customer" options={customerNames} selected={filterCustomers} onChange={setFilterCustomers} />
           <MultiSelect label="Renewal Due" options={RENEWAL_FILTER_OPTS} selected={filterRenewal} onChange={setFilterRenewal} />
-          {isAdmin && <MultiSelect label="Sales Rep" options={bdNames} selected={filterBDs} onChange={setFilterBDs} />}
+          {isAdmin && <MultiSelect label="Sales Rep" options={bdOpts} selected={filterBDs} onChange={setFilterBDs} />}
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#334155' }}>
             <input type="checkbox" checked={filterOverdue} onChange={e => setFilterOverdue(e.target.checked)} /> Followup overdue only
           </label>
@@ -631,7 +635,7 @@ function PoCard({ l, renewedIds }) {
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, padding: '14px 16px', background: '#eef2ff', borderBottom: '1px solid #c7d2fe' }}>
-        <Stat label="Sales Rep" value={l.owner?.name || '—'} />
+        <Stat label="Sales Rep" value={bdLabel(l.owner) || '—'} />
         <Stat label="Order Number" value={l.po_number || '—'} />
         <Stat label="Quantity" value={l.quantity || '—'} />
         <Stat label="Deal Value" value={l.potential_tcv_lakhs ? `₹${l.potential_tcv_lakhs}L` : '—'} />

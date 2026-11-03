@@ -10,6 +10,8 @@ export default function MultiSelect({ label, options, selected, onChange, width 
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
+  const valOf = (opt) => (opt && typeof opt === 'object') ? opt.value : opt;
+  const lblOf = (opt) => (opt && typeof opt === 'object') ? opt.label : opt;
   const toggle = (val) => onChange(selected.includes(val) ? selected.filter(v => v !== val) : [...selected, val]);
 
   return (
@@ -29,12 +31,15 @@ export default function MultiSelect({ label, options, selected, onChange, width 
           border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.08)',
           zIndex: 20, minWidth: width, maxHeight: 220, overflowY: 'auto', padding: 6,
         }}>
-          {options.map(opt => (
-            <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', fontSize: 12, cursor: 'pointer', borderRadius: 6 }}>
-              <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} />
-              {opt}
-            </label>
-          ))}
+          {options.map(opt => {
+            const v = valOf(opt), l = lblOf(opt);
+            return (
+              <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', fontSize: 12, cursor: 'pointer', borderRadius: 6 }}>
+                <input type="checkbox" checked={selected.includes(v)} onChange={() => toggle(v)} />
+                {l}
+              </label>
+            );
+          })}
           {selected.length > 0 && (
             <button type="button" className="btn btn-sm" style={{ width: '100%', marginTop: 4, justifyContent: 'center' }} onClick={() => onChange([])}>Clear</button>
           )}

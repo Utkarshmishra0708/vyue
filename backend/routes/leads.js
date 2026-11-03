@@ -279,7 +279,7 @@ router.get('/', canReadLeadData, async (req, res) => {
     const leads = await Lead.findAll({
       where,
       include: [
-        { model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] },
+        { model: User, as: 'owner', attributes: ['id', 'name', 'username', 'color', 'initials'] },
         { model: LeadContact, as: 'contacts', attributes: ['name', 'phone', 'email', 'designation'] },
       ],
       order: [['sr_no', 'ASC']],
@@ -379,7 +379,7 @@ router.get('/:id', canReadLeadData, async (req, res) => {
   try {
     const lead = await Lead.findByPk(req.params.id, {
       include: [
-        { model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] },
+        { model: User, as: 'owner', attributes: ['id', 'name', 'username', 'color', 'initials'] },
         { model: LeadContact, as: 'contacts' },
         { model: GlobalPo, as: 'globalPo' },
         { model: ActivityLog, as: 'activity', order: [['createdAt', 'DESC']] },
@@ -452,7 +452,7 @@ router.post('/', requireModule('leads', 'full'), async (req, res) => {
     }, { transaction: t });
 
     await t.commit();
-    const full = await Lead.findByPk(lead.id, { include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] }] });
+    const full = await Lead.findByPk(lead.id, { include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'username', 'color', 'initials'] }] });
 
     // Fire-and-forget notifications (never blocks the response).
     const nCtx = { lead: { id: lead.id, sr_no: lead.sr_no, customer_name: lead.customer_name, owner_id: lead.owner_id }, actor: req.user, businessUnit: req.user.business_unit };
@@ -564,7 +564,7 @@ router.put('/:id', requireModule('leads', 'edit'), async (req, res) => {
     }
 
     await t.commit();
-    const full = await Lead.findByPk(existing.id, { include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'color', 'initials'] }] });
+    const full = await Lead.findByPk(existing.id, { include: [{ model: User, as: 'owner', attributes: ['id', 'name', 'username', 'color', 'initials'] }] });
 
     // Audit trail — fire-and-forget (logChanges never throws)
     logChanges({
