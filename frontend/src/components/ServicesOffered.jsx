@@ -37,7 +37,7 @@ function ComponentFields({ comp, onPatch, disabled }) {
       </select>
       {isOpex
         ? <FreqSelect value={comp.frequency} disabled={disabled} onChange={v => onPatch({ frequency: v })} />
-        : <span style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>one-time</span>}
+        : <span style={{ fontSize: 11, color: 'var(--m3-outline)', textAlign: 'center' }}>one-time</span>}
       <input className="input" style={inStyle} type="number" step="0.01" min="0" value={comp.rate ?? ''} disabled={disabled}
         onChange={e => onPatch({ rate: e.target.value })} placeholder={isOpex ? 'Unit rate / period' : 'Unit rate'} />
       <input className="input" style={inStyle} type="number" min="0" value={comp.qty ?? ''} disabled={disabled}
@@ -90,7 +90,7 @@ export default function ServicesOffered({ catalog = [], contractMonths, value = 
   return (
     <section>
       <p className="section-title">Services Offered</p>
-      <p style={{ fontSize: 11, color: '#94a3b8', margin: '-6px 0 12px' }}>
+      <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: '-6px 0 12px' }}>
         Pick the items on this deal and set Recurring/One-time, billing frequency (recurring), unit rate and quantity.
         Deal Value is auto-calculated from these × the contract period.
       </p>
@@ -99,40 +99,40 @@ export default function ServicesOffered({ catalog = [], contractMonths, value = 
         const items = byCat[cat.key] || [];
         return (
           <div key={cat.key} style={{ border: '1px solid #e5e9f0', borderRadius: 10, marginBottom: 12 }}>
-            <div style={{ padding: '9px 12px', background: '#f8fafc', borderRadius: '10px 10px 0 0' }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{cat.title}</span>
-              <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 8 }}>{cat.hint}</span>
+            <div style={{ padding: '9px 12px', background: 'var(--m3-surface-container)', borderRadius: '10px 10px 0 0' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--m3-on-surface)' }}>{cat.title}</span>
+              <span style={{ fontSize: 11, color: 'var(--m3-outline)', marginLeft: 8 }}>{cat.hint}</span>
             </div>
             <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {items.length === 0 && (
-                <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0' }}>No items in this catalog — an Owner can add them in Edit Template.</p>
+                <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: '4px 0' }}>No items in this catalog — an Owner can add them in Edit Template.</p>
               )}
               {items.map(item => {
                 const line = lineByLabel.get(item.label);
                 const on = !!line;
                 const lineTotal = on ? (componentTcv(line.hw, months) + componentTcv(line.svc, months)) : 0;
                 return (
-                  <div key={item.slug || item.label} className="card-sm" style={{ borderColor: on ? '#c7d2fe' : '#e2e8f0', background: on ? '#eef2ff' : '#fff' }}>
+                  <div key={item.slug || item.label} className="card-sm" style={{ borderColor: on ? 'var(--m3-primary-container)' : 'var(--m3-outline-variant)', background: on ? 'var(--m3-primary-container)' : '#fff' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: readOnly ? 'default' : 'pointer', fontSize: 13, fontWeight: 600 }}>
                         <input type="checkbox" checked={on} disabled={readOnly} onChange={e => toggle(item, e.target.checked)} />
                         {item.label}
                       </label>
                       {on && lineTotal > 0 && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#4338ca' }}>₹{(lineTotal / 100000).toFixed(2)} L</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--m3-primary)' }}>₹{(lineTotal / 100000).toFixed(2)} L</span>
                       )}
                     </div>
                     {on && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
                         {line.hw && (
                           <div>
-                            {cat.key === 'hardware_software' && <div style={{ fontSize: 10.5, fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 }}>Hardware component</div>}
+                            {cat.key === 'hardware_software' && <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--m3-on-surface)', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 }}>Hardware component</div>}
                             <ComponentFields comp={line.hw} disabled={readOnly} onPatch={p => patch(item.label, 'hw', p)} />
                           </div>
                         )}
                         {line.svc && (
                           <div>
-                            {cat.key === 'hardware_software' && <div style={{ fontSize: 10.5, fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 }}>Service component</div>}
+                            {cat.key === 'hardware_software' && <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--m3-tertiary)', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 }}>Service component</div>}
                             <ComponentFields comp={line.svc} disabled={readOnly} onPatch={p => patch(item.label, 'svc', p)} />
                           </div>
                         )}
@@ -146,9 +146,9 @@ export default function ServicesOffered({ catalog = [], contractMonths, value = 
         );
       })}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 13, fontWeight: 700, color: '#0f172a', padding: '4px 2px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 13, fontWeight: 700, color: 'var(--m3-on-surface)', padding: '4px 2px' }}>
         <span>Deal Value: ₹{totals.tcvLakhs.toFixed(2)} L</span>
-        <span style={{ color: '#64748b' }}>First-year Annual Value: ₹{totals.acvLakhs.toFixed(2)} L</span>
+        <span style={{ color: 'var(--m3-on-surface-variant)' }}>First-year Annual Value: ₹{totals.acvLakhs.toFixed(2)} L</span>
       </div>
     </section>
   );

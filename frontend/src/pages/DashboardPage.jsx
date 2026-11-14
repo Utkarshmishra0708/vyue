@@ -12,10 +12,10 @@ import { buildNameCount, bdLabel as _bdLabel, ownerLabel as _ownerLabel } from '
 function Kpi({ icon, label, value, sub, onClick }) {
   return (
     <div className={`kpi-card ${onClick ? 'clickable' : ''}`} onClick={onClick}>
-      <div style={{ fontSize: 20, marginBottom: 6 }}>{icon}</div>
-      <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 2px' }}>{label}</p>
+      <div style={{ marginBottom: 6 }}>{icon}</div>
+      <p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: '0 0 2px' }}>{label}</p>
       <p style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{value}</p>
-      {sub && <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>{sub}</p>}
+      {sub && <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: '2px 0 0' }}>{sub}</p>}
     </div>
   );
 }
@@ -368,7 +368,7 @@ export default function DashboardPage() {
     });
   }, [wonPOs, poTrendYears, poTrendAvailableYears]);
   const poTrendActiveYears = poTrendYears.length ? poTrendYears : poTrendAvailableYears.slice(0, 2);
-  const PO_TREND_COLORS = ['#4f46e5', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6'];
+  const PO_TREND_COLORS = ['var(--m3-primary)', '#f59e0b', 'var(--m3-success)', 'var(--m3-error)', '#8b5cf6'];
   const poTrendTotals = useMemo(() => {
     const totals = {};
     for (const yr of poTrendActiveYears) {
@@ -494,15 +494,15 @@ export default function DashboardPage() {
     setEditingTarget(null);
   };
 
-  if (loading) return <Layout><div style={{ padding: 32, color: '#94a3b8' }}>Loading…</div></Layout>;
+  if (loading) return <Layout><div style={{ padding: 20, color: 'var(--m3-outline)' }}>Loading…</div></Layout>;
 
   return (
     <Layout>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--m3-outline-variant)', padding: '10px 16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Dashboard</h1>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Pipeline overview & analytics</p>
+            <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Dashboard</h1>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>Pipeline overview & analytics</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <select className="input" style={{ width: 150 }} value={datePreset} onChange={e => setDatePreset(e.target.value)} title="Filter leads by creation date">
@@ -516,7 +516,7 @@ export default function DashboardPage() {
             {datePreset === 'custom' && (
               <>
                 <input className="input" style={{ width: 140 }} type="date" value={customFrom} max={customTo || undefined} onChange={e => setCustomFrom(e.target.value)} />
-                <span style={{ color: '#94a3b8', fontSize: 12 }}>→</span>
+                <span style={{ color: 'var(--m3-outline)', fontSize: 12 }}>→</span>
                 <input className="input" style={{ width: 140 }} type="date" value={customTo} min={customFrom || undefined} onChange={e => setCustomTo(e.target.value)} />
               </>
             )}
@@ -530,11 +530,11 @@ export default function DashboardPage() {
         </div>
         {/* Tab strip */}
         <div style={{ display: 'flex', gap: 4, marginTop: 14 }}>
-          {[['overview', '📊 Overview'], ['analytics', '📈 Analytics']].map(([key, label]) => (
+          {[['overview', 'Overview'], ['analytics', 'Analytics']].map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
               style={{
                 border: 'none', background: 'none', cursor: 'pointer', padding: '8px 14px', fontSize: 13,
-                fontWeight: tab === key ? 700 : 500, color: tab === key ? '#4f46e5' : '#64748b',
+                fontWeight: tab === key ? 700 : 500, color: tab === key ? 'var(--m3-primary)' : 'var(--m3-on-surface-variant)',
                 borderBottom: tab === key ? '2px solid #4f46e5' : '2px solid transparent', marginBottom: -1,
               }}>
               {label}
@@ -543,7 +543,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
         {tab === 'overview' && (<>
         {overdueForTicker.length > 0 && (() => {
           const text = overdueForTicker
@@ -552,8 +552,8 @@ export default function DashboardPage() {
           // Speed scales with content so the pace stays even regardless of how many items there are.
           const duration = Math.max(18, overdueForTicker.length * 6);
           return (
-            <div style={{ background: '#dc2626', color: '#fff', borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontWeight: 700, flexShrink: 0 }}>⏰ OVERDUE</span>
+            <div style={{ background: 'var(--m3-error)', color: '#fff', borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontWeight: 700, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> OVERDUE</span>
               <div className="marquee" style={{ flex: 1 }}>
                 <div className="marquee__track" style={{ animationDuration: `${duration}s` }}>
                   <span style={{ paddingRight: 48 }}>{text}</span>
@@ -571,7 +571,7 @@ export default function DashboardPage() {
             .join('     •     ');
           const duration = Math.max(18, onHoldForTicker.length * 6);
           return (
-            <div style={{ background: '#0ea5e9', color: '#fff', borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ background: 'var(--m3-tertiary)', color: '#fff', borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
               <span style={{ fontWeight: 700, flexShrink: 0 }}>❄ ON HOLD</span>
               <div className="marquee" style={{ flex: 1 }}>
                 <div className="marquee__track" style={{ animationDuration: `${duration}s` }}>
@@ -584,17 +584,17 @@ export default function DashboardPage() {
         })()}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          <Kpi icon="💰" label="Open Pipeline" value={`₹${openTCV.toFixed(1)}L`} sub={`${active.length} active`} onClick={() => navigateWithFilter('active')} />
-          <Kpi icon="🏆" label="Won Deal Value" value={`₹${wonTCV.toFixed(1)}L`} sub={`${won.length} deals`} onClick={() => navigateWithFilter('won')} />
-          <Kpi icon="🔥" label="Hot Leads" value={String(hot.length)} sub="Tap to view" onClick={() => navigateWithFilter('hot')} />
-          <Kpi icon="⏰" label="Overdue Follow-Ups" value={String(overdue.length)} sub="Tap to view" onClick={() => navigateWithFilter('overdue')} />
+          <Kpi icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--m3-primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} label="Open Pipeline" value={`₹${openTCV.toFixed(1)}L`} sub={`${active.length} active`} onClick={() => navigateWithFilter('active')} />
+          <Kpi icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--m3-success)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>} label="Won Deal Value" value={`₹${wonTCV.toFixed(1)}L`} sub={`${won.length} deals`} onClick={() => navigateWithFilter('won')} />
+          <Kpi icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--m3-error)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} label="Hot Leads" value={String(hot.length)} sub="Tap to view" onClick={() => navigateWithFilter('hot')} />
+          <Kpi icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} label="Overdue Follow-Ups" value={String(overdue.length)} sub="Tap to view" onClick={() => navigateWithFilter('overdue')} />
         </div>
 
         {totalDataIssues > 0 && (
-          <div className="card" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
+          <div className="card" style={{ background: 'var(--m3-tertiary-container)', borderColor: 'var(--m3-outline-variant)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 16 }}>⚠️</span>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#92400e', margin: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--m3-on-surface)', margin: 0 }}>
                 Data Quality — {totalDataIssues} incomplete field{totalDataIssues > 1 ? 's' : ''} across leads
               </p>
             </div>
@@ -623,20 +623,20 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
             <div>
               <p className="section-title" style={{ margin: 0 }}>Pipeline Target</p>
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>Orders {pipelineLabel.toLowerCase()} vs ₹{pipelineTarget.toFixed(1)}L target</p>
+              <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: '2px 0 0' }}>Orders {pipelineLabel.toLowerCase()} vs ₹{pipelineTarget.toFixed(1)}L target</p>
             </div>
             <div style={{ textAlign: 'right' }}>
               <p style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>₹{pipelineWon.toFixed(2)}L</p>
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>{pipelinePct}% of ₹{pipelineTarget.toFixed(1)}L</p>
+              <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: 0 }}>{pipelinePct}% of ₹{pipelineTarget.toFixed(1)}L</p>
             </div>
           </div>
-          <div style={{ height: 8, background: '#f1f5f9', borderRadius: 99, marginBottom: 10 }}>
-            <div style={{ height: 8, width: `${pipelinePct}%`, background: pipelinePct >= 100 ? '#059669' : '#4f46e5', borderRadius: 99 }} />
+          <div style={{ height: 8, background: 'var(--color-bg)', borderRadius: 99, marginBottom: 10 }}>
+            <div style={{ height: 8, width: `${pipelinePct}%`, background: pipelinePct >= 100 ? 'var(--m3-success)' : 'var(--m3-primary)', borderRadius: 99 }} />
           </div>
           {hasHardware && (
-            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#334155', marginBottom: 4 }}>
-              <span>📦 <strong>{pipelineLicenses}</strong> Units</span>
-              <span>👥 <strong>{pipelineCustomers}</strong> Customer{pipelineCustomers !== 1 ? 's' : ''}</span>
+            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--m3-on-surface-variant)', marginBottom: 4 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg> <strong>{pipelineLicenses}</strong> Units</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg> <strong>{pipelineCustomers}</strong> Customer{pipelineCustomers !== 1 ? 's' : ''}</span>
             </div>
           )}
           {isAdmin && (
@@ -671,16 +671,16 @@ export default function DashboardPage() {
                           <button className="btn btn-sm btn-primary" onClick={() => saveBdTarget(b.id)}>✓</button>
                         </span>
                       ) : (
-                        <span style={{ color: '#64748b' }}>₹{bdWon.toFixed(1)}L / ₹{bdTarget.toFixed(1)}L <button className="btn btn-sm" style={{ marginLeft: 6, padding: '2px 6px' }} onClick={() => { setEditingTarget(bKey); setTargetInput(String(bdWeeklyTarget)); }}>✏️</button></span>
+                        <span style={{ color: 'var(--m3-on-surface-variant)' }}>₹{bdWon.toFixed(1)}L / ₹{bdTarget.toFixed(1)}L <button className="btn btn-sm" style={{ marginLeft: 6, padding: '2px 6px' }} onClick={() => { setEditingTarget(bKey); setTargetInput(String(bdWeeklyTarget)); }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button></span>
                       )}
                     </div>
-                    <div style={{ height: 6, background: '#f1f5f9', borderRadius: 99, marginTop: 4 }}>
-                      <div style={{ height: 6, width: `${pct}%`, background: pct >= 100 ? '#059669' : '#818cf8', borderRadius: 99 }} />
+                    <div style={{ height: 6, background: 'var(--color-bg)', borderRadius: 99, marginTop: 4 }}>
+                      <div style={{ height: 6, width: `${pct}%`, background: pct >= 100 ? 'var(--m3-success)' : '#818cf8', borderRadius: 99 }} />
                     </div>
                     {hasHardware && (
-                      <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
-                        <span>📦 {bdLic} units</span>
-                        <span>👥 {bdCust} customer{bdCust !== 1 ? 's' : ''}</span>
+                      <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--m3-outline)', marginTop: 3 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg> {bdLic} units</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg> {bdCust} customer{bdCust !== 1 ? 's' : ''}</span>
                       </div>
                     )}
                   </div>
@@ -694,7 +694,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
             <div>
               <p className="section-title" style={{ margin: 0 }}>Target vs Expected vs Won</p>
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>Expected = deals with a Order Expected date this {attCfg.unit}; Won = orders received this {attCfg.unit}</p>
+              <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: '2px 0 0' }}>Expected = deals with a Order Expected date this {attCfg.unit}; Won = orders received this {attCfg.unit}</p>
             </div>
             <select className="input" style={{ width: 160 }} value={attPeriod} onChange={e => setAttPeriod(e.target.value)}>
               {INV_GRAN.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
@@ -703,23 +703,23 @@ export default function DashboardPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
             <div className="card-sm" style={{ textAlign: 'center' }} title={`${scopedBdDisplay ? (isAdmin ? scopedBdDisplay + "'s" : 'Your') : 'Team'} weekly target ₹${Number(scopedWeeklyTarget).toFixed(1)}L × this ${attCfg.unit}`}>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>Target</div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>₹{attainment.target.toFixed(1)}L</div>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>{scopedBdDisplay ? (isAdmin ? `${scopedBdDisplay}'s` : 'your') : 'team'} · this {attCfg.unit}</div>
+              <div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>Target</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--m3-on-surface)' }}>₹{attainment.target.toFixed(1)}L</div>
+              <div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>{scopedBdDisplay ? (isAdmin ? `${scopedBdDisplay}'s` : 'your') : 'team'} · this {attCfg.unit}</div>
             </div>
             <div className={`card-sm ${attainment.expectedIds.length ? 'clickable' : ''}`} style={{ textAlign: 'center', cursor: attainment.expectedIds.length ? 'pointer' : 'default' }}
               onClick={() => navigateWithIds(attainment.expectedIds, `Expected · this ${attCfg.unit}`)}
               title={attainment.expectedIds.length ? `View the ${attainment.expCount} deal(s) with a Order Expected date this ${attCfg.unit}` : undefined}>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>Expected (order due)</div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#6366f1' }}>₹{attainment.expected.toFixed(1)}L</div>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>{attainment.expCount} deal{attainment.expCount === 1 ? '' : 's'}</div>
+              <div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>Expected (order due)</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--m3-primary)' }}>₹{attainment.expected.toFixed(1)}L</div>
+              <div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>{attainment.expCount} deal{attainment.expCount === 1 ? '' : 's'}</div>
             </div>
             <div className={`card-sm ${attainment.wonIds.length ? 'clickable' : ''}`} style={{ textAlign: 'center', cursor: attainment.wonIds.length ? 'pointer' : 'default' }}
               onClick={() => navigateWithIds(attainment.wonIds, `Won · this ${attCfg.unit}`)}
               title={attainment.wonIds.length ? `View the ${attainment.wonIds.length} deal(s) won this ${attCfg.unit}` : undefined}>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>Won</div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#059669' }}>₹{attainment.won.toFixed(1)}L</div>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>{attainment.wonPct}% of target</div>
+              <div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>Won</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--m3-success)' }}>₹{attainment.won.toFixed(1)}L</div>
+              <div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>{attainment.wonPct}% of target</div>
             </div>
           </div>
 
@@ -727,15 +727,15 @@ export default function DashboardPage() {
 
         {renewalAlerts.length > 0 && (
           <div className="card">
-            <p className="section-title">🔔 Renewal Alerts</p>
+            <p className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" /></svg> Renewal Alerts</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 260, overflowY: 'auto' }}>
               {renewalAlerts.map(l => {
                 const s = RENEWAL_BAND_STYLE[l.renewal.band] || RENEWAL_BAND_STYLE.ok;
                 return (
-                  <div key={l.id} className="card-sm" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', borderLeft: `3px solid ${s.border}` }}>
+                  <div key={l.id} className="card-sm" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--m3-surface-container-lowest)', borderLeft: `3px solid ${s.border}` }}>
                     <div>
                       <p style={{ fontSize: 12, fontWeight: 700, margin: 0 }}>{l.customer_name}{l.city ? ` · ${l.city}` : ''}</p>
-                      <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{ownerLabel(l.owner)} · {l.lead_ref || `₹${l.potential_tcv_lakhs}L`} · ends {l.service_end_date ? fmtDate(l.service_end_date) : '—'}</p>
+                      <p style={{ fontSize: 11, color: 'var(--m3-on-surface-variant)', margin: 0 }}>{ownerLabel(l.owner)} · {l.lead_ref || `₹${l.potential_tcv_lakhs}L`} · ends {l.service_end_date ? fmtDate(l.service_end_date) : '—'}</p>
                     </div>
                     <span style={{ background: s.bg, color: s.fg, border: `1px solid ${s.border}`, borderRadius: 999, padding: '2px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
                       {renewalLabel(l.renewal)}
@@ -766,7 +766,7 @@ export default function DashboardPage() {
             <p className="section-title">Conversion Funnel</p>
             {(() => {
               const hasData = (funnelWithConv[0]?.count || 0) > 0;
-              if (!hasData) return <p style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>No pipeline leads yet.</p>;
+              if (!hasData) return <p style={{ fontSize: 12, color: 'var(--m3-outline)', fontStyle: 'italic', margin: 0 }}>No pipeline leads yet.</p>;
               // Segmented trapezoid funnel: dark navy → light blue ramp (6 bands, Negotiation removed),
               // with the stage-to-stage conversion % shown between bands. The lightest bands stay a
               // visible blue (not white) so they read on the white card, with dark text.
@@ -801,7 +801,7 @@ export default function DashboardPage() {
                           <span style={{ fontSize: 12, fontWeight: 600, opacity: 0.9 }}>· {f.count} lead{f.count === 1 ? '' : 's'}</span>
                         </div>
                         {i < n - 1 && (
-                          <div style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: '#94a3b8', padding: '2px 0' }}>
+                          <div style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: 'var(--m3-outline)', padding: '2px 0' }}>
                             {nextConv === null ? '·' : `${nextConv}% conversion`}
                           </div>
                         )}
@@ -816,7 +816,7 @@ export default function DashboardPage() {
           <div className="card">
             <p className="section-title">Bottlenecks — Avg Days per Stage</p>
             {avgTimeInStage.every(s => s.avgDays === null) ? (
-              <p style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No completed stage transitions yet.</p>
+              <p style={{ fontSize: 12, color: 'var(--m3-outline)', fontStyle: 'italic' }}>No completed stage transitions yet.</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {avgTimeInStage.map(s => {
@@ -824,7 +824,7 @@ export default function DashboardPage() {
                   return (
                     <div key={s.stage} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
                       <div style={{ width: 80, fontWeight: 600 }}>{s.stage}</div>
-                      <div style={{ flex: 1, height: 16, background: '#f8fafc', borderRadius: 6 }}>
+                      <div style={{ flex: 1, height: 16, background: 'var(--m3-surface-container)', borderRadius: 6 }}>
                         {s.avgDays !== null && <div style={{ height: '100%', width: `${Math.max(4, Math.round((s.avgDays/maxAvg)*100))}%`, background: s.avgDays > 21 ? '#f87171' : s.avgDays > 14 ? '#fbbf24' : '#34d399', borderRadius: 6 }} />}
                       </div>
                       <div style={{ width: 60, textAlign: 'right' }}>{s.avgDays === null ? '—' : `${s.avgDays}d (${s.samples})`}</div>
@@ -838,7 +838,7 @@ export default function DashboardPage() {
           <div className="card">
             <p className="section-title">Lead Source Effectiveness</p>
             {sourceStats.length === 0 ? (
-              <p style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>No leads to analyse yet.</p>
+              <p style={{ fontSize: 12, color: 'var(--m3-outline)', fontStyle: 'italic', margin: 0 }}>No leads to analyse yet.</p>
             ) : (
               <table className="data-table" style={{ fontSize: 12 }}>
                 <thead>
@@ -857,13 +857,13 @@ export default function DashboardPage() {
                       <td style={{ textAlign: 'right' }}>{s.count}</td>
                       <td style={{ textAlign: 'right' }}>
                         {s.winRate === null
-                          ? <span style={{ color: '#cbd5e1' }}>—</span>
-                          : <span style={{ fontWeight: 700, color: s.winRate >= 50 ? '#059669' : s.winRate >= 25 ? '#b45309' : '#dc2626' }}>{s.winRate}%</span>}
+                          ? <span style={{ color: 'var(--m3-outline-variant)' }}>—</span>
+                          : <span style={{ fontWeight: 700, color: s.winRate >= 50 ? 'var(--m3-success)' : s.winRate >= 25 ? 'var(--color-warning)' : 'var(--m3-error)' }}>{s.winRate}%</span>}
                       </td>
                       <td style={{ textAlign: 'right', fontWeight: 700 }}>₹{s.tcv.toFixed(1)}</td>
                       <td style={{ textAlign: 'right' }}>
                         {s.avgScore === null
-                          ? <span style={{ color: '#cbd5e1' }}>—</span>
+                          ? <span style={{ color: 'var(--m3-outline-variant)' }}>—</span>
                           : <span className={`badge ${s.avgScore >= 70 ? 'badge-green' : s.avgScore >= 40 ? 'badge-amber' : 'badge-gray'}`}>{s.avgScore}</span>}
                       </td>
                     </tr>
@@ -876,44 +876,44 @@ export default function DashboardPage() {
           <div className="card">
             <p className="section-title">Pipeline Confidence</p>
             {confScored.length === 0 ? (
-              <p style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>No active leads to score yet.</p>
+              <p style={{ fontSize: 12, color: 'var(--m3-outline)', fontStyle: 'italic', margin: 0 }}>No active leads to score yet.</p>
             ) : (
               <>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 34, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{confAvg}%</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: confTrend === 'up' ? '#16a34a' : confTrend === 'down' ? '#dc2626' : '#94a3b8' }}>
+                  <span style={{ fontSize: 34, fontWeight: 800, color: 'var(--m3-on-surface)', lineHeight: 1 }}>{confAvg}%</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: confTrend === 'up' ? 'var(--m3-success)' : confTrend === 'down' ? 'var(--m3-error)' : 'var(--m3-outline)' }}>
                     {confTrend === 'up' ? '▲ up' : confTrend === 'down' ? '▼ down' : '● flat'} vs last week
                   </span>
-                  <span style={{ fontSize: 12, color: '#94a3b8' }}>avg win-confidence · {confScored.length} active</span>
+                  <span style={{ fontSize: 12, color: 'var(--m3-outline)' }}>avg win-confidence · {confScored.length} active</span>
                 </div>
                 {/* Band mix bar */}
-                <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 10, background: '#f1f5f9' }}>
-                  {confHigh > 0 && <div style={{ flex: confHigh, background: '#22c55e' }} />}
+                <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 10, background: 'var(--color-bg)' }}>
+                  {confHigh > 0 && <div style={{ flex: confHigh, background: 'var(--m3-success)' }} />}
                   {confMedium > 0 && <div style={{ flex: confMedium, background: '#f59e0b' }} />}
-                  {confLow > 0 && <div style={{ flex: confLow, background: '#cbd5e1' }} />}
+                  {confLow > 0 && <div style={{ flex: confLow, background: 'var(--m3-outline-variant)' }} />}
                 </div>
                 {/* Clickable band tiles */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
-                  {[['high', 'High ≥60', '#16a34a', confHigh], ['medium', 'Medium 30–59', '#b45309', confMedium], ['low', 'Low <30', '#64748b', confLow]].map(([key, label, color, count]) => (
+                  {[['high', 'High ≥60', 'var(--m3-success)', confHigh], ['medium', 'Medium 30–59', 'var(--color-warning)', confMedium], ['low', 'Low <30', 'var(--m3-on-surface-variant)', confLow]].map(([key, label, color, count]) => (
                     <button key={key} onClick={() => navigateWithConf(key)} title={`View ${count} ${label} lead(s)`}
-                      style={{ textAlign: 'left', border: '1px solid #e2e8f0', borderRadius: 10, padding: '8px 10px', background: '#fff', cursor: 'pointer' }}>
+                      style={{ textAlign: 'left', border: '1px solid var(--m3-outline-variant)', borderRadius: 10, padding: '8px 10px', background: 'var(--m3-surface-container-lowest)', cursor: 'pointer' }}>
                       <div style={{ fontSize: 20, fontWeight: 800, color }}>{count}</div>
-                      <div style={{ fontSize: 11, color: '#64748b' }}>{label}</div>
+                      <div style={{ fontSize: 11, color: 'var(--m3-on-surface-variant)' }}>{label}</div>
                     </button>
                   ))}
                 </div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#334155', margin: '0 0 6px' }}>📉 Losing confidence this week</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--m3-on-surface-variant)', margin: '0 0 6px' }}>📉 Losing confidence this week</p>
                 {confLosing.length === 0 ? (
-                  <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>No active leads dropped this week.</p>
+                  <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: 0 }}>No active leads dropped this week.</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     {confLosing.map(l => (
                       <div key={l.id} onClick={() => navigate('/leads')} title="Open Leads"
                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, cursor: 'pointer' }}>
                         <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {l.customer_name} <span style={{ color: '#94a3b8', fontWeight: 400 }}>· {l.phase}</span>
+                          {l.customer_name} <span style={{ color: 'var(--m3-outline)', fontWeight: 400 }}>· {l.phase}</span>
                         </span>
-                        <span style={{ color: '#dc2626', fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>{Math.round(l.score)}% ▼ −{Math.round(l.drop)}</span>
+                        <span style={{ color: 'var(--m3-error)', fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>{Math.round(l.score)}% ▼ −{Math.round(l.drop)}</span>
                       </div>
                     ))}
                   </div>
@@ -924,7 +924,7 @@ export default function DashboardPage() {
 
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-              <p className="section-title" style={{ margin: 0 }}>📊 Won Trend</p>
+              <p className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> Won Trend</p>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                 <select className="input" style={{ width: 110, fontSize: 11, height: 28, padding: '2px 6px' }} value={poTrendMetric} onChange={e => setPoTrendMetric(e.target.value)}>
                   <option value="count">Count</option>
@@ -945,12 +945,12 @@ export default function DashboardPage() {
               </div>
             </div>
             {poTrendActiveYears.length === 0 ? (
-              <p style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>No won orders yet.</p>
+              <p style={{ fontSize: 12, color: 'var(--m3-outline)', fontStyle: 'italic', margin: 0 }}>No won orders yet.</p>
             ) : (
               <>
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={poTrendData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f1f4" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} allowDecimals={poTrendMetric === 'tcv' || poTrendMetric === 'acv'} />
                     <Tooltip formatter={(v) => (poTrendMetric === 'tcv' || poTrendMetric === 'acv') ? `₹${Number(v).toFixed(1)}L` : v} />
@@ -961,7 +961,7 @@ export default function DashboardPage() {
                     ))}
                   </LineChart>
                 </ResponsiveContainer>
-                <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: '#64748b', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: 'var(--m3-on-surface-variant)', flexWrap: 'wrap' }}>
                   {poTrendActiveYears.map((yr, i) => (
                     <span key={yr}>
                       <span style={{ display: 'inline-block', width: 10, height: 10, background: PO_TREND_COLORS[i % PO_TREND_COLORS.length], borderRadius: 2, marginRight: 4 }} />
@@ -983,17 +983,17 @@ export default function DashboardPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div>
                     <p style={{ fontWeight: 700, margin: 0, fontSize: 13 }}>{bd.label}</p>
-                    <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>{bd.totalLeads} total leads</p>
+                    <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: 0 }}>{bd.totalLeads} total leads</p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontWeight: 700, color: '#059669', margin: 0 }}>₹{bd.wonTCV.toFixed(1)}L won</p>
-                    <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>{bd.wonDeals} deals</p>
+                    <p style={{ fontWeight: 700, color: 'var(--m3-success)', margin: 0 }}>₹{bd.wonTCV.toFixed(1)}L won</p>
+                    <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: 0 }}>{bd.wonDeals} deals</p>
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, fontSize: 11 }}>
-                  <div style={{ background: '#f8fafc', borderRadius: 8, padding: 6, textAlign: 'center' }}><div style={{ color: '#94a3b8' }}>Active</div><div style={{ fontWeight: 700 }}>{bd.activeLeads}</div></div>
-                  <div style={{ background: '#ecfdf5', borderRadius: 8, padding: 6, textAlign: 'center' }}><div style={{ color: '#94a3b8' }}>Won {currentYear}</div><div style={{ fontWeight: 700 }}>{bd.wonDeals}</div></div>
-                  <div style={{ background: '#eff6ff', borderRadius: 8, padding: 6, textAlign: 'center' }}><div style={{ color: '#94a3b8' }}>Conv. Rate</div><div style={{ fontWeight: 700 }}>{bd.convRate}%</div></div>
+                  <div style={{ background: 'var(--m3-surface-container)', borderRadius: 8, padding: 6, textAlign: 'center' }}><div style={{ color: 'var(--m3-outline)' }}>Active</div><div style={{ fontWeight: 700 }}>{bd.activeLeads}</div></div>
+                  <div style={{ background: 'var(--m3-success-container)', borderRadius: 8, padding: 6, textAlign: 'center' }}><div style={{ color: 'var(--m3-outline)' }}>Won {currentYear}</div><div style={{ fontWeight: 700 }}>{bd.wonDeals}</div></div>
+                  <div style={{ background: '#eff6ff', borderRadius: 8, padding: 6, textAlign: 'center' }}><div style={{ color: 'var(--m3-outline)' }}>Conv. Rate</div><div style={{ fontWeight: 700 }}>{bd.convRate}%</div></div>
                 </div>
               </div>
             ))}
@@ -1006,13 +1006,13 @@ export default function DashboardPage() {
         </div>
 
         {/* Cohort Aging Grid */}
-        <div style={{ marginTop: 16, background: '#1e293b', borderRadius: 10, padding: 16 }}>
+        <div style={{ marginTop: 16, background: 'var(--m3-on-surface)', borderRadius: 10, padding: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cohort Aging Grid</p>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--m3-outline-variant)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cohort Aging Grid</p>
             <select
               value={closureFY}
               onChange={e => setClosureFY(Number(e.target.value))}
-              style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #475569', fontSize: 12, color: '#e2e8f0', background: '#334155', cursor: 'pointer', outline: 'none' }}
+              style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #475569', fontSize: 12, color: 'var(--m3-outline-variant)', background: 'var(--m3-on-surface)', cursor: 'pointer', outline: 'none' }}
             >
               {[0, 1, 2].map(offset => {
                 const y = new Date().getFullYear() - offset;
@@ -1025,9 +1025,9 @@ export default function DashboardPage() {
               { color: '#1e40af', label: 'Closed on time' },
               { color: '#78350f', label: 'Closed late' },
               { color: '#93c5fd', label: 'Still open' },
-              { color: '#ef4444', label: 'Lost' },
+              { color: 'var(--m3-error)', label: 'Lost' },
             ].map(l => (
-              <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#94a3b8' }}>
+              <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--m3-outline)' }}>
                 <span style={{ width: 12, height: 12, borderRadius: 3, background: l.color, display: 'inline-block' }} />
                 {l.label}
               </span>
@@ -1037,22 +1037,22 @@ export default function DashboardPage() {
             <table style={{ borderCollapse: 'collapse', fontSize: 12, whiteSpace: 'nowrap', width: '100%' }}>
               <thead>
                 <tr>
-                  <th style={{ padding: '8px 10px', textAlign: 'left', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155', position: 'sticky', left: 0, background: '#1e293b', zIndex: 2 }}>Expected in</th>
-                  <th style={{ padding: '8px 10px', textAlign: 'right', color: '#e2e8f0', fontWeight: 700, borderBottom: '1px solid #334155' }}>Total</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'left', color: 'var(--m3-outline)', fontWeight: 600, borderBottom: '1px solid #334155', position: 'sticky', left: 0, background: 'var(--m3-on-surface)', zIndex: 2 }}>Expected in</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--m3-outline-variant)', fontWeight: 700, borderBottom: '1px solid #334155' }}>Total</th>
                   {closureData.fyMonths.map(m => (
-                    <th key={m.label} style={{ padding: '8px 10px', textAlign: 'right', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155' }}>{m.label}</th>
+                    <th key={m.label} style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--m3-outline)', fontWeight: 600, borderBottom: '1px solid #334155' }}>{m.label}</th>
                   ))}
                   <th style={{ padding: '8px 10px', textAlign: 'right', color: '#93c5fd', fontWeight: 600, borderBottom: '1px solid #334155' }}>Still open</th>
-                  <th style={{ padding: '8px 10px', textAlign: 'right', color: '#ef4444', fontWeight: 600, borderBottom: '1px solid #334155' }}>Lost</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--m3-error)', fontWeight: 600, borderBottom: '1px solid #334155' }}>Lost</th>
                 </tr>
               </thead>
               <tbody>
                 {closureData.rows.map((row, ri) => (
                   <tr key={row.key}>
-                    <td style={{ padding: '7px 10px', fontWeight: 600, color: '#e2e8f0', borderBottom: '1px solid #334155', position: 'sticky', left: 0, background: '#1e293b', zIndex: 1 }}>{row.label}</td>
+                    <td style={{ padding: '7px 10px', fontWeight: 600, color: 'var(--m3-outline-variant)', borderBottom: '1px solid #334155', position: 'sticky', left: 0, background: 'var(--m3-on-surface)', zIndex: 1 }}>{row.label}</td>
                     <td
                       onClick={() => row.total > 0 && navigateWithIds(row.totalIds, `Total expected ${row.label}`)}
-                      style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: '#e2e8f0', borderBottom: '1px solid #334155', cursor: row.total > 0 ? 'pointer' : 'default' }}
+                      style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--m3-outline-variant)', borderBottom: '1px solid #334155', cursor: row.total > 0 ? 'pointer' : 'default' }}
                       title={row.total > 0 ? 'Click to view leads' : undefined}
                     >{row.total}</td>
                     {row.cells.map((val, ci) => {
@@ -1067,7 +1067,7 @@ export default function DashboardPage() {
                           onClick={() => !isBefore && val > 0 && navigateWithIds(ids, `${row.label} → ${closureData.fyMonths[ci].label}`)}
                           style={{
                             padding: '7px 10px', textAlign: 'right', borderBottom: '1px solid #334155',
-                            background: bg, color: isBefore ? '#334155' : val > 0 ? '#fff' : '#64748b',
+                            background: bg, color: isBefore ? 'var(--m3-on-surface)' : val > 0 ? '#fff' : 'var(--m3-on-surface-variant)',
                             fontWeight: val > 0 ? 700 : 400, borderRadius: 0,
                             cursor: !isBefore && val > 0 ? 'pointer' : 'default',
                           }}
@@ -1084,7 +1084,7 @@ export default function DashboardPage() {
                     >{row.open}</td>
                     <td
                       onClick={() => row.lost > 0 && navigateWithIds(row.lostIds, `Lost — expected ${row.label}`)}
-                      style={{ padding: '7px 10px', textAlign: 'right', color: '#ef4444', fontWeight: row.lost > 0 ? 700 : 400, borderBottom: '1px solid #334155', cursor: row.lost > 0 ? 'pointer' : 'default' }}
+                      style={{ padding: '7px 10px', textAlign: 'right', color: 'var(--m3-error)', fontWeight: row.lost > 0 ? 700 : 400, borderBottom: '1px solid #334155', cursor: row.lost > 0 ? 'pointer' : 'default' }}
                       title={row.lost > 0 ? 'Click to view leads' : undefined}
                     >{row.lost}</td>
                   </tr>

@@ -108,7 +108,7 @@ export default function LoginPage() {
         {needsSetup ? (
           <>
             <p style={s.sub}>{TEXT.setupTitle}</p>
-            <p style={{ fontSize: 12, color: '#94a3b8', margin: '-16px 0 20px' }}>{TEXT.setupSubtitle}</p>
+            <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: '-16px 0 20px' }}>{TEXT.setupSubtitle}</p>
             <form onSubmit={handleSetup}>
               <label style={s.label}>{TEXT.yourName}</label>
               <input type="text" value={ownerName} onChange={e => setOwnerName(e.target.value)}
@@ -151,19 +151,19 @@ export default function LoginPage() {
 }
 
 const s = {
-  wrap:    { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', padding: 16, fontFamily: 'Inter, system-ui, sans-serif' },
-  card:    { background: '#fff', borderRadius: 16, padding: 32, width: '100%', maxWidth: 420, boxShadow: '0 10px 30px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' },
-  title:   { fontSize: 24, fontWeight: 700, margin: '0 0 4px', color: '#0f172a' },
-  h2:      { fontSize: 20, fontWeight: 700, margin: '0 0 4px', color: '#0f172a' },
-  sub:     { fontSize: 13, color: '#64748b', margin: '0 0 24px' },
-  buButton:{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: 14, borderRadius: 12, border: '2px solid #e2e8f0', background: '#fff', cursor: 'pointer', marginBottom: 10 },
-  buIcon:  { width: 40, height: 40, borderRadius: 10, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 },
-  buName:  { fontSize: 14, fontWeight: 600, color: '#0f172a' },
-  buDesc:  { fontSize: 12, color: '#94a3b8' },
-  back:    { background: 'none', border: 'none', color: '#94a3b8', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 16 },
-  label:   { fontSize: 12, fontWeight: 600, color: '#334155', display: 'block', marginBottom: 6, marginTop: 12 },
-  input:   { width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box' },
-  error:   { background: '#fee2e2', color: '#b91c1c', padding: '8px 12px', borderRadius: 8, fontSize: 13, marginTop: 12 },
-  submit:  { width: '100%', padding: 12, marginTop: 16, background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
-  adminLogin:{ position: 'absolute', top: 18, right: 18, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 999, border: '1.5px solid #e9d5ff', background: '#faf5ff', color: '#7c3aed', fontSize: 12, fontWeight: 700, cursor: 'pointer', lineHeight: 1 },
+  wrap:    { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)', padding: 16, fontFamily: 'var(--font-body)' },
+  card:    { background: 'var(--m3-surface-container-lowest, #fff)', borderRadius: 20, padding: '28px 24px', width: '100%', maxWidth: 400, boxShadow: 'var(--elevation-3)', border: 'none' },
+  title:   { fontSize: 24, fontWeight: 700, margin: '0 0 4px', color: 'var(--m3-on-surface)', fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' },
+  h2:      { fontSize: 24, fontWeight: 700, margin: '0 0 4px', color: 'var(--m3-on-surface)', fontFamily: 'var(--font-heading)' },
+  sub:     { fontSize: 13, color: 'var(--m3-on-surface-variant)', margin: '0 0 20px', letterSpacing: '0.01em' },
+  buButton:{ width: '100%', display: 'flex', alignItems: 'center', gap: 16, padding: 16, borderRadius: 16, border: '1px solid var(--m3-outline-variant)', background: 'var(--m3-surface-container-lowest, #fff)', cursor: 'pointer', marginBottom: 10, transition: 'all .2s' },
+  buIcon:  { width: 40, height: 40, borderRadius: 12, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 },
+  buName:  { fontSize: 14, fontWeight: 600, color: 'var(--m3-on-surface)' },
+  buDesc:  { fontSize: 12, color: 'var(--m3-on-surface-variant)' },
+  back:    { background: 'none', border: 'none', color: 'var(--m3-on-surface-variant)', fontSize: 14, cursor: 'pointer', padding: 0, marginBottom: 16 },
+  label:   { fontSize: 12, fontWeight: 500, color: 'var(--m3-on-surface-variant)', display: 'block', marginBottom: 6, marginTop: 12, letterSpacing: '0.02em' },
+  input:   { width: '100%', padding: '10px 12px', border: '1px solid var(--m3-outline)', borderRadius: 4, fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color .2s', letterSpacing: '0.01em' },
+  error:   { background: 'var(--m3-error-container)', color: 'var(--m3-on-error-container)', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginTop: 12 },
+  submit:  { width: '100%', padding: 10, marginTop: 20, background: 'var(--m3-primary)', color: 'var(--m3-on-primary)', border: 'none', borderRadius: 18, fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: 'var(--elevation-1)', transition: 'all .2s', fontFamily: 'inherit', letterSpacing: '0.01em' },
+  adminLogin:{ position: 'absolute', top: 18, right: 18, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 20, border: '1px solid var(--m3-outline-variant)', background: 'var(--m3-surface-container-lowest, #fff)', color: 'var(--m3-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', lineHeight: 1 },
 };

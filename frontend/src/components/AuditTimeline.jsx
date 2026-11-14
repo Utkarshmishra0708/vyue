@@ -57,11 +57,11 @@ export default function AuditTimeline({ entityType, entityId }) {
   }, [entityType, entityId]);
 
   if (loading) {
-    return <div style={{ padding: 16, color: '#94a3b8', fontSize: 13 }}>Loading history...</div>;
+    return <div style={{ padding: 16, color: 'var(--m3-outline)', fontSize: 13 }}>Loading history...</div>;
   }
 
   if (entries.length === 0) {
-    return <div style={{ padding: 16, color: '#94a3b8', fontSize: 13, fontStyle: 'italic' }}>No changes recorded yet</div>;
+    return <div style={{ padding: 16, color: 'var(--m3-outline)', fontSize: 13, fontStyle: 'italic' }}>No changes recorded yet</div>;
   }
 
   return (
@@ -69,7 +69,7 @@ export default function AuditTimeline({ entityType, entityId }) {
       {/* Vertical timeline line */}
       <div style={{
         position: 'absolute', left: 8, top: 6, bottom: 6,
-        width: 2, background: '#e2e8f0',
+        width: 2, background: 'var(--m3-outline-variant)',
       }} />
 
       {entries.map((entry, i) => {
@@ -80,24 +80,24 @@ export default function AuditTimeline({ entityType, entityId }) {
             <div style={{
               position: 'absolute', left: -20, top: 4,
               width: 10, height: 10, borderRadius: '50%',
-              background: '#4f46e5', border: '2px solid #fff',
-              boxShadow: '0 0 0 2px #e2e8f0',
+              background: 'var(--m3-primary)', border: '2px solid #fff',
+              boxShadow: '0 0 0 2px #e8eaf0',
             }} />
 
             <div style={{ fontSize: 13 }}>
-              <div style={{ fontWeight: 600, color: '#334155', marginBottom: 2 }}>
+              <div style={{ fontWeight: 600, color: 'var(--m3-on-surface)', marginBottom: 2 }}>
                 {formatFieldName(entry.field_name || entry.field)}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12 }}>
-                <span style={{ textDecoration: 'line-through', color: '#94a3b8' }}>
+                <span style={{ textDecoration: 'line-through', color: 'var(--m3-outline)' }}>
                   {entry.old_value ?? entry.oldValue ?? '(empty)'}
                 </span>
-                <span style={{ color: '#64748b' }}>{'→'}</span>
-                <span style={{ fontWeight: 700, color: '#0f172a' }}>
+                <span style={{ color: 'var(--m3-on-surface-variant)' }}>{'→'}</span>
+                <span style={{ fontWeight: 700, color: 'var(--m3-on-surface)' }}>
                   {entry.new_value ?? entry.newValue ?? '(empty)'}
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, fontSize: 11, color: '#94a3b8' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, fontSize: 11, color: 'var(--m3-outline)' }}>
                 <span>{entry.changed_by_name || entry.changed_by || entry.user_name || 'System'}</span>
                 <span>{'·'}</span>
                 <span title={ts}>{timeAgo(ts)}</span>

@@ -5,7 +5,7 @@ import { getCampaigns, createCampaign, updateCampaign, deleteCampaign } from '..
 const STATUS_STYLES = {
   active:    { bg: '#dcfce7', fg: '#166534' },
   completed: { bg: '#dbeafe', fg: '#1e40af' },
-  planned:   { bg: '#fef3c7', fg: '#92400e' },
+  planned:   { bg: 'var(--m3-tertiary-container)', fg: 'var(--m3-on-surface)' },
 };
 
 const emptyCampaign = {
@@ -94,44 +94,44 @@ export default function CampaignsPage() {
 
   return (
     <Layout>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--m3-outline-variant)', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Campaigns</h1>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{campaigns.length} campaign{campaigns.length === 1 ? '' : 's'}</p>
+          <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Campaigns</h1>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>{campaigns.length} campaign{campaigns.length === 1 ? '' : 's'}</p>
         </div>
         {editing === null && (
           <button className="btn btn-primary" onClick={startNew}>+ New Campaign</button>
         )}
       </div>
 
-      <div style={{ padding: 20 }}>
+      <div style={{ padding: 16 }}>
         {/* Summary cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
           <div className="kpi-card">
-            <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Campaigns</p>
+            <p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Campaigns</p>
             <p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{stats.total}</p>
           </div>
           <div className="kpi-card">
-            <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Active Campaigns</p>
-            <p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{stats.active}</p>
+            <p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Active Campaigns</p>
+            <p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: 'var(--m3-success)' }}>{stats.active}</p>
           </div>
           <div className="kpi-card">
-            <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Budget</p>
+            <p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Budget</p>
             <p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{'₹'}{stats.totalBudget.toFixed(1)}L</p>
           </div>
           <div className="kpi-card">
-            <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Revenue</p>
-            <p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{'₹'}{stats.totalRevenue.toFixed(1)}L</p>
+            <p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Revenue</p>
+            <p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: 'var(--m3-success)' }}>{'₹'}{stats.totalRevenue.toFixed(1)}L</p>
           </div>
         </div>
 
         {/* Inline form */}
         {editing !== null && (
-          <div className="card" style={{ marginBottom: 20, padding: 20 }}>
-            <p style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', margin: '0 0 14px' }}>
+          <div className="card" style={{ marginBottom: 14, padding: 14 }}>
+            <p style={{ fontWeight: 700, fontSize: 14, color: 'var(--m3-on-surface)', margin: '0 0 14px' }}>
               {editing === 'new' ? 'New Campaign' : 'Edit Campaign'}
             </p>
-            {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+            {error && <div style={{ background: 'var(--m3-error-container)', border: '1px solid #fecaca', color: 'var(--m3-error)', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 12 }}>{error}</div>}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <div>
                 <label className="field-label">Name *</label>
@@ -170,10 +170,10 @@ export default function CampaignsPage() {
         )}
 
         {/* Table */}
-        {loading && <p style={{ color: '#94a3b8' }}>Loading...</p>}
+        {loading && <p style={{ color: 'var(--m3-outline)' }}>Loading...</p>}
 
         {!loading && campaigns.length === 0 && (
-          <div className="card" style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontStyle: 'italic' }}>
+          <div className="card" style={{ textAlign: 'center', padding: 24, color: 'var(--m3-outline)', fontStyle: 'italic' }}>
             No campaigns yet. Click "+ New Campaign" to create one.
           </div>
         )}

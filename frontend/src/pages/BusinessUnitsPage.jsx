@@ -16,9 +16,9 @@ import { refreshBusinessUnits } from '../utils/useBusinessUnits';
 const STATUS_BADGE = {
   active:   { label: 'Active',   bg: '#dcfce7', fg: '#166534' },
   disabled: { label: 'Disabled', bg: '#fef9c3', fg: '#854d0e' },
-  archived: { label: 'Archived', bg: '#e2e8f0', fg: '#475569' },
+  archived: { label: 'Archived', bg: 'var(--m3-outline-variant)', fg: 'var(--m3-on-surface-variant)' },
 };
-const PRESET_COLORS = ['#4f46e5', '#ea580c', '#0891b2', '#16a34a', '#db2777', '#7c3aed', '#0ea5e9', '#f59e0b'];
+const PRESET_COLORS = ['var(--m3-primary)', '#ea580c', 'var(--m3-tertiary)', 'var(--m3-success)', '#db2777', 'var(--m3-primary)', 'var(--m3-tertiary)', '#f59e0b'];
 const slugify = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
 
 export default function BusinessUnitsPage() {
@@ -76,8 +76,8 @@ export default function BusinessUnitsPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '8px 4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#0f172a' }}>{isGa ? 'Businesses' : 'Business'}</h1>
-            <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: 'var(--m3-on-surface)' }}>{isGa ? 'Businesses' : 'Business'}</h1>
+            <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', margin: '4px 0 0' }}>
               {isGa
                 ? 'Create businesses with Guided setup, and manage them here. A new business appears on the login page and across the app straight away.'
                 : 'Edit the presentation and template for your business. Only an Owner can create, clone, disable, archive or delete a business.'}
@@ -91,7 +91,7 @@ export default function BusinessUnitsPage() {
         </div>
 
         {error && <div style={s.error}>{error}</div>}
-        {!units && !error && <p style={{ fontSize: 13, color: '#64748b' }}>Loading…</p>}
+        {!units && !error && <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)' }}>Loading…</p>}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14, marginTop: 14 }}>
           {units && units.map(bu => {
@@ -104,13 +104,13 @@ export default function BusinessUnitsPage() {
                     {(bu.name || bu.slug || '?')[0].toUpperCase()}
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{bu.name}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8', fontFamily: 'monospace' }}>{bu.slug}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--m3-on-surface)' }}>{bu.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--m3-outline)', fontFamily: 'monospace' }}>{bu.slug}</div>
                   </div>
                   <span style={{ ...s.badge, background: badge.bg, color: badge.fg }}>{badge.label}</span>
                 </div>
 
-                <p style={{ fontSize: 12.5, color: '#64748b', margin: '0 0 12px', minHeight: 32 }}>{bu.description || <span style={{ color: '#cbd5e1' }}>No description</span>}</p>
+                <p style={{ fontSize: 12.5, color: 'var(--m3-on-surface-variant)', margin: '0 0 12px', minHeight: 32 }}>{bu.description || <span style={{ color: 'var(--m3-outline-variant)' }}>No description</span>}</p>
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                   <Stat label="Users" n={u.users} />
@@ -167,8 +167,8 @@ export default function BusinessUnitsPage() {
 
 function Stat({ label, n }) {
   return (
-    <div style={{ background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 8, padding: '4px 9px', fontSize: 11.5 }}>
-      <span style={{ fontWeight: 700, color: '#334155' }}>{n ?? 0}</span> <span style={{ color: '#94a3b8' }}>{label}</span>
+    <div style={{ background: 'var(--m3-surface-container)', border: '1px solid #eef2f7', borderRadius: 8, padding: '4px 9px', fontSize: 11.5 }}>
+      <span style={{ fontWeight: 700, color: 'var(--m3-on-surface-variant)' }}>{n ?? 0}</span> <span style={{ color: 'var(--m3-outline)' }}>{label}</span>
     </div>
   );
 }
@@ -215,13 +215,13 @@ function BuFormModal({ mode, bu, onClose, onSaved }) {
     <Overlay onClose={onClose}>
       <form onSubmit={submit} style={{ padding: 22 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 4px' }}>{title}</h2>
-        {isClone && <p style={{ fontSize: 12.5, color: '#64748b', margin: '0 0 14px' }}>Copies fields, dropdowns and SLA config from <b>{bu.name}</b>. Users and leads are never copied.</p>}
+        {isClone && <p style={{ fontSize: 12.5, color: 'var(--m3-on-surface-variant)', margin: '0 0 14px' }}>Copies fields, dropdowns and SLA config from <b>{bu.name}</b>. Users and leads are never copied.</p>}
 
         <label style={s.label}>Name</label>
         <input style={s.input} value={form.name} onChange={e => onName(e.target.value)} autoFocus required placeholder="e.g. Telecom" />
 
-        <label style={s.label}>Slug {isEdit && <span style={{ color: '#94a3b8', fontWeight: 400 }}>(fixed)</span>}</label>
-        <input style={{ ...s.input, fontFamily: 'monospace', background: isEdit ? '#f1f5f9' : '#fff' }}
+        <label style={s.label}>Slug {isEdit && <span style={{ color: 'var(--m3-outline)', fontWeight: 400 }}>(fixed)</span>}</label>
+        <input style={{ ...s.input, fontFamily: 'monospace', background: isEdit ? 'var(--m3-surface-container-high)' : '#fff' }}
           value={form.slug} disabled={isEdit}
           onChange={e => { setSlugTouched(true); set('slug', slugify(e.target.value)); }}
           required placeholder="e.g. telecom" />
@@ -240,7 +240,7 @@ function BuFormModal({ mode, bu, onClose, onSaved }) {
               {PRESET_COLORS.map(c => (
                 <button type="button" key={c} onClick={() => set('color', c)}
                   style={{ width: 28, height: 28, borderRadius: 7, background: c, cursor: 'pointer',
-                    border: form.color === c ? '3px solid #0f172a' : '2px solid #e2e8f0' }} />
+                    border: form.color === c ? '3px solid #0f172a' : '2px solid #e8eaf0' }} />
               ))}
             </div>
           </>
@@ -270,13 +270,13 @@ function DeleteModal({ info, onClose, onArchive, onDelete }) {
     <Overlay onClose={onClose}>
       <div style={{ padding: 22 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 4px' }}>Delete “{bu.name}”?</h2>
-        <p style={{ fontSize: 12.5, color: '#64748b', margin: '0 0 14px' }}>Here is everything this business holds:</p>
+        <p style={{ fontSize: 12.5, color: 'var(--m3-on-surface-variant)', margin: '0 0 14px' }}>Here is everything this business holds:</p>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 14 }}>
           {rows.map(([label, n]) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 8, padding: '6px 10px', fontSize: 12.5 }}>
-              <span style={{ color: '#64748b' }}>{label}</span>
-              <span style={{ fontWeight: 700, color: (n > 0 ? '#0f172a' : '#cbd5e1') }}>{n ?? 0}</span>
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', background: 'var(--m3-surface-container)', border: '1px solid #eef2f7', borderRadius: 8, padding: '6px 10px', fontSize: 12.5 }}>
+              <span style={{ color: 'var(--m3-on-surface-variant)' }}>{label}</span>
+              <span style={{ fontWeight: 700, color: (n > 0 ? 'var(--m3-on-surface)' : 'var(--m3-outline-variant)') }}>{n ?? 0}</span>
             </div>
           ))}
         </div>
@@ -313,7 +313,7 @@ function Overlay({ children }) {
   // input or a typed delete-confirm slug. Use the × / Cancel button inside to close.
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
-      <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 440, boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderRadius: 14, width: '100%', maxWidth: 440, boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
         {children}
       </div>
     </div>
@@ -321,13 +321,13 @@ function Overlay({ children }) {
 }
 
 const s = {
-  primary: { background: '#4f46e5', color: '#fff', border: 'none' },
-  ghost:   { background: '#fff', color: '#334155', border: '1px solid #e2e8f0' },
-  danger:  { background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' },
+  primary: { background: 'var(--m3-primary)', color: '#fff', border: 'none' },
+  ghost:   { background: 'var(--m3-surface-container-lowest)', color: 'var(--m3-on-surface-variant)', border: '1px solid var(--m3-outline-variant)' },
+  danger:  { background: 'var(--m3-error-container)', color: 'var(--m3-error)', border: '1px solid #fecaca' },
   badge:   { fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap' },
-  label:   { fontSize: 12, fontWeight: 600, color: '#334155', display: 'block', marginBottom: 6, marginTop: 12 },
-  input:   { width: '100%', padding: '9px 11px', border: '1.5px solid #e2e8f0', borderRadius: 9, fontSize: 14, outline: 'none', boxSizing: 'border-box' },
-  hint:    { fontSize: 11, color: '#94a3b8', marginTop: 4 },
-  error:   { background: '#fee2e2', color: '#b91c1c', padding: '8px 12px', borderRadius: 8, fontSize: 13 },
-  warn:    { background: '#fffbeb', color: '#92400e', padding: '10px 12px', borderRadius: 8, fontSize: 12.5, border: '1px solid #fde68a' },
+  label:   { fontSize: 12, fontWeight: 600, color: 'var(--m3-on-surface-variant)', display: 'block', marginBottom: 6, marginTop: 12 },
+  input:   { width: '100%', padding: '9px 11px', border: '1.5px solid #e8eaf0', borderRadius: 9, fontSize: 14, outline: 'none', boxSizing: 'border-box' },
+  hint:    { fontSize: 11, color: 'var(--m3-outline)', marginTop: 4 },
+  error:   { background: 'var(--m3-error-container)', color: 'var(--m3-error)', padding: '8px 12px', borderRadius: 8, fontSize: 13 },
+  warn:    { background: 'var(--m3-tertiary-container)', color: 'var(--m3-on-surface)', padding: '10px 12px', borderRadius: 8, fontSize: 12.5, border: '1px solid #fde68a' },
 };

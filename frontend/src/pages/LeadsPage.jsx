@@ -9,12 +9,12 @@ import KanbanView from '../components/KanbanView';
 import GlobalPosView from '../components/GlobalPosView';
 import BulkUploadModal from '../components/BulkUploadModal';
 import ExpansionPicker from '../components/ExpansionPicker';
-import NotificationBell from '../components/NotificationBell';
+import usePersistedState from '../utils/usePersistedState';
 import { parseServiceLines } from '../components/ServicesOffered';
 import { useAuth } from '../context/AuthContext';
 import { getLeads, getLead, deleteLead, updateLead, getBds, bulkUpdateLeads, getStageHistory, getDropdowns, getBusinessUnitConfig, getTat } from '../services/api';
 import { PHASE_BADGE } from '../utils/constants';
-import { hasMoney, fmtDate, isTATBreached, isOverdue, hasConfidence, confidenceTrend, buildRotMetrics, getRotState, stripHtml, primaryContact, formatOtherContacts, stageAging, renewalStatus, renewalLabel, RENEWAL_BAND_STYLE, buildRenewedSet } from '../utils/leadHelpers';
+import { hasMoney, fmtDate, isTATBreached, isOverdue, hasConfidence, confidenceTrend, stripHtml, primaryContact, formatOtherContacts, stageAging, renewalStatus, renewalLabel, RENEWAL_BAND_STYLE, buildRenewedSet } from '../utils/leadHelpers';
 import { sortWithWonLast } from '../utils/leadPriority';
 import { exportRowsToPdf } from '../utils/pdfExport';
 import { writeFormattedSheet } from '../utils/excelExport';
@@ -41,20 +41,20 @@ function FollowUpDatePicker({ from, to, onFromChange, onToChange }) {
       <button type="button" className="input" onClick={() => setOpen(o => !o)}
         style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', height: 30,
           padding: '5px 8px', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
-          borderColor: hasRange ? '#6366f1' : '#cbd5e1', background: hasRange ? '#eef2ff' : '#fff',
-          color: hasRange ? '#4338ca' : '#334155' }}>
-        📅 {shortLabel} <span style={{ fontSize: 10, color: '#64748b' }}>▾</span>
+          borderColor: hasRange ? 'var(--m3-primary)' : 'var(--m3-outline-variant)', background: hasRange ? 'var(--m3-primary-container)' : '#fff',
+          color: hasRange ? 'var(--m3-primary)' : 'var(--m3-on-surface)' }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg> {shortLabel} <span style={{ fontSize: 10, color: 'var(--m3-on-surface-variant)' }}>▾</span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff',
-          border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.08)',
+        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--m3-surface-container-lowest)',
+          border: '1px solid var(--m3-outline-variant)', borderRadius: 8, boxShadow: 'var(--elevation-2)',
           zIndex: 20, padding: 12, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 200 }}>
-          <label style={{ fontSize: 11, fontWeight: 600, color: '#334155' }}>
+          <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--m3-on-surface-variant)' }}>
             From
             <input type="date" className="input" style={{ width: '100%', fontSize: 11, marginTop: 2 }}
               value={from} onChange={e => onFromChange(e.target.value)} />
           </label>
-          <label style={{ fontSize: 11, fontWeight: 600, color: '#334155' }}>
+          <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--m3-on-surface-variant)' }}>
             To
             <input type="date" className="input" style={{ width: '100%', fontSize: 11, marginTop: 2 }}
               value={to} min={from || undefined} onChange={e => onToChange(e.target.value)} />
@@ -92,10 +92,108 @@ const scoreBandOf = (l) => {
 
 // Week-over-week confidence trend indicator shown beside the score.
 function TrendArrow({ trend }) {
-  if (trend === 'up')   return <span title="Up vs last week"   style={{ color: '#16a34a', fontSize: 12, fontWeight: 700 }}>▲</span>;
-  if (trend === 'down') return <span title="Down vs last week" style={{ color: '#dc2626', fontSize: 12, fontWeight: 700 }}>▼</span>;
-  if (trend === 'hold') return <span title="Frozen (On Hold)"  style={{ color: '#0ea5e9', fontSize: 12 }}>❄</span>;
-  return <span title="No change vs last week" style={{ color: '#94a3b8', fontSize: 9 }}>●</span>;
+  if (trend === 'up')   return <span title="Up vs last week"   style={{ color: 'var(--m3-success)', fontSize: 12, fontWeight: 700 }}>▲</span>;
+  if (trend === 'down') return <span title="Down vs last week" style={{ color: 'var(--m3-error)', fontSize: 12, fontWeight: 700 }}>▼</span>;
+  if (trend === 'hold') return <span title="Frozen (On Hold)"  style={{ color: 'var(--m3-tertiary)', fontSize: 12 }}>❄</span>;
+  return <span title="No change vs last week" style={{ color: 'var(--m3-outline)', fontSize: 9 }}>●</span>;
+}
+
+// ── Export dropdown with format + column selection ──
+function ExportMenu({ onExportExcel, onExportPdf }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button className="btn btn-sm" style={{ fontSize: 11, padding: '5px 10px' }} onClick={() => setOpen(o => !o)}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg> Export ▾
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: 'var(--m3-surface-container-lowest)', border: '1px solid var(--m3-outline-variant)', borderRadius: 8, boxShadow: 'var(--elevation-2)', zIndex: 20, minWidth: 140, padding: 4 }}>
+          <button onClick={() => { onExportExcel(); setOpen(false); }} style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 500, color: 'var(--m3-on-surface)', borderRadius: 6 }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--m3-surface-container)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            Export as Excel
+          </button>
+          <button onClick={() => { onExportPdf(); setOpen(false); }} style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 500, color: 'var(--m3-on-surface)', borderRadius: 6 }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--m3-surface-container)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+            Export as PDF
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Column layout system ──
+const ALL_COLUMNS = [
+  { key: 'sr',        label: 'Sr',               locked: true },
+  { key: 'customer',  label: 'Customer',         locked: true },
+  { key: 'sales_rep', label: 'Sales Rep',        locked: true },
+  { key: 'phase',     label: 'Phase' },
+  { key: 'aging',     label: 'Aging' },
+  { key: 'location',  label: 'Location' },
+  { key: 'qty',       label: 'Qty' },
+  { key: 'deal_value',label: 'Deal Value (₹L)' },
+  { key: 'scoring',   label: 'Scoring' },
+  { key: 'followup',  label: 'Next Follow-Up' },
+  { key: 'source',    label: 'Source' },
+  { key: 'new_renewal', label: 'New/Renewal' },
+  { key: 'competitor', label: 'Competitor' },
+  { key: 'contract',  label: 'Contract Period' },
+  { key: 'billing',   label: 'Billing Cycle' },
+  { key: 'created',   label: 'Created' },
+];
+const DEFAULT_COL_KEYS = ['sr', 'customer', 'sales_rep', 'phase', 'aging', 'location', 'qty', 'deal_value', 'scoring', 'followup'];
+const LOCKED_KEYS = new Set(ALL_COLUMNS.filter(c => c.locked).map(c => c.key));
+const MAX_COLS = 10;
+
+function LayoutPicker({ columns, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  const selected = new Set(columns);
+  const toggle = (key) => {
+    if (LOCKED_KEYS.has(key)) return;
+    const next = new Set(selected);
+    if (next.has(key)) next.delete(key);
+    else if (next.size < MAX_COLS) next.add(key);
+    onChange([...next]);
+  };
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button className="btn btn-sm" style={{ fontSize: 11, padding: '5px 10px' }} onClick={() => setOpen(o => !o)}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h16M4 18h7" /></svg> Layout
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: 'var(--m3-surface-container-lowest)', border: '1px solid var(--m3-outline-variant)', borderRadius: 8, boxShadow: 'var(--elevation-2)', zIndex: 50, width: 220, padding: 6, maxHeight: 340, overflowY: 'auto' }}>
+          <div style={{ padding: '4px 8px 6px', fontSize: 11, color: 'var(--m3-on-surface-variant)', borderBottom: '1px solid var(--m3-surface-container-high)', marginBottom: 4 }}>
+            Columns ({selected.size}/{MAX_COLS} max)
+          </div>
+          <button style={{ width: '100%', textAlign: 'center', padding: '4px', fontSize: 11, border: 'none', background: 'var(--m3-surface-container)', borderRadius: 4, cursor: 'pointer', marginBottom: 4, color: 'var(--m3-primary)', fontWeight: 600 }}
+            onClick={() => onChange([...DEFAULT_COL_KEYS])}>Reset to default</button>
+          {ALL_COLUMNS.map(col => (
+            <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4, cursor: col.locked ? 'not-allowed' : 'pointer', opacity: col.locked ? 0.6 : 1, fontSize: 12 }}>
+              <input type="checkbox" checked={selected.has(col.key)} disabled={col.locked || (!selected.has(col.key) && selected.size >= MAX_COLS)} onChange={() => toggle(col.key)} />
+              {col.label}
+              {col.locked && <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--m3-outline)' }}>default</span>}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function LeadsPage() {
@@ -148,6 +246,30 @@ export default function LeadsPage() {
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [buConfig, setBuConfig] = useState(null);
   const [tatMap, setTatMap] = useState({});                 // { phase: tat_days } for aging colour
+
+  // Column layout — persisted per user
+  const [visibleCols, setVisibleCols] = usePersistedState('leads_cols', DEFAULT_COL_KEYS);
+  const [colOrder, setColOrder] = usePersistedState('leads_col_order', DEFAULT_COL_KEYS);
+  const orderedCols = useMemo(() => {
+    const vis = new Set(visibleCols);
+    const ordered = colOrder.filter(k => vis.has(k));
+    vis.forEach(k => { if (!ordered.includes(k)) ordered.push(k); });
+    return ordered;
+  }, [visibleCols, colOrder]);
+  const handleColChange = (keys) => { setVisibleCols(keys); setColOrder(keys); };
+  const [dragCol, setDragCol] = useState(null);
+  const handleColDragStart = (key) => setDragCol(key);
+  const handleColDrop = (targetKey) => {
+    if (!dragCol || dragCol === targetKey) { setDragCol(null); return; }
+    const next = [...orderedCols];
+    const fromIdx = next.indexOf(dragCol);
+    const toIdx = next.indexOf(targetKey);
+    if (fromIdx < 0 || toIdx < 0) { setDragCol(null); return; }
+    next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, dragCol);
+    setColOrder(next);
+    setDragCol(null);
+  };
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -214,7 +336,7 @@ export default function LeadsPage() {
     return () => { cancelled = true; };
   }, [deepLinkId, navTs]);
 
-  const { lastEntry: rotLastEntry, teamAvg: rotTeamAvg } = useMemo(() => buildRotMetrics(stageHistory), [stageHistory]);
+  // Rot/stuck metrics removed from table display
   const renewedIds = useMemo(() => buildRenewedSet(leads), [leads]);
 
   // Ranked with the shared prioritization order (stage → confidence → chain → TCV), with
@@ -416,83 +538,81 @@ export default function LeadsPage() {
   };
 
   const bdOpts = bds.map(b => ({ value: String(b.id), label: b.label || b.name }));
-  const customerNames = useMemo(() => [...new Set(leads.map(l => l.customer_name).filter(Boolean))].sort(), [leads]);
+  // customerNames removed from filter bar but state kept for deep-link compatibility
   // Filter options come from the per-business dropdowns, unioned with any values present in the data.
   const sourceOpts = [...new Set([...(dropdowns.lead_source || SOURCES), ...leads.map(l => l.lead_source).filter(Boolean)])];
 
   return (
     <Layout>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--m3-outline-variant)', padding: '6px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {cameFromDashboard && <button className="btn btn-sm" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => { const dtab = searchParams.get('dtab'); navigate(dtab ? `/dashboard?tab=${dtab}` : '/dashboard'); }}>← Dashboard</button>}
           {cameFromForecast && <button className="btn btn-sm" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => navigate('/forecast')}>← Inventory</button>}
           {cameFromActivity && <button className="btn btn-sm" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => navigate('/activity')}>← Activity</button>}
           <div>
             <h1 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Leads</h1>
-            <p style={{ margin: '1px 0 0', fontSize: 11, color: '#64748b' }}>{openCount} active · {filtered.length} total</p>
+            <p style={{ margin: '1px 0 0', fontSize: 11, color: 'var(--m3-on-surface-variant)' }}>{openCount} active · {filtered.length} total</p>
           </div>
-          <NotificationBell />
         </div>
         <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-          {leadsCanFull && <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} onClick={() => setShowChains(true)}>🏢 Master Orders</button>}
-          <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} onClick={exportExcel}>Export Excel</button>
-          <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} onClick={exportPdf}>Export PDF</button>
-          <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
-            <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, fontSize: 11, padding: '8px 12px', background: view === 'table' ? '#eef2ff' : '#fff' }} onClick={() => setView('table')}>Table</button>
-            <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, fontSize: 11, padding: '8px 12px', background: view === 'kanban' ? '#eef2ff' : '#fff' }} onClick={() => setView('kanban')}>Kanban</button>
+          {leadsCanFull && <button className="btn btn-sm" style={{ fontSize: 11, padding: '5px 10px' }} onClick={() => setShowChains(true)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg> Master Orders</button>}
+          <ExportMenu onExportExcel={exportExcel} onExportPdf={exportPdf} />
+          <div style={{ display: 'flex', border: '1px solid var(--m3-outline-variant)', borderRadius: 6, overflow: 'hidden' }}>
+            <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, fontSize: 11, padding: '5px 12px', background: view === 'table' ? 'var(--m3-primary-container)' : '#fff' }} onClick={() => setView('table')}>Table</button>
+            <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, fontSize: 11, padding: '5px 12px', background: view === 'kanban' ? 'var(--m3-primary-container)' : '#fff' }} onClick={() => setView('kanban')}>Kanban</button>
           </div>
-          <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} title="View customers and their orders by city" onClick={() => navigate('/customers')}>👥 Customers</button>
-          {isAdmin && <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 12px' }} onClick={() => setShowBulkUpload(true)}>⬆ Bulk Import</button>}
-          {leadsCanFull && <button className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '8px 14px' }} onClick={openNew}>+ New Lead</button>}
-          {leadsCanFull && <button className="btn btn-sm" style={{ fontSize: 11, padding: '8px 14px', background: '#f1f5f9', color: '#4338ca', borderColor: '#c7d2fe' }} onClick={() => setShowExpansionPicker(true)}>+ Existing Customer</button>}
+          {isAdmin && <button className="btn btn-sm" style={{ fontSize: 11, padding: '5px 10px' }} onClick={() => setShowBulkUpload(true)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg> Bulk Import</button>}
+          {leadsCanFull && <button className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '5px 12px' }} onClick={openNew}>+ New Lead</button>}
+          {leadsCanFull && <button className="btn btn-sm" style={{ fontSize: 11, padding: '5px 12px', background: 'var(--color-bg)', color: 'var(--m3-primary)', borderColor: 'var(--m3-primary-container)' }} onClick={() => setShowExpansionPicker(true)}>+ Existing Customer</button>}
         </div>
       </div>
 
-      <div style={{ padding: 20 }}>
+      <div style={{ padding: '8px 16px' }}>
         {deepLinkError && (
-          <div style={{ marginBottom: 16, background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 10, padding: '10px 14px', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+          <div style={{ marginBottom: 16, background: 'var(--m3-error-container)', border: '1px solid #fecaca', color: 'var(--m3-error)', borderRadius: 10, padding: '10px 14px', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
             <span>{deepLinkError}</span>
             <button className="btn btn-sm" onClick={() => setDeepLinkError('')}>Dismiss</button>
           </div>
         )}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'nowrap', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '6px 10px' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#334155', whiteSpace: 'nowrap' }}>Filters</span>
-          <input className="input" style={{ width: 160, height: 30, fontSize: 11, padding: '4px 8px' }} placeholder="Search customer, city…" value={search} onChange={e => setSearch(e.target.value)} />
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'nowrap', alignItems: 'center', background: 'var(--m3-surface-container)', borderRadius: 8, padding: '5px 10px' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--m3-on-surface-variant)', whiteSpace: 'nowrap' }}>Filters</span>
+          <input className="input" style={{ width: 150, height: 28, fontSize: 11, padding: '4px 8px', background: 'var(--m3-surface-container-lowest)' }} placeholder="Search customer, city…" value={search} onChange={e => setSearch(e.target.value)} />
           <MultiSelect label="Phase" options={PHASES} selected={filterPhases} onChange={setFilterPhases} />
           <MultiSelect label="Scoring" options={SCORE_BANDS} selected={filterScores} onChange={setFilterScores} />
           <MultiSelect label="Source" options={sourceOpts} selected={filterSources} onChange={setFilterSources} />
-          <MultiSelect label="Customer" options={customerNames} selected={filterCustomers} onChange={setFilterCustomers} />
           {isAdmin && <MultiSelect label="Sales Rep" options={bdOpts} selected={filterBDs} onChange={setFilterBDs} />}
-          {/* Follow-up date range — single button with dropdown */}
           <FollowUpDatePicker from={filterFollowFrom} to={filterFollowTo}
             onFromChange={setFilterFollowFrom} onToChange={setFilterFollowTo} />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--m3-on-surface-variant)', whiteSpace: 'nowrap' }}>
             <input type="checkbox" checked={filterOverdue} onChange={e => setFilterOverdue(e.target.checked)} /> Followup overdue
           </label>
+          <div style={{ marginLeft: 'auto' }}>
+            <LayoutPicker columns={visibleCols} onChange={handleColChange} />
+          </div>
           {/* Rating has no bar control anymore, but the Dashboard "Hot leads" KPI still deep-links to
               it — surface it as a dismissible chip so the user can see and clear that filter. */}
           {filterTemps.length > 0 && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 999, padding: '4px 10px', color: '#9a3412' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, background: 'var(--m3-tertiary-container)', border: '1px solid #fed7aa', borderRadius: 999, padding: '4px 10px', color: 'var(--m3-error)' }}>
               Rating: {filterTemps.join(', ')}
-              <button type="button" onClick={() => setFilterTemps([])} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#c2410c', fontWeight: 700, padding: 0 }}>✕</button>
+              <button type="button" onClick={() => setFilterTemps([])} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--m3-error)', fontWeight: 700, padding: 0 }}>✕</button>
             </span>
           )}
           {filterConf && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 999, padding: '4px 10px', color: '#3730a3' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, background: 'var(--m3-primary-container)', border: '1px solid #c7d2fe', borderRadius: 999, padding: '4px 10px', color: 'var(--m3-primary)' }}>
               Confidence: {filterConf === 'high' ? 'High ≥60' : filterConf === 'medium' ? 'Medium 30–59' : 'Low <30'}
-              <button type="button" onClick={() => setFilterConf('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#4f46e5', fontWeight: 700, padding: 0 }}>✕</button>
+              <button type="button" onClick={() => setFilterConf('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--m3-primary)', fontWeight: 700, padding: 0 }}>✕</button>
             </span>
           )}
           {filterIds.length > 0 && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 999, padding: '4px 10px', color: '#065f46' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, background: 'var(--m3-success-container)', border: '1px solid #a7f3d0', borderRadius: 999, padding: '4px 10px', color: 'var(--m3-success)' }}>
               {idsLabel} ({filterIds.length})
-              <button type="button" onClick={() => { setFilterIds([]); setIdsLabel(''); }} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#059669', fontWeight: 700, padding: 0 }}>✕</button>
+              <button type="button" onClick={() => { setFilterIds([]); setIdsLabel(''); }} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--m3-success)', fontWeight: 700, padding: 0 }}>✕</button>
             </span>
           )}
         </div>
 
         {isAdmin && selectedIds.size > 0 && (
-          <div className="card-sm" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, background: '#eef2ff', borderColor: '#c7d2fe' }}>
+          <div className="card-sm" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, background: 'var(--m3-primary-container)', borderColor: 'var(--m3-primary-container)' }}>
             <span style={{ fontSize: 12, fontWeight: 700 }}>{selectedIds.size} selected</span>
             <button className="btn btn-sm" onClick={() => { setBulkAction('reassign'); setBulkValue(''); }}>Reassign</button>
             <button className="btn btn-sm" onClick={() => { setBulkAction('phase'); setBulkValue(''); }}>Change Phase</button>
@@ -511,7 +631,7 @@ export default function LeadsPage() {
           </div>
         )}
 
-        {loading ? <p style={{ color: '#94a3b8' }}>Loading…</p> : view === 'kanban' ? (
+        {loading ? <p style={{ color: 'var(--m3-outline)' }}>Loading…</p> : view === 'kanban' ? (
           <KanbanView leads={filtered} onOpen={openEdit} onPhaseChange={handlePhaseChangeKanban} tatMap={tatMap} bds={bds} />
         ) : (
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -519,15 +639,24 @@ export default function LeadsPage() {
               <thead>
                 <tr>
                   {isAdmin && (
-                    <th onClick={e => e.stopPropagation()} style={{ width: 32 }}>
+                    <th onClick={e => e.stopPropagation()} style={{ width: 28 }}>
                       <input type="checkbox" checked={allSelected} onChange={toggleSelectAll}
                         title={allSelected ? 'Deselect all' : `Select all ${filtered.length}`} />
                     </th>
                   )}
-                  <th>Sr</th><th>Customer</th>{isAdmin && <th>Sales Rep</th>}<th>Phase</th>
-                  <th title="Days in current stage (coloured vs this stage's TAT target)">Aging</th>
-                  <th>Location</th>
-                  <th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Deal Value (₹L)</th><th>Scoring</th><th>Next Follow-Up</th>
+                  {orderedCols.map(key => {
+                    if (key === 'sales_rep' && !isAdmin) return null;
+                    const col = ALL_COLUMNS.find(c => c.key === key);
+                    const align = ['qty', 'deal_value'].includes(key) ? 'right' : 'left';
+                    return (
+                      <th key={key} draggable onDragStart={() => handleColDragStart(key)}
+                        onDragOver={e => e.preventDefault()} onDrop={() => handleColDrop(key)}
+                        style={{ textAlign: align, cursor: 'grab', userSelect: 'none', background: dragCol === key ? 'var(--m3-primary-container)' : undefined }}
+                        title={key === 'aging' ? 'Days in current stage (coloured vs TAT target)' : undefined}>
+                        {col?.label || key}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -536,75 +665,78 @@ export default function LeadsPage() {
                   const overdue = isOverdue(l);
                   const poRenewal = renewalStatus(l, renewedIds);
                   const showExpiry = poRenewal && poRenewal.band !== 'ok' && poRenewal.band !== 'renewed';
-                  const rot = getRotState(l, rotLastEntry, rotTeamAvg);
                   const isClosed = ['On Hold', 'Lost', 'Won'].includes(l.phase);
                   const isLost = l.phase === 'Lost';
                   const conf = hasConfidence(l) ? Number(l.confidence_score) : null;
-                  return (
-                    <tr key={l.id} onClick={() => openEdit(l)} style={{ background: isLost ? '#f1f5f9' : (tatBad ? '#fef2f2' : undefined), color: isLost ? '#94a3b8' : undefined, opacity: isLost ? 0.75 : 1 }}>
-                      {isAdmin && <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelect(l.id)} /></td>}
-                      <td style={{ color: '#94a3b8' }}>{idx + 1}</td>
-                      <td>
+
+                  const cellMap = {
+                    sr: <td key="sr" style={{ color: 'var(--m3-outline)' }}>{idx + 1}</td>,
+                    customer: (
+                      <td key="customer">
                         <p style={{ fontWeight: 700, margin: 0 }}>{l.customer_name}</p>
-                        {l.lead_ref && <p style={{ fontSize: 10, fontFamily: 'monospace', color: '#6366f1', margin: '1px 0 0' }}>{l.lead_ref}</p>}
-                        <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>
-                          {l.new_or_renewal} · {l.lead_source}
-                          {/* Surface the specific partner/Account Manager/affiliate name when the lead source needs one.
-                              Keeps the row compact but adds the "who brought this in" context. */}
-                          {l.lead_source === 'Channel Partner' && l.channel_partner_name && <> · <span style={{ color: '#4338ca', fontWeight: 600 }}>{l.channel_partner_name}</span></>}
-                          {l.lead_source === 'Account Manager' && l.kam_name && <> · <span style={{ color: '#4338ca', fontWeight: 600 }}>{l.kam_name}</span></>}
-                          {l.lead_source === 'Referral Partner' && l.affiliate_name && <> · <span style={{ color: '#4338ca', fontWeight: 600 }}>{l.affiliate_name}</span></>}
-                        </p>
+                        {l.lead_ref && <p style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--m3-primary)', margin: '1px 0 0' }}>{l.lead_ref}</p>}
                         {showExpiry && (() => {
                           const s = RENEWAL_BAND_STYLE[poRenewal.band] || RENEWAL_BAND_STYLE.ok;
-                          return (
-                            <span style={{ display: 'inline-block', marginTop: 4, marginRight: 4, background: s.bg, color: s.fg, border: `1px solid ${s.border}`, borderRadius: 999, padding: '2px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                              {renewalLabel(poRenewal)}
-                            </span>
-                          );
+                          return <span style={{ display: 'inline-block', marginTop: 3, background: s.bg, color: s.fg, border: `1px solid ${s.border}`, borderRadius: 999, padding: '1px 8px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>{renewalLabel(poRenewal)}</span>;
                         })()}
-                        {rot && (
-                          <span className={`badge ${rot.severity === 'red' ? 'badge-red' : 'badge-amber'}`} style={{ marginTop: 4 }}>
-                            🥀 Stuck {rot.ageDays}d
-                          </span>
-                        )}
                       </td>
-                      {isAdmin && <td>{ownerLabel(l.owner)}</td>}
-                      <td><span className={`badge ${PHASE_BADGE[l.phase]}`}>{l.phase}</span></td>
-                      <td>
+                    ),
+                    sales_rep: isAdmin ? <td key="sales_rep">{ownerLabel(l.owner)}</td> : null,
+                    phase: <td key="phase"><span className={`badge ${PHASE_BADGE[l.phase]}`}>{l.phase}</span></td>,
+                    aging: (
+                      <td key="aging">
                         {(() => {
                           const a = stageAging(l, tatMap);
-                          if (a.days === null) return <span style={{ color: '#cbd5e1' }}>—</span>;
-                          const color = a.level === 'over' ? '#dc2626' : a.level === 'warn' ? '#b45309' : a.level === 'ok' ? '#059669' : '#64748b';
-                          const bg    = a.level === 'over' ? '#fef2f2' : a.level === 'warn' ? '#fffbeb' : a.level === 'ok' ? '#ecfdf5' : '#f8fafc';
-                          const tip   = a.target != null ? `${a.days}d in ${l.phase} · target ${a.target}d` : `${a.days}d in ${l.phase} · no target set`;
-                          return <span className="badge" style={{ background: bg, color, border: `1px solid ${color}22`, fontWeight: 700 }} title={tip}>{a.days}d</span>;
+                          if (a.days === null) return <span style={{ color: 'var(--m3-outline-variant)' }}>—</span>;
+                          const color = a.level === 'over' ? 'var(--m3-error)' : a.level === 'warn' ? 'var(--color-warning)' : a.level === 'ok' ? 'var(--m3-success)' : 'var(--m3-on-surface-variant)';
+                          const bg    = a.level === 'over' ? 'var(--m3-error-container)' : a.level === 'warn' ? 'var(--m3-tertiary-container)' : a.level === 'ok' ? 'var(--m3-success-container)' : 'var(--m3-surface-container)';
+                          return <span className="badge" style={{ background: bg, color, border: `1px solid ${color}22`, fontWeight: 700 }} title={a.target != null ? `${a.days}d in ${l.phase} · target ${a.target}d` : `${a.days}d in ${l.phase}`}>{a.days}d</span>;
                         })()}
                       </td>
-                      <td>{l.state || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
-                      <td style={{ textAlign: 'right' }}>{l.quantity || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{hasMoney(l.potential_tcv_lakhs) ? `₹${l.potential_tcv_lakhs}` : '—'}</td>
-                      <td>
-                        {conf === null ? <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>—</span> : (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <span className={`badge ${conf >= 60 ? 'badge-green' : conf >= 30 ? 'badge-amber' : 'badge-gray'}`} style={{ minWidth: 46, justifyContent: 'center' }} title="Win-confidence score">{Math.round(conf)}%</span>
+                    ),
+                    location: <td key="location">{l.state || <span style={{ color: 'var(--m3-outline-variant)' }}>—</span>}</td>,
+                    qty: <td key="qty" style={{ textAlign: 'right' }}>{l.quantity || <span style={{ color: 'var(--m3-outline-variant)' }}>—</span>}</td>,
+                    deal_value: <td key="deal_value" style={{ textAlign: 'right', fontWeight: 700 }}>{hasMoney(l.potential_tcv_lakhs) ? `₹${l.potential_tcv_lakhs}` : '—'}</td>,
+                    scoring: (
+                      <td key="scoring">
+                        {conf === null ? <span style={{ color: 'var(--m3-outline-variant)' }}>—</span> : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span className={`badge ${conf >= 60 ? 'badge-green' : conf >= 30 ? 'badge-amber' : 'badge-gray'}`} style={{ minWidth: 40, justifyContent: 'center' }}>{Math.round(conf)}%</span>
                             <TrendArrow trend={confidenceTrend(l)} />
                           </span>
                         )}
                       </td>
-                      <td>
-                        {isClosed ? <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>—</span> :
-                          l.next_followup_date ? <span style={{ color: overdue ? '#dc2626' : '#334155', fontWeight: overdue ? 700 : 400 }}>{overdue && '⚠ '}{fmtDate(l.next_followup_date)}</span> :
-                          <span style={{ color: '#cbd5e1' }}>—</span>}
+                    ),
+                    followup: (
+                      <td key="followup">
+                        {isClosed ? <span style={{ color: 'var(--m3-outline-variant)' }}>—</span> :
+                          l.next_followup_date ? <span style={{ color: overdue ? 'var(--m3-error)' : 'var(--m3-on-surface)', fontWeight: overdue ? 700 : 400 }}>{overdue && '⚠ '}{fmtDate(l.next_followup_date)}</span> :
+                          <span style={{ color: 'var(--m3-outline-variant)' }}>—</span>}
                       </td>
+                    ),
+                    source: <td key="source">{l.lead_source || '—'}</td>,
+                    new_renewal: <td key="new_renewal">{l.new_or_renewal || '—'}</td>,
+                    competitor: <td key="competitor">{l.competitor || <span style={{ color: 'var(--m3-outline-variant)' }}>—</span>}</td>,
+                    contract: <td key="contract">{l.contract_period_months ? `${l.contract_period_months}mo` : '—'}</td>,
+                    billing: <td key="billing">{l.billing_cycle || '—'}</td>,
+                    created: <td key="created">{l.createdAt ? fmtDate(l.createdAt) : '—'}</td>,
+                  };
+
+                  return (
+                    <tr key={l.id} onClick={() => openEdit(l)} style={{ background: isLost ? 'var(--m3-surface-container-high)' : (tatBad ? 'var(--m3-error-container)' : undefined), color: isLost ? 'var(--m3-outline)' : undefined, opacity: isLost ? 0.75 : 1 }}>
+                      {isAdmin && <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelect(l.id)} /></td>}
+                      {orderedCols.map(key => {
+                        if (key === 'sales_rep' && !isAdmin) return null;
+                        return cellMap[key] || null;
+                      })}
                     </tr>
                   );
                 })}
-                {filtered.length === 0 && <tr><td colSpan={isAdmin ? 11 : 9} style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>No leads match your filters.</td></tr>}
+                {filtered.length === 0 && <tr><td colSpan={orderedCols.length + (isAdmin ? 1 : 0)} style={{ textAlign: 'center', color: 'var(--m3-outline)', padding: 16 }}>No leads match your filters.</td></tr>}
               </tbody>
             </table>
             {isAdmin && filtered.length > 0 && (
-              <div style={{ padding: 10 }}>
+              <div style={{ padding: 8 }}>
                 {leadsCanEdit && <button className="btn btn-sm" onClick={selectAll}>Select all ({filtered.length})</button>}
               </div>
             )}
@@ -668,7 +800,7 @@ export default function LeadsPage() {
           <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
             <div className="modal-body">
               <p style={{ fontWeight: 700, marginBottom: 8 }}>Delete this lead?</p>
-              <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>This permanently removes the lead, its contacts, and its activity history. This cannot be undone.</p>
+              <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', marginBottom: 20 }}>This permanently removes the lead, its contacts, and its activity history. This cannot be undone.</p>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="btn" onClick={() => setDeleteId(null)}>Cancel</button>
                 <button className="btn btn-danger" onClick={async () => { await deleteLead(deleteId); setDeleteId(null); closeForm(); fetchAll(); }}>Delete</button>
@@ -683,7 +815,7 @@ export default function LeadsPage() {
           <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
             <div className="modal-body">
               <p style={{ fontWeight: 700, marginBottom: 8 }}>Delete {selectedIds.size} lead{selectedIds.size > 1 ? 's' : ''}?</p>
-              <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>This permanently removes the selected lead{selectedIds.size > 1 ? 's' : ''}, their contacts, and their activity history. This cannot be undone.</p>
+              <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', marginBottom: 20 }}>This permanently removes the selected lead{selectedIds.size > 1 ? 's' : ''}, their contacts, and their activity history. This cannot be undone.</p>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="btn" disabled={bulkDeleting} onClick={() => setConfirmBulkDelete(false)}>Cancel</button>
                 <button className="btn btn-danger" disabled={bulkDeleting} onClick={executeBulkDelete}>{bulkDeleting ? 'Deleting…' : `Delete ${selectedIds.size}`}</button>

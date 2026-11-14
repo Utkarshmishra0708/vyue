@@ -55,7 +55,7 @@ export default function PermissionsModal({ userId, userName, onClose, onSaved })
           <div>
             <span style={{ fontWeight: 700, fontSize: 15 }}>Module Access — {userName}</span>
             {meta && (
-              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>
                 {meta.role} · {meta.business_unit}
               </p>
             )}
@@ -64,14 +64,14 @@ export default function PermissionsModal({ userId, userName, onClose, onSaved })
         </div>
 
         <div style={{ padding: 20 }}>
-          {err && <div style={{ marginBottom: 12, background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>{err}</div>}
+          {err && <div style={{ marginBottom: 12, background: 'var(--m3-error-container)', border: '1px solid #fecaca', color: 'var(--m3-error)', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>{err}</div>}
 
-          {!perms ? <p style={{ color: '#94a3b8', fontSize: 13 }}>Loading…</p> : (
+          {!perms ? <p style={{ color: 'var(--m3-outline)', fontSize: 13 }}>Loading…</p> : (
             <>
               <PermissionMatrix value={perms} onChange={setPerms} idPrefix="edit-perm" />
               <div style={{ height: 14 }} />
               <PermissionLegend />
-              <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.7, marginTop: 8 }}>
+              <div style={{ fontSize: 11, color: 'var(--m3-on-surface-variant)', lineHeight: 1.7, marginTop: 8 }}>
                 Settings is not listed here: it stays restricted to Owner and Manager roles.
                 These levels narrow what an account type already allows — they never widen it — and
                 apply to the user immediately, without signing out.

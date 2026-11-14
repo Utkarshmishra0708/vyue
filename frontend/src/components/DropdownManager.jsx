@@ -41,10 +41,10 @@ export default function DropdownManager({ field, label, onChange }) {
         {open ? 'Close' : '✎ Manage'}
       </button>
       {open && (
-        <div style={{ position: 'absolute', zIndex: 40, top: '110%', right: 0, width: 260, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.12)', padding: 12 }}>
+        <div style={{ position: 'absolute', zIndex: 40, top: '110%', right: 0, width: 260, background: 'var(--m3-surface-container-lowest)', border: '1px solid var(--m3-outline-variant)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.12)', padding: 12 }}>
           <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 8px' }}>Manage “{label}” options</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 180, overflowY: 'auto' }}>
-            {rows.length === 0 && <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>No options yet — add one below.</p>}
+            {rows.length === 0 && <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: 0 }}>No options yet — add one below.</p>}
             {rows.map(r => (
               <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 12 }}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.value}</span>
@@ -58,7 +58,7 @@ export default function DropdownManager({ field, label, onChange }) {
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
             <button type="button" className="btn btn-sm btn-primary" disabled={busy || !val.trim()} onClick={add}>Add</button>
           </div>
-          {err && <p style={{ fontSize: 11, color: '#dc2626', margin: '6px 0 0' }}>{err}</p>}
+          {err && <p style={{ fontSize: 11, color: 'var(--m3-error)', margin: '6px 0 0' }}>{err}</p>}
         </div>
       )}
     </span>

@@ -13,7 +13,7 @@ import { getBuCatalog, createBusinessUnit } from '../services/api';
 // services and SLA. Captured now / wired next: field-by-field lead-form rendering, module nav,
 // dashboards, reports, workflow.
 const STEPS = ['Basics', 'Sales Fields', 'Services', 'Modules', 'Dashboards', 'Reports', 'Workflow', 'Review'];
-const PRESET_COLORS = ['#4f46e5', '#ea580c', '#0891b2', '#16a34a', '#db2777', '#7c3aed', '#0ea5e9', '#f59e0b'];
+const PRESET_COLORS = ['var(--m3-primary)', '#ea580c', 'var(--m3-tertiary)', 'var(--m3-success)', '#db2777', 'var(--m3-primary)', 'var(--m3-tertiary)', '#f59e0b'];
 const slugify = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
 const fieldSlugify = (s) => slugify(s).replace(/-/g, '_').slice(0, 64);
 const APPROVER_ROLES = [
@@ -169,15 +169,15 @@ export default function BuWizard({ onClose, onCreated }) {
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 12 }}>
             {STEPS.map((label, i) => (
               <div key={label} style={{ fontSize: 11, fontWeight: 700, padding: '4px 9px', borderRadius: 999,
-                background: i === step ? '#4f46e5' : i < step ? '#e0e7ff' : '#f1f5f9',
-                color: i === step ? '#fff' : i < step ? '#4338ca' : '#94a3b8' }}>{i + 1}. {label}</div>
+                background: i === step ? 'var(--m3-primary)' : i < step ? '#e0e7ff' : 'var(--m3-surface-container-high)',
+                color: i === step ? '#fff' : i < step ? 'var(--m3-primary)' : 'var(--m3-outline)' }}>{i + 1}. {label}</div>
             ))}
           </div>
         </div>
 
         <div style={{ padding: 22, overflowY: 'auto', flex: 1 }}>
           {loadErr && <div style={ov.error}>{loadErr}</div>}
-          {!catalog && !loadErr && <p style={{ fontSize: 13, color: '#64748b' }}>Loading the catalog from your existing businesses…</p>}
+          {!catalog && !loadErr && <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)' }}>Loading the catalog from your existing businesses…</p>}
 
           {catalog && step === 0 && (
             <div>
@@ -199,7 +199,7 @@ export default function BuWizard({ onClose, onCreated }) {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {PRESET_COLORS.map(c => (
                     <button type="button" key={c} onClick={() => setBasics(b => ({ ...b, color: c }))}
-                      style={{ width: 28, height: 28, borderRadius: 7, background: c, cursor: 'pointer', border: basics.color === c ? '3px solid #0f172a' : '2px solid #e2e8f0' }} />
+                      style={{ width: 28, height: 28, borderRadius: 7, background: c, cursor: 'pointer', border: basics.color === c ? '3px solid #0f172a' : '2px solid #e8eaf0' }} />
                   ))}
                 </div>
               </Field>
@@ -246,10 +246,10 @@ export default function BuWizard({ onClose, onCreated }) {
                 <div key={m.slug} style={ov.row}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: m.core ? 'default' : 'pointer' }}>
                     <input type="checkbox" checked={m.enabled} disabled={m.core || (m.slug === 'forecast' && !sellsHardware)} onChange={() => { if (m.slug === 'forecast') setForecastTouched(true); setModules(ms => ms.map(x => x.slug === m.slug && !x.core ? { ...x, enabled: !x.enabled } : x)); }} />
-                    <span style={{ fontSize: 13, color: m.enabled ? '#0f172a' : '#94a3b8' }}>{m.label}{m.core && <span style={ov.pill}>core</span>}</span>
+                    <span style={{ fontSize: 13, color: m.enabled ? 'var(--m3-on-surface)' : 'var(--m3-outline)' }}>{m.label}{m.core && <span style={ov.pill}>core</span>}</span>
                   </label>
                   {m.slug === 'forecast' && (
-                    <div style={{ fontSize: 11.5, color: '#64748b', margin: '2px 0 0 24px' }}>
+                    <div style={{ fontSize: 11.5, color: 'var(--m3-on-surface-variant)', margin: '2px 0 0 24px' }}>
                       {sellsHardware
                         ? 'Plans the hardware on this business\'s leads (a service in step 3 is Hardware).'
                         : 'Available once a service in step 3 is marked Hardware (or Hardware + Software).'}
@@ -330,13 +330,13 @@ export function SectionCard({ sec, catalog, onToggle, onCollapse, onToggleField,
 
   return (
     <div style={{ border: '1px solid #e5e9f0', borderRadius: 10, marginBottom: 10, opacity: sec.enabled ? 1 : 0.6 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: '#f8fafc', borderRadius: '10px 10px 0 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'var(--m3-surface-container)', borderRadius: '10px 10px 0 0' }}>
         <input type="checkbox" checked={sec.enabled} onChange={onToggle} title="Include this section" />
-        <button type="button" onClick={onCollapse} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: '#0f172a', flex: 1, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, color: '#94a3b8' }}>{sec.collapsed ? '▶' : '▼'}</span>
+        <button type="button" onClick={onCollapse} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: 'var(--m3-on-surface)', flex: 1, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10, color: 'var(--m3-outline)' }}>{sec.collapsed ? '▶' : '▼'}</span>
           {sec.label}
           {sec.custom && <span style={ov.pillGreen}>custom</span>}
-          <span style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8' }}>({sec.fields.filter(f => f.enabled).length}/{sec.fields.length})</span>
+          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--m3-outline)' }}>({sec.fields.filter(f => f.enabled).length}/{sec.fields.length})</span>
         </button>
         {sec.custom && <button type="button" style={ov.x} title="Remove section" onClick={onRemoveSection}>×</button>}
       </div>
@@ -346,24 +346,24 @@ export function SectionCard({ sec, catalog, onToggle, onCollapse, onToggleField,
           {sec.enabled && sec.fields.length > 1 && (
             <div style={{ display: 'flex', gap: 10, marginBottom: 4 }}>
               <button type="button" onClick={() => onSetAllFields(true)} style={ov.linkBtn}>Select all</button>
-              <span style={{ color: '#cbd5e1' }}>·</span>
+              <span style={{ color: 'var(--m3-outline-variant)' }}>·</span>
               <button type="button" onClick={() => onSetAllFields(false)} style={ov.linkBtn}>Select none</button>
             </div>
           )}
-          {sec.fields.length === 0 && <div style={{ fontSize: 12, color: '#94a3b8', padding: '4px 0' }}>No fields yet — add one below.</div>}
+          {sec.fields.length === 0 && <div style={{ fontSize: 12, color: 'var(--m3-outline)', padding: '4px 0' }}>No fields yet — add one below.</div>}
           {sec.fields.map(f => (
             <div key={f.slug} style={ov.row}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer' }}>
                 <input type="checkbox" checked={f.enabled} disabled={!sec.enabled} onChange={() => onToggleField(f.slug)} />
-                <span style={{ fontSize: 13, color: f.enabled && sec.enabled ? '#0f172a' : '#94a3b8' }}>
+                <span style={{ fontSize: 13, color: f.enabled && sec.enabled ? 'var(--m3-on-surface)' : 'var(--m3-outline)' }}>
                   {f.label}
                   <span style={ov.type}>{f.type}</span>
-                  {Array.isArray(f.options) && f.options.length > 0 && <span style={{ fontSize: 10.5, color: '#94a3b8' }}> · {f.options.join(' / ')}</span>}
+                  {Array.isArray(f.options) && f.options.length > 0 && <span style={{ fontSize: 10.5, color: 'var(--m3-outline)' }}> · {f.options.join(' / ')}</span>}
                   {f.custom && <span style={ov.pillGreen}>custom</span>}
                 </span>
               </label>
               {f.enabled && sec.enabled && (
-                <label style={{ fontSize: 11.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                <label style={{ fontSize: 11.5, color: 'var(--m3-on-surface-variant)', display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
                   <input type="checkbox" checked={f.mandatory} onChange={() => onToggleMandatory(f.slug)} /> mandatory
                 </label>
               )}
@@ -372,7 +372,7 @@ export function SectionCard({ sec, catalog, onToggle, onCollapse, onToggleField,
           ))}
 
           {adding ? (
-            <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 8, padding: 10, marginTop: 8 }}>
+            <div style={{ background: 'var(--m3-surface-container)', border: '1px dashed #cbd5e1', borderRadius: 8, padding: 10, marginTop: 8 }}>
               <input style={{ ...ov.input, marginBottom: 6 }} value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))} placeholder="Field label (e.g. GSTIN)" autoFocus />
               <div style={{ display: 'flex', gap: 6 }}>
                 <select style={{ ...ov.input, margin: 0, flex: 1 }} value={draft.type} onChange={e => setDraft(d => ({ ...d, type: e.target.value }))}>
@@ -409,15 +409,15 @@ export function ServiceCategoryBuilder({ category, items, onAdd, onRemove, onNat
   };
   return (
     <div style={{ border: '1px solid #e5e9f0', borderRadius: 10, marginBottom: 12 }}>
-      <div style={{ padding: '9px 12px', background: '#f8fafc', borderRadius: '10px 10px 0 0' }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{category.title}</span>
-        <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 8 }}>{category.hint}</span>
+      <div style={{ padding: '9px 12px', background: 'var(--m3-surface-container)', borderRadius: '10px 10px 0 0' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--m3-on-surface)' }}>{category.title}</span>
+        <span style={{ fontSize: 11, color: 'var(--m3-outline)', marginLeft: 8 }}>{category.hint}</span>
       </div>
       <div style={{ padding: '8px 12px' }}>
-        {items.length === 0 && <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 8px' }}>No items yet — add the {category.title.toLowerCase()} this business offers.</p>}
+        {items.length === 0 && <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: '2px 0 8px' }}>No items yet — add the {category.title.toLowerCase()} this business offers.</p>}
         {items.map(s => (
           <div key={s.slug} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid #f1f5f9' }}>
-            <span style={{ fontSize: 13, flex: 1, color: '#0f172a' }}>{s.label}</span>
+            <span style={{ fontSize: 13, flex: 1, color: 'var(--m3-on-surface)' }}>{s.label}</span>
             <select value={s.nature} onChange={e => onNature(s.slug, e.target.value)} style={{ ...ov.input, margin: 0, width: 90, padding: '4px 6px' }}>
               <option value="opex">Recurring</option><option value="capex">One-time</option>
             </select>
@@ -442,7 +442,7 @@ export function SelectAllRow({ onAll, onNone }) {
   return (
     <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
       <button type="button" onClick={onAll} style={ov.linkBtn}>Select all</button>
-      <span style={{ color: '#cbd5e1' }}>·</span>
+      <span style={{ color: 'var(--m3-outline-variant)' }}>·</span>
       <button type="button" onClick={onNone} style={ov.linkBtn}>Select none</button>
     </div>
   );
@@ -456,7 +456,7 @@ function ChecklistStep({ title, note, options, selected, setSelected }) {
       <SelectAllRow onAll={() => setSelected([...options])} onNone={() => setSelected([])} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
         {options.map(o => (
-          <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', border: '1px solid #eef2f7', borderRadius: 8, cursor: 'pointer', background: selected.includes(o) ? '#eef2ff' : '#fff' }}>
+          <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', border: '1px solid #eef2f7', borderRadius: 8, cursor: 'pointer', background: selected.includes(o) ? 'var(--m3-primary-container)' : '#fff' }}>
             <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} />
             <span style={{ fontSize: 13 }}>{o}</span>
           </label>
@@ -469,32 +469,32 @@ function ChecklistStep({ title, note, options, selected, setSelected }) {
 
 const Field = ({ label, children }) => (
   <div style={{ marginBottom: 12 }}>
-    <label style={{ fontSize: 12, fontWeight: 600, color: '#334155', display: 'block', marginBottom: 6 }}>{label}</label>
+    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--m3-on-surface-variant)', display: 'block', marginBottom: 6 }}>{label}</label>
     {children}
   </div>
 );
-const Intro = ({ children }) => <p style={{ fontSize: 12.5, color: '#64748b', margin: '0 0 14px', lineHeight: 1.5 }}>{children}</p>;
+const Intro = ({ children }) => <p style={{ fontSize: 12.5, color: 'var(--m3-on-surface-variant)', margin: '0 0 14px', lineHeight: 1.5 }}>{children}</p>;
 const Summary = ({ label, value }) => (
   <div style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid #f8fafc', fontSize: 13 }}>
-    <span style={{ width: 130, color: '#94a3b8', flexShrink: 0 }}>{label}</span>
-    <span style={{ color: '#0f172a', fontWeight: 500 }}>{value}</span>
+    <span style={{ width: 130, color: 'var(--m3-outline)', flexShrink: 0 }}>{label}</span>
+    <span style={{ color: 'var(--m3-on-surface)', fontWeight: 500 }}>{value}</span>
   </div>
 );
 
 export const ov = {
   backdrop: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 },
-  modal: { background: '#fff', borderRadius: 14, width: '100%', maxWidth: 580, maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 50px rgba(0,0,0,0.25)' },
-  x: { background: 'none', border: 'none', fontSize: 20, lineHeight: 1, color: '#94a3b8', cursor: 'pointer' },
-  input: { width: '100%', padding: '9px 11px', border: '1.5px solid #e2e8f0', borderRadius: 9, fontSize: 14, outline: 'none', boxSizing: 'border-box' },
-  primary: { background: '#4f46e5', color: '#fff', border: 'none' },
-  ghost: { background: '#fff', color: '#334155', border: '1px solid #e2e8f0' },
+  modal: { background: 'var(--m3-surface-container-lowest)', borderRadius: 14, width: '100%', maxWidth: 580, maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 50px rgba(0,0,0,0.25)' },
+  x: { background: 'none', border: 'none', fontSize: 20, lineHeight: 1, color: 'var(--m3-outline)', cursor: 'pointer' },
+  input: { width: '100%', padding: '9px 11px', border: '1.5px solid #e8eaf0', borderRadius: 9, fontSize: 14, outline: 'none', boxSizing: 'border-box' },
+  primary: { background: 'var(--m3-primary)', color: '#fff', border: 'none' },
+  ghost: { background: 'var(--m3-surface-container-lowest)', color: 'var(--m3-on-surface-variant)', border: '1px solid var(--m3-outline-variant)' },
   row: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '5px 0' },
-  pill: { marginLeft: 6, fontSize: 9.5, fontWeight: 700, background: '#eef2ff', color: '#4338ca', padding: '1px 6px', borderRadius: 999, textTransform: 'uppercase' },
-  pillGreen: { marginLeft: 6, fontSize: 9.5, fontWeight: 700, background: '#ecfdf5', color: '#047857', padding: '1px 6px', borderRadius: 999, textTransform: 'uppercase' },
-  type: { marginLeft: 6, fontSize: 9.5, fontWeight: 700, background: '#f1f5f9', color: '#64748b', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' },
-  addRow: { display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, borderTop: '1px dashed #e2e8f0', paddingTop: 12 },
-  note: { background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 8, padding: '9px 11px', fontSize: 11.5, color: '#64748b', lineHeight: 1.5 },
-  hint: { fontSize: 11, color: '#94a3b8', marginTop: 4 },
-  linkBtn: { background: 'none', border: 'none', color: '#4f46e5', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 },
-  error: { background: '#fee2e2', color: '#b91c1c', padding: '8px 12px', borderRadius: 8, fontSize: 13 },
+  pill: { marginLeft: 6, fontSize: 9.5, fontWeight: 700, background: 'var(--m3-primary-container)', color: 'var(--m3-primary)', padding: '1px 6px', borderRadius: 999, textTransform: 'uppercase' },
+  pillGreen: { marginLeft: 6, fontSize: 9.5, fontWeight: 700, background: 'var(--m3-success-container)', color: 'var(--m3-success)', padding: '1px 6px', borderRadius: 999, textTransform: 'uppercase' },
+  type: { marginLeft: 6, fontSize: 9.5, fontWeight: 700, background: 'var(--m3-surface-container-high)', color: 'var(--m3-on-surface-variant)', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' },
+  addRow: { display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, borderTop: '1px dashed #e8eaf0', paddingTop: 12 },
+  note: { background: 'var(--m3-surface-container)', border: '1px solid #eef2f7', borderRadius: 8, padding: '9px 11px', fontSize: 11.5, color: 'var(--m3-on-surface-variant)', lineHeight: 1.5 },
+  hint: { fontSize: 11, color: 'var(--m3-outline)', marginTop: 4 },
+  linkBtn: { background: 'none', border: 'none', color: 'var(--m3-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 },
+  error: { background: 'var(--m3-error-container)', color: 'var(--m3-error)', padding: '8px 12px', borderRadius: 8, fontSize: 13 },
 };

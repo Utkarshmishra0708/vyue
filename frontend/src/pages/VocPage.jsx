@@ -21,18 +21,18 @@ const EMPTY = {
 };
 
 // Small titled breakdown: label → count with a proportional bar. Clicking a row is optional.
-function Breakdown({ title, data, color = '#6366f1' }) {
+function Breakdown({ title, data, color = 'var(--m3-primary)' }) {
   const rows = Object.entries(data || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
     <div className="card" style={{ padding: 14 }}>
       <p className="section-title" style={{ margin: '0 0 8px' }}>{title}</p>
-      {rows.length === 0 ? <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>—</p> : (
+      {rows.length === 0 ? <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: 0 }}>—</p> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {rows.map(([label, n]) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
-              <div style={{ width: 110, fontWeight: 600, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={label}>{label}</div>
-              <div style={{ flex: 1, height: 14, background: '#f1f5f9', borderRadius: 5 }}>
+              <div style={{ width: 110, fontWeight: 600, color: 'var(--m3-on-surface-variant)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={label}>{label}</div>
+              <div style={{ flex: 1, height: 14, background: 'var(--m3-surface-container-high)', borderRadius: 5 }}>
                 <div style={{ height: '100%', width: `${Math.max(6, Math.round((n / max) * 100))}%`, background: color, borderRadius: 5 }} />
               </div>
               <div style={{ width: 26, textAlign: 'right', fontWeight: 700 }}>{n}</div>
@@ -139,15 +139,15 @@ export default function VocPage() {
   const bdNames = bds.map(b => b.name);
 
   if (!allowed) {
-    return <Layout><div style={{ padding: 40 }}><h1 style={{ fontSize: 18 }}>Customer Feedback</h1><p style={{ color: '#64748b' }}>The Customer Feedback module is not enabled for your business. Please contact your administrator.</p></div></Layout>;
+    return <Layout><div style={{ padding: 20 }}><h1 style={{ fontSize: 16 }}>Customer Feedback</h1><p style={{ color: 'var(--m3-on-surface-variant)' }}>The Customer Feedback module is not enabled for your business. Please contact your administrator.</p></div></Layout>;
   }
 
   return (
     <Layout>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--m3-outline-variant)', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Customer Feedback</h1>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{stats.open} open · {stats.total} total</p>
+          <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Customer Feedback</h1>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>{stats.open} open · {stats.total} total</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => setShowDash(s => !s)}>{showDash ? 'Hide' : 'Show'} dashboard</button>
@@ -160,9 +160,9 @@ export default function VocPage() {
         {showDash && (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-              {[['Total Feedback', stats.total, '#6366f1'], ['Open', stats.open, '#f59e0b'], ['Closed', stats.closed, '#16a34a']].map(([label, val, color]) => (
+              {[['Total Feedback', stats.total, 'var(--m3-primary)'], ['Open', stats.open, '#f59e0b'], ['Closed', stats.closed, 'var(--m3-success)']].map(([label, val, color]) => (
                 <div key={label} className="card" style={{ padding: 16 }}>
-                  <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{label}</div>
+                  <div style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', fontWeight: 600 }}>{label}</div>
                   <div style={{ fontSize: 30, fontWeight: 800, color }}>{val}</div>
                 </div>
               ))}
@@ -179,20 +179,20 @@ export default function VocPage() {
         )}
 
         {/* Filters */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 14px' }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Filters</span>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', background: 'var(--m3-surface-container-lowest)', border: '1px solid var(--m3-outline-variant)', borderRadius: 12, padding: '12px 14px' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--m3-on-surface-variant)' }}>Filters</span>
           <input className="input" style={{ width: 220 }} placeholder="Search customer, description…" value={search} onChange={e => setSearch(e.target.value)} />
           <MultiSelect label="Status" options={VOC_STATUSES} selected={fStatus} onChange={setFStatus} />
           <MultiSelect label="Priority" options={VOC_PRIORITIES} selected={fPriority} onChange={setFPriority} />
           <MultiSelect label="Product" options={productOptions} selected={fProduct} onChange={setFProduct} />
           <MultiSelect label="Feedback Type" options={VOC_TYPES} selected={fType} onChange={setFType} />
           {canReview && <MultiSelect label="Sales Rep" options={bdNames} selected={fBd} onChange={setFBd} />}
-          <label style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>From <input type="date" className="input" style={{ width: 140 }} value={fFrom} onChange={e => setFFrom(e.target.value)} /></label>
-          <label style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>To <input type="date" className="input" style={{ width: 140 }} value={fTo} onChange={e => setFTo(e.target.value)} /></label>
+          <label style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', display: 'flex', alignItems: 'center', gap: 4 }}>From <input type="date" className="input" style={{ width: 140 }} value={fFrom} onChange={e => setFFrom(e.target.value)} /></label>
+          <label style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', display: 'flex', alignItems: 'center', gap: 4 }}>To <input type="date" className="input" style={{ width: 140 }} value={fTo} onChange={e => setFTo(e.target.value)} /></label>
         </div>
 
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-          {loading ? <p style={{ padding: 20, color: '#94a3b8' }}>Loading…</p> : (
+          {loading ? <p style={{ padding: 20, color: 'var(--m3-outline)' }}>Loading…</p> : (
             <table className="data-table">
               <thead>
                 <tr>
@@ -203,9 +203,9 @@ export default function VocPage() {
               <tbody>
                 {filtered.map(v => (
                   <tr key={v.id} style={{ cursor: 'pointer' }} onClick={() => setModal({ mode: 'edit', voc: v })}>
-                    <td style={{ color: '#94a3b8', fontWeight: 600 }}>#{v.voc_no}</td>
+                    <td style={{ color: 'var(--m3-outline)', fontWeight: 600 }}>#{v.voc_no}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{v.date_of_entry ? fmtDate(v.date_of_entry) : '—'}</td>
-                    <td><p style={{ fontWeight: 700, margin: 0 }}>{v.customer_name}</p>{v.total_account_value_lakhs != null && <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>₹{v.total_account_value_lakhs}L</p>}</td>
+                    <td><p style={{ fontWeight: 700, margin: 0 }}>{v.customer_name}</p>{v.total_account_value_lakhs != null && <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: '2px 0 0' }}>₹{v.total_account_value_lakhs}L</p>}</td>
                     <td>{v.product_solution || '—'}</td>
                     <td style={{ fontSize: 12 }}>{v.voc_type || '—'}</td>
                     <td>{v.priority ? <span className={`badge ${VOC_PRIORITY_BADGE[v.priority] || 'badge-gray'}`}>{v.priority}</span> : '—'}</td>
@@ -214,7 +214,7 @@ export default function VocPage() {
                     <td style={{ fontSize: 12 }}>{v.bdOwner?.name?.split(' ')[0] || '—'}</td>
                   </tr>
                 ))}
-                {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>No feedback entries match your filters.</td></tr>}
+                {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--m3-outline)', padding: 24 }}>No feedback entries match your filters.</td></tr>}
               </tbody>
             </table>
           )}
@@ -240,7 +240,7 @@ export default function VocPage() {
           <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
             <div className="modal-body">
               <p style={{ fontWeight: 700, marginBottom: 8 }}>Delete this feedback?</p>
-              <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>This permanently removes the feedback and its history.</p>
+              <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', marginBottom: 20 }}>This permanently removes the feedback and its history.</p>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="btn" onClick={() => setDeleteId(null)}>Cancel</button>
                 <button className="btn btn-danger" onClick={async () => { await deleteVoc(deleteId); setDeleteId(null); fetchAll(); }}>Delete</button>
@@ -397,8 +397,8 @@ function VocModal({ mode, voc, bds, productOptions, canReview, user, onClose, on
                 <Sel label="Status" k="status" opts={VOC_STATUSES} ro={reviewerRO} />
               </div>
 
-              {err && <p style={{ fontSize: 12, color: '#dc2626', margin: 0 }}>{err}</p>}
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+              {err && <p style={{ fontSize: 12, color: 'var(--m3-error)', margin: 0 }}>{err}</p>}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--m3-outline-variant)', paddingTop: 14 }}>
                 <button type="button" className="btn" onClick={onClose}>Cancel</button>
                 {canEdit && <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create Feedback')}</button>}
               </div>
@@ -410,19 +410,19 @@ function VocModal({ mode, voc, bds, productOptions, canReview, user, onClose, on
                 <button className="btn btn-primary btn-sm" disabled={busy || !comment.trim()} onClick={postComment}>Add</button>
               </div>
               <p className="section-title">Activity & Audit Trail</p>
-              {!detail?.activity?.length ? <p style={{ fontSize: 13, color: '#94a3b8' }}>No activity yet.</p> : (
+              {!detail?.activity?.length ? <p style={{ fontSize: 13, color: 'var(--m3-outline)' }}>No activity yet.</p> : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {detail.activity.map(a => (
-                    <div key={a.id} style={{ borderLeft: '2px solid #e2e8f0', paddingLeft: 10 }}>
+                    <div key={a.id} style={{ borderLeft: '2px solid #e8eaf0', paddingLeft: 10 }}>
                       <div style={{ fontSize: 12 }}>
                         <span style={{ fontWeight: 700 }}>{a.user_name}</span>
-                        <span style={{ color: '#94a3b8' }}> · {fmtDate(a.created_at)}</span>
-                        {a.action_type === 'created' && <span style={{ color: '#059669' }}> · created</span>}
-                        {a.action_type === 'status_change' && <span style={{ color: '#0ea5e9' }}> · status</span>}
-                        {a.action_type === 'comment' && <span style={{ color: '#7c3aed' }}> · comment</span>}
+                        <span style={{ color: 'var(--m3-outline)' }}> · {fmtDate(a.created_at)}</span>
+                        {a.action_type === 'created' && <span style={{ color: 'var(--m3-success)' }}> · created</span>}
+                        {a.action_type === 'status_change' && <span style={{ color: 'var(--m3-tertiary)' }}> · status</span>}
+                        {a.action_type === 'comment' && <span style={{ color: 'var(--m3-primary)' }}> · comment</span>}
                       </div>
-                      {a.field_changed && <div style={{ fontSize: 12, color: '#334155' }}>{a.field_changed}: <span style={{ color: '#94a3b8' }}>{a.old_value}</span> → <b>{a.new_value}</b></div>}
-                      {a.note && <div style={{ fontSize: 12, color: '#334155' }}>{a.note}</div>}
+                      {a.field_changed && <div style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>{a.field_changed}: <span style={{ color: 'var(--m3-outline)' }}>{a.old_value}</span> → <b>{a.new_value}</b></div>}
+                      {a.note && <div style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>{a.note}</div>}
                     </div>
                   ))}
                 </div>

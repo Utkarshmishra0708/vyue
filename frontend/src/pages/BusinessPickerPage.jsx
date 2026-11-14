@@ -68,7 +68,7 @@ export default function BusinessPickerPage() {
         <p style={s.sub}>{TEXT.title}</p>
 
         {onlyOneOwner && (
-          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12.5, color: '#92400e', lineHeight: 1.5 }}>
+          <div style={{ background: 'var(--m3-tertiary-container)', border: '1px solid var(--m3-outline-variant)', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12.5, color: 'var(--m3-on-surface)', lineHeight: 1.5 }}>
             You're the only Owner. Consider adding a second one from <b>Organization Settings</b> so you're never locked out.
           </div>
         )}
@@ -89,8 +89,8 @@ export default function BusinessPickerPage() {
 
         {isSuperAdmin && canAct && list && (
           <button type="button" disabled={!!busy} onClick={() => navigate('/business-units?new=1')}
-            style={{ ...s.buButton, borderColor: '#64748b' }}>
-            <div style={{ ...s.buIcon, background: '#64748b' }}>+</div>
+            style={{ ...s.buButton, borderColor: 'var(--m3-outline)' }}>
+            <div style={{ ...s.buIcon, background: 'var(--m3-outline)' }}>+</div>
             <div style={{ textAlign: 'left' }}><div style={s.buName}>{TEXT.create}</div></div>
           </button>
         )}
@@ -105,15 +105,15 @@ export default function BusinessPickerPage() {
 }
 
 const s = {
-  wrap:    { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', padding: 16, fontFamily: 'Inter, system-ui, sans-serif' },
-  card:    { background: '#fff', borderRadius: 16, padding: 32, width: '100%', maxWidth: 420, boxShadow: '0 10px 30px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' },
-  title:   { fontSize: 24, fontWeight: 700, margin: '0 0 4px', color: '#0f172a' },
-  sub:     { fontSize: 13, color: '#64748b', margin: '0 0 24px' },
-  buButton:{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: 14, borderRadius: 12, border: '2px solid #e2e8f0', background: '#fff', cursor: 'pointer', marginBottom: 10 },
-  buIcon:  { width: 40, height: 40, borderRadius: 10, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 },
-  buName:  { fontSize: 14, fontWeight: 600, color: '#0f172a' },
-  buDesc:  { fontSize: 12, color: '#94a3b8' },
-  error:   { background: '#fee2e2', color: '#b91c1c', padding: '8px 12px', borderRadius: 8, fontSize: 13, marginBottom: 12 },
+  wrap:    { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)', padding: 16, fontFamily: 'var(--font-body)' },
+  card:    { background: 'var(--m3-surface-container-lowest)', borderRadius: 20, padding: 24, width: '100%', maxWidth: 400, boxShadow: 'var(--elevation-3)', border: 'none' },
+  title:   { fontSize: 22, fontWeight: 700, margin: '0 0 4px', color: 'var(--m3-on-surface)', fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' },
+  sub:     { fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: '0 0 16px' },
+  buButton:{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: 14, borderRadius: 16, border: '1px solid var(--m3-outline-variant)', background: 'var(--m3-surface-container-lowest)', cursor: 'pointer', marginBottom: 10, transition: 'all .15s' },
+  buIcon:  { width: 40, height: 40, borderRadius: 12, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 },
+  buName:  { fontSize: 13, fontWeight: 600, color: 'var(--m3-on-surface)' },
+  buDesc:  { fontSize: 11, color: 'var(--m3-on-surface-variant)' },
+  error:   { background: 'var(--m3-error-container)', color: 'var(--m3-on-error-container)', padding: '8px 12px', borderRadius: 12, fontSize: 12, marginBottom: 12 },
   links:   { display: 'flex', justifyContent: 'space-between', marginTop: 18 },
-  link:    { background: 'none', border: 'none', color: '#4f46e5', fontSize: 13, cursor: 'pointer', padding: 0 },
+  link:    { background: 'none', border: 'none', color: 'var(--m3-primary)', fontSize: 12, cursor: 'pointer', padding: 0 },
 };

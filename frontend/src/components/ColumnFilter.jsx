@@ -58,11 +58,11 @@ export default function ColumnFilter({ column, value, onChange, leads }) {
 
   const panel = {
     position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, zIndex: 200,
-    background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
+    background: 'var(--m3-surface-container-lowest)', border: '1px solid var(--m3-outline-variant)', borderRadius: 10,
     boxShadow: '0 10px 30px rgba(15,23,42,.14)', padding: 10, width: PANEL_W,
-    textTransform: 'none', fontWeight: 400, color: '#0f172a',
+    textTransform: 'none', fontWeight: 400, color: 'var(--m3-on-surface)',
   };
-  const lbl = { fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 3 };
+  const lbl = { fontSize: 11, fontWeight: 600, color: 'var(--m3-on-surface-variant)', display: 'block', marginBottom: 3 };
 
   return (
     <span ref={wrapRef} style={{ position: 'relative', display: 'inline-block', marginLeft: 4 }}>
@@ -75,7 +75,7 @@ export default function ColumnFilter({ column, value, onChange, leads }) {
         aria-expanded={open}
         style={{
           border: 'none', background: active ? '#e0e7ff' : 'transparent', cursor: 'pointer',
-          color: active ? '#4338ca' : '#94a3b8', borderRadius: 5, padding: '1px 4px',
+          color: active ? 'var(--m3-primary)' : 'var(--m3-outline)', borderRadius: 5, padding: '1px 4px',
           fontSize: 11, lineHeight: 1.4,
         }}
       >

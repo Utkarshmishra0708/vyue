@@ -28,14 +28,14 @@ export default function OrganizationSettingsPage() {
 
   return (
     <Layout>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px' }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{TEXT.title}</h1>
-        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{TEXT.subtitle}</p>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--m3-outline-variant)', padding: '10px 16px' }}>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{TEXT.title}</h1>
+        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>{TEXT.subtitle}</p>
       </div>
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ maxWidth: 640, margin: '0 auto', padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div className="card">
           <p className="section-title">{TEXT.businesses}</p>
-          {count !== null && <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 12px' }}>{TEXT.count(count)}</p>}
+          {count !== null && <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', margin: '0 0 12px' }}>{TEXT.count(count)}</p>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={() => navigate('/business-units')}>{TEXT.manage}</button>
             {canAct && <button className="btn" onClick={() => navigate('/business-units?new=1')}>{TEXT.create}</button>}

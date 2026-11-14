@@ -203,7 +203,7 @@ export default function IndiaMap({ leads = [] }) {
   const tooltipName = tooltip ? ID_TO_NAME[tooltip.stateId] || tooltip.stateId : '';
 
   return (
-    <div style={{ background: '#1e293b', borderRadius: 10, padding: 16 }}>
+    <div style={{ background: 'var(--m3-on-surface)', borderRadius: 10, padding: 16 }}>
       {/* Header */}
       <div
         style={{
@@ -213,7 +213,7 @@ export default function IndiaMap({ leads = [] }) {
           marginBottom: 10,
         }}
       >
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Geographic Distribution</p>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--m3-outline-variant)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Geographic Distribution</p>
         <select
           value={selectedMetric}
           onChange={(e) => setSelectedMetric(e.target.value)}
@@ -222,8 +222,8 @@ export default function IndiaMap({ leads = [] }) {
             borderRadius: 6,
             border: '1px solid #475569',
             fontSize: 12,
-            color: '#e2e8f0',
-            background: '#334155',
+            color: 'var(--m3-outline-variant)',
+            background: 'var(--m3-on-surface)',
             cursor: 'pointer',
             outline: 'none',
           }}
@@ -272,8 +272,8 @@ export default function IndiaMap({ leads = [] }) {
                 position: 'absolute',
                 top: tooltip.y,
                 left: tooltip.x,
-                background: '#1e293b',
-                color: '#f1f5f9',
+                background: 'var(--m3-on-surface)',
+                color: 'var(--m3-surface-container-high)',
                 borderRadius: 8,
                 padding: '10px 14px',
                 fontSize: 12,
@@ -294,7 +294,7 @@ export default function IndiaMap({ leads = [] }) {
                   <div>Total Licenses: {formatValue(tooltipData.quantity, 'quantity')}</div>
                 </>
               ) : (
-                <div style={{ color: '#94a3b8' }}>No data</div>
+                <div style={{ color: 'var(--m3-outline)' }}>No data</div>
               )}
             </div>
           )}
@@ -307,7 +307,7 @@ export default function IndiaMap({ leads = [] }) {
               gap: 6,
               marginTop: 6,
               fontSize: 10,
-              color: '#94a3b8',
+              color: 'var(--m3-outline)',
             }}
           >
             <span>Low</span>
@@ -328,11 +328,11 @@ export default function IndiaMap({ leads = [] }) {
 
         {/* Top 5 */}
         <div style={{ flex: '1 1 50%', minWidth: 0 }}>
-          <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 700, color: '#cbd5e1' }}>
+          <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 700, color: 'var(--m3-outline-variant)' }}>
             Top 5 States
           </p>
           {sortedStates.length === 0 ? (
-            <div style={{ color: '#64748b', fontSize: 12 }}>No data available</div>
+            <div style={{ color: 'var(--m3-on-surface-variant)', fontSize: 12 }}>No data available</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {sortedStates.map((item, idx) => {
@@ -345,7 +345,7 @@ export default function IndiaMap({ leads = [] }) {
                         justifyContent: 'space-between',
                         marginBottom: 3,
                         fontSize: 12,
-                        color: '#e2e8f0',
+                        color: 'var(--m3-outline-variant)',
                       }}
                     >
                       <span style={{ fontWeight: 500 }}>
@@ -361,7 +361,7 @@ export default function IndiaMap({ leads = [] }) {
                       style={{
                         height: 6,
                         borderRadius: 3,
-                        background: '#334155',
+                        background: 'var(--m3-on-surface)',
                         overflow: 'hidden',
                       }}
                     >

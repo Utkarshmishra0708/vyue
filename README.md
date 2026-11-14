@@ -1,4 +1,4 @@
-# Jio Sales CRM — Enterprise Sales Intelligence Platform
+# VYUE — Enterprise Sales Intelligence Platform
 
 > A full-featured, self-hosted CRM built for B2B sales teams that need pipeline visibility, team accountability, and data-driven decision making — without the complexity or cost of Salesforce.
 
@@ -10,9 +10,9 @@
 
 ---
 
-## Why Jio Sales CRM?
+## Why VYUE?
 
-Most CRMs are either too simple (spreadsheets with a login page) or too complex (6-month Salesforce implementations). Jio Sales CRM sits in the sweet spot:
+Most CRMs are either too simple (spreadsheets with a login page) or too complex (6-month Salesforce implementations). VYUE sits in the sweet spot:
 
 - **Deploy in hours, not months** — self-hosted, no vendor lock-in, no per-seat pricing
 - **Multi-business from day one** — one instance serves unlimited business units, each with its own pipeline, team, and configuration
@@ -60,7 +60,7 @@ Most CRMs are either too simple (spreadsheets with a login page) or too complex 
 
 ## MVP Features (Minimum Viable Product)
 
-These are the core capabilities that make Jio Sales CRM a functional pipeline tool from day one:
+These are the core capabilities that make VYUE a functional pipeline tool from day one:
 
 | # | Feature | Description |
 |---|---------|-------------|
@@ -77,7 +77,7 @@ These are the core capabilities that make Jio Sales CRM a functional pipeline to
 
 ## MSP Features (Minimum Sellable Product)
 
-These are the differentiators that make Jio Sales CRM worth paying for:
+These are the differentiators that make VYUE worth paying for:
 
 | # | Feature | Business Value |
 |---|---------|---------------|
@@ -264,7 +264,7 @@ pm2 save && pm2 startup    # survives reboots
 Or as a **systemd** unit:
 ```ini
 [Unit]
-Description=Jio Sales CRM API
+Description=VYUE API
 After=network.target mysql.service
 
 [Service]
@@ -321,7 +321,7 @@ mysqldump -u root jio_sales_crm | gzip > /backups/jio_sales_crm_$(date +%Y%m%d).
 
 ## Adapting for Your Business
 
-Jio Sales CRM is designed to be business-agnostic. Here's how to make it yours:
+VYUE is designed to be business-agnostic. Here's how to make it yours:
 
 ### 1. Create Your Business Unit
 Log in as Global Admin → Business Units → **+ New Business Unit**. The wizard lets you:
@@ -479,4 +479,4 @@ Jio-Sales-CRM/
 
 **Built for teams that sell. Deployed where you control it. Scales with your business.**
 
-*Jio Sales CRM — Enterprise Sales Intelligence Platform*
+*VYUE — Enterprise Sales Intelligence Platform*

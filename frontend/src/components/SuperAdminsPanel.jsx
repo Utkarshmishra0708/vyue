@@ -15,7 +15,7 @@ import useBusinessUnits from '../utils/useBusinessUnits';
 // Read+Write applies to every platform, with no per-platform configuration.
 // ---------------------------------------------------------------------------
 const SCOPE_STYLE = {
-  write: { bg: '#f0fdf4', fg: '#15803d', br: '#bbf7d0', label: 'Read + Write' },
+  write: { bg: 'var(--m3-success-container)', fg: 'var(--m3-success)', br: '#bbf7d0', label: 'Read + Write' },
   read:  { bg: '#eff6ff', fg: '#1d4ed8', br: '#bfdbfe', label: 'Read-only' },
 };
 
@@ -72,10 +72,10 @@ export default function SuperAdminsPanel({ reloadSignal }) {
     <div className="card" style={{ marginTop: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.4, color: '#334155', margin: 0 }}>
+          <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.4, color: 'var(--m3-on-surface)', margin: 0 }}>
             OWNERS — ALL BUSINESSES
           </p>
-          <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0', maxWidth: 620 }}>
+          <p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: '4px 0 0', maxWidth: 620 }}>
             Cross-business access spanning every business at once — and any business
             added later, automatically. The grant sits on top of the person's existing business role
             and doesn't replace it. Only an Owner can change this.
@@ -85,26 +85,26 @@ export default function SuperAdminsPanel({ reloadSignal }) {
       </div>
 
       {msg && (
-        <div style={{ marginTop: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#334155' }}>
+        <div style={{ marginTop: 12, background: 'var(--m3-surface-container)', border: '1px solid var(--m3-outline-variant)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--m3-on-surface)' }}>
           {msg}
         </div>
       )}
 
       <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {data.superAdmins.length === 0 && (
-          <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>No Owners yet.</p>
+          <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: 0 }}>No Owners yet.</p>
         )}
         {data.superAdmins.map(sa => {
           const st = SCOPE_STYLE[sa.scope] || SCOPE_STYLE.read;
           const isSelf = sa.id === user.id;
           return (
-            <div key={sa.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 10 }}>
+            <div key={sa.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 12px', border: '1px solid var(--m3-outline-variant)', borderRadius: 10 }}>
               <div style={{ flex: 1, minWidth: 200 }}>
                 <span style={{ fontWeight: 600, fontSize: 13 }}>{sa.name}</span>
-                {isSelf && <span style={{ fontSize: 11, color: '#94a3b8' }}> · you</span>}
-                <div style={{ fontSize: 11, color: '#64748b' }}>
+                {isSelf && <span style={{ fontSize: 11, color: 'var(--m3-outline)' }}> · you</span>}
+                <div style={{ fontSize: 11, color: 'var(--m3-on-surface-variant)' }}>
                   {sa.email} · business role: {sa.role} ({businessOf(sa.business_unit).name})
-                  {!sa.active && <span style={{ color: '#b91c1c' }}> · disabled</span>}
+                  {!sa.active && <span style={{ color: 'var(--m3-error)' }}> · disabled</span>}
                 </div>
               </div>
               <span style={{ background: st.bg, color: st.fg, border: `1px solid ${st.br}`, borderRadius: 999, padding: '2px 10px', fontSize: 11, fontWeight: 700 }}>
@@ -122,7 +122,7 @@ export default function SuperAdminsPanel({ reloadSignal }) {
                     onClick={() => change(sa.id, null, sa.name)}>Revoke</button>
                 </>
               )}
-              {isSelf && <span style={{ fontSize: 11, color: '#94a3b8' }}>another Owner must change yours</span>}
+              {isSelf && <span style={{ fontSize: 11, color: 'var(--m3-outline)' }}>another Owner must change yours</span>}
             </div>
           );
         })}
@@ -153,7 +153,7 @@ export default function SuperAdminsPanel({ reloadSignal }) {
         </div>
       )}
 
-      <p style={{ fontSize: 11, color: '#94a3b8', margin: '12px 0 0', lineHeight: 1.7 }}>
+      <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: '12px 0 0', lineHeight: 1.7 }}>
         <b>Read + Write</b> is unrestricted by design — Full Access to every module including Settings,
         on every business, with no per-module limits.{' '}
         <b>Read-only</b> sees everything across all businesses and can change nothing anywhere.
@@ -161,14 +161,14 @@ export default function SuperAdminsPanel({ reloadSignal }) {
 
       {showAudit && (
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: '#334155', margin: '0 0 8px' }}>Change history</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--m3-on-surface)', margin: '0 0 8px' }}>Change history</p>
           {audit.length === 0 ? (
-            <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>No changes recorded yet.</p>
+            <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: 0 }}>No changes recorded yet.</p>
           ) : (
             <div style={{ maxHeight: 220, overflowY: 'auto', fontSize: 12 }}>
               {audit.map((e, i) => (
-                <div key={i} style={{ padding: '5px 0', borderBottom: '1px solid #f8fafc', color: '#475569' }}>
-                  <span style={{ color: '#94a3b8' }}>{String(e.at).slice(0, 19).replace('T', ' ')}</span>
+                <div key={i} style={{ padding: '5px 0', borderBottom: '1px solid #f8fafc', color: 'var(--m3-on-surface-variant)' }}>
+                  <span style={{ color: 'var(--m3-outline)' }}>{String(e.at).slice(0, 19).replace('T', ' ')}</span>
                   {' · '}<b>{e.user}</b> changed <b>{e.subject}</b>: {e.from} → {e.to}
                 </div>
               ))}

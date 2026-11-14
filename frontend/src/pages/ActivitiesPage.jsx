@@ -14,16 +14,16 @@ import MentionTextarea from '../components/MentionTextarea';
 // the page. Hiding a column is a personal-view preference (see hidden-columns state below), NOT a
 // data change: a hidden column keeps its cards, they just don't render for that user.
 const COLUMNS = [
-  { slug: 'to_do',        label: 'To Do',            color: '#64748b' },
+  { slug: 'to_do',        label: 'To Do',            color: 'var(--m3-on-surface-variant)' },
   { slug: 'in_progress',  label: 'In Progress',      color: '#2563eb' },
   { slug: 'delayed',      label: 'Delayed',          color: '#f97316' },
-  { slug: 'blocked',      label: 'On Hold / Blocked', color: '#dc2626' },
-  { slug: 'completed',    label: 'Completed',        color: '#16a34a' },
+  { slug: 'blocked',      label: 'On Hold / Blocked', color: 'var(--m3-error)' },
+  { slug: 'completed',    label: 'Completed',        color: 'var(--m3-success)' },
 ];
 
 const PRIORITY_COLORS = {
-  high:   { bg: '#fee2e2', fg: '#991b1b' },
-  medium: { bg: '#fef3c7', fg: '#92400e' },
+  high:   { bg: 'var(--m3-error-container)', fg: 'var(--m3-error)' },
+  medium: { bg: 'var(--m3-tertiary-container)', fg: 'var(--m3-on-surface)' },
   low:    { bg: '#dbeafe', fg: '#1e40af' },
 };
 
@@ -207,21 +207,21 @@ export default function ActivitiesPage() {
 
   return (
     <Layout>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--m3-outline-variant)', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Task Board</h1>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Track calls, follow-ups and internal tasks on shared boards. Drag cards between columns to update status.</p>
+          <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Task Board</h1>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>Track calls, follow-ups and internal tasks on shared boards. Drag cards between columns to update status.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }}>
           {/* Columns picker — a small popover that lets each user hide phases they don't want to see.
               Preference is per-user (localStorage), so it doesn't affect other people's boards. */}
           <button className="btn" onClick={() => setShowColumnPicker(v => !v)}>
-            ⚙ Columns{hiddenCols.size > 0 ? ` (${COLUMNS.length - hiddenCols.size}/${COLUMNS.length})` : ''}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline',verticalAlign:'middle',marginRight:4}}><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>Columns{hiddenCols.size > 0 ? ` (${COLUMNS.length - hiddenCols.size}/${COLUMNS.length})` : ''}
           </button>
           {showColumnPicker && (
             <div onMouseLeave={() => setShowColumnPicker(false)}
-              style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.12)', padding: 10, zIndex: 30, minWidth: 220 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>Show / hide phases</div>
+              style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, background: 'var(--m3-surface-container-lowest)', border: '1px solid var(--m3-outline-variant)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.12)', padding: 10, zIndex: 30, minWidth: 220 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--m3-outline)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>Show / hide phases</div>
               {COLUMNS.map(col => (
                 <label key={col.slug} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px', cursor: 'pointer', fontSize: 13 }}>
                   <input type="checkbox" checked={!hiddenCols.has(col.slug)} onChange={() => toggleColumnHidden(col.slug)} />
@@ -229,7 +229,7 @@ export default function ActivitiesPage() {
                   <span>{col.label}</span>
                 </label>
               ))}
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: '6px 0 0' }}>Hidden phases keep their cards — this only changes your view.</p>
+              <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: '6px 0 0' }}>Hidden phases keep their cards — this only changes your view.</p>
             </div>
           )}
           {canCreate && activeTabId && (
@@ -239,7 +239,7 @@ export default function ActivitiesPage() {
       </div>
 
       {/* Tab strip — one tab per board, plus add/rename/delete controls. */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '0 24px', display: 'flex', gap: 4, alignItems: 'flex-end', overflowX: 'auto' }}>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--m3-outline-variant)', padding: '0 16px', display: 'flex', gap: 4, alignItems: 'flex-end', overflowX: 'auto' }}>
         {tabs.map(tab => {
           const active = tab.id === activeTabId;
           const renaming = renamingId === tab.id;
@@ -256,13 +256,13 @@ export default function ActivitiesPage() {
                   onClick={() => setActiveTabId(tab.id)}
                   onDoubleClick={() => canCreate && startRename(tab)}
                   title={canCreate ? 'Click to open. Double-click to rename.' : 'Click to open.'}
-                  style={{ background: 'transparent', border: 'none', padding: '4px 10px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: active ? '#4f46e5' : '#64748b' }}>
+                  style={{ background: 'transparent', border: 'none', padding: '4px 10px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: active ? 'var(--m3-primary)' : 'var(--m3-on-surface-variant)' }}>
                   {tab.label}
                 </button>
               )}
               {active && canCreate && !renaming && tabs.length > 1 && (
                 <button onClick={() => removeTab(tab)} title="Delete tab"
-                  style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 14, padding: '2px 6px' }}>×</button>
+                  style={{ background: 'transparent', border: 'none', color: 'var(--m3-outline)', cursor: 'pointer', fontSize: 14, padding: '2px 6px' }}>×</button>
               )}
             </div>
           );
@@ -278,19 +278,19 @@ export default function ActivitiesPage() {
           </div>
         ) : (
           <button onClick={() => setAddingTab(true)} title="Add a tab"
-            style={{ background: 'transparent', border: '1px dashed #cbd5e1', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: '4px 10px', margin: '10px 8px 8px' }}>+ Tab</button>
+            style={{ background: 'transparent', border: '1px dashed #cbd5e1', borderRadius: 6, color: 'var(--m3-on-surface-variant)', cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: '4px 10px', margin: '10px 8px 8px' }}>+ Tab</button>
         ))}
       </div>
 
-      {err && <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '8px 16px', fontSize: 13 }}>{err}</div>}
+      {err && <div style={{ background: 'var(--m3-error-container)', color: 'var(--m3-error)', padding: '8px 16px', fontSize: 13 }}>{err}</div>}
 
       <div style={{ padding: 20, overflowX: 'auto' }}>
         {loading ? (
-          <p style={{ color: '#94a3b8', padding: 40, textAlign: 'center' }}>Loading board…</p>
+          <p style={{ color: 'var(--m3-outline)', padding: 24, textAlign: 'center' }}>Loading board…</p>
         ) : !activeTabId ? (
-          <p style={{ color: '#94a3b8', padding: 40, textAlign: 'center' }}>No tabs yet — add one to get started.</p>
+          <p style={{ color: 'var(--m3-outline)', padding: 24, textAlign: 'center' }}>No tabs yet — add one to get started.</p>
         ) : visibleColumns.length === 0 ? (
-          <p style={{ color: '#94a3b8', padding: 40, textAlign: 'center' }}>All phases are hidden — use the Columns menu to bring one back.</p>
+          <p style={{ color: 'var(--m3-outline)', padding: 24, textAlign: 'center' }}>All phases are hidden — use the Columns menu to bring one back.</p>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${visibleColumns.length}, minmax(300px, 1fr))`, gap: 14, minWidth: 300 * visibleColumns.length }}>
             {visibleColumns.map(col => {
@@ -306,7 +306,7 @@ export default function ActivitiesPage() {
                     setDragCardId(null); setDragOverCol(null);
                   }}
                   style={{
-                    background: isDropTarget ? '#eef2ff' : '#f8fafc',
+                    background: isDropTarget ? 'var(--m3-primary-container)' : 'var(--m3-surface-container)',
                     borderRadius: 12, padding: 12, minHeight: 200,
                     border: isDropTarget ? '2px dashed #4f46e5' : '2px solid transparent',
                     transition: 'background .15s, border-color .15s',
@@ -314,17 +314,17 @@ export default function ActivitiesPage() {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ width: 8, height: 8, borderRadius: 999, background: col.color }} />
-                      <span style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{col.label}</span>
-                      <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>{cardsByCol[col.slug].length}</span>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--m3-on-surface)' }}>{col.label}</span>
+                      <span style={{ fontSize: 11, color: 'var(--m3-outline)', fontWeight: 600 }}>{cardsByCol[col.slug].length}</span>
                     </div>
                     {canCreate && (
                       <button onClick={() => openNew(col.slug)} title="Add card to this column"
-                        style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 8, padding: '2px 8px', cursor: 'pointer', fontSize: 13, color: '#475569' }}>+</button>
+                        style={{ border: '1px solid var(--m3-outline-variant)', background: 'var(--m3-surface-container-lowest)', borderRadius: 8, padding: '2px 8px', cursor: 'pointer', fontSize: 13, color: 'var(--m3-on-surface-variant)' }}>+</button>
                     )}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {cardsByCol[col.slug].length === 0 && (
-                      <p style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 16 }}>No cards</p>
+                      <p style={{ fontSize: 12, color: 'var(--m3-outline)', textAlign: 'center', padding: 16 }}>No cards</p>
                     )}
                     {cardsByCol[col.slug].map(card => (
                       <CardTile key={card.id} card={card}
@@ -373,19 +373,19 @@ function CardTile({ card, draggable, isDragging, onDragStart, onDragEnd, onEdit 
       onDragEnd={onDragEnd}
       onClick={onEdit}
       style={{
-        background: '#fff', borderRadius: 10, padding: 12,
+        background: 'var(--m3-surface-container-lowest)', borderRadius: 10, padding: 12,
         boxShadow: isDragging ? '0 8px 20px rgba(79,70,229,0.25)' : '0 1px 3px rgba(0,0,0,0.06)',
-        border: '1px solid #e2e8f0', cursor: draggable ? 'grab' : 'pointer',
+        border: '1px solid var(--m3-outline-variant)', cursor: draggable ? 'grab' : 'pointer',
         opacity: isDragging ? 0.5 : 1, transition: 'opacity .1s, box-shadow .1s',
       }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <div style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a', lineHeight: 1.3, flex: 1 }}>{card.title}</div>
+        <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--m3-on-surface)', lineHeight: 1.3, flex: 1 }}>{card.title}</div>
         {p && <span style={{ background: p.bg, color: p.fg, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase' }}>{card.priority}</span>}
       </div>
 
       {ownerLabel && (
-        <div style={{ marginTop: 6, fontSize: 11.5, color: '#475569', display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ width: 20, height: 20, borderRadius: 999, background: '#4f46e5', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700 }}>
+        <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--m3-on-surface-variant)', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ width: 20, height: 20, borderRadius: 999, background: 'var(--m3-primary)', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700 }}>
             {ownerLabel.trim().slice(0, 1).toUpperCase()}
           </span>
           <span style={{ fontWeight: 600 }}>{ownerLabel}</span>
@@ -394,35 +394,35 @@ function CardTile({ card, draggable, isDragging, onDragStart, onDragEnd, onEdit 
 
       {/* Recent Updates and Next Steps live on the face — this is the whole point of the redesign. */}
       {card.recent_updates && (
-        <div style={{ marginTop: 8, background: '#f8fafc', borderLeft: '3px solid #2563eb', padding: '6px 8px', borderRadius: '0 6px 6px 0' }}>
+        <div style={{ marginTop: 8, background: 'var(--m3-surface-container)', borderLeft: '3px solid #2563eb', padding: '6px 8px', borderRadius: '0 6px 6px 0' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>Recent Updates</div>
-          <div style={{ fontSize: 12, color: '#334155', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{card.recent_updates}</div>
+          <div style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{card.recent_updates}</div>
         </div>
       )}
       {card.next_steps && (
-        <div style={{ marginTop: 6, background: '#f0fdf4', borderLeft: '3px solid #16a34a', padding: '6px 8px', borderRadius: '0 6px 6px 0' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>Next Steps</div>
-          <div style={{ fontSize: 12, color: '#334155', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{card.next_steps}</div>
+        <div style={{ marginTop: 6, background: 'var(--m3-success-container)', borderLeft: '3px solid #16a34a', padding: '6px 8px', borderRadius: '0 6px 6px 0' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--m3-success)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>Next Steps</div>
+          <div style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{card.next_steps}</div>
         </div>
       )}
 
       {(card.start_date || card.next_followup_date || card.due_date) && (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10, paddingTop: 8, borderTop: '1px dashed #e2e8f0', fontSize: 11, color: '#64748b' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10, paddingTop: 8, borderTop: '1px dashed #e8eaf0', fontSize: 11, color: 'var(--m3-on-surface-variant)' }}>
           {card.start_date && (
             <span title="Start date" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.3, fontSize: 9.5 }}>Start</span>
+              <span style={{ fontWeight: 700, color: 'var(--m3-on-surface-variant)', textTransform: 'uppercase', letterSpacing: 0.3, fontSize: 9.5 }}>Start</span>
               <span>{fmtDate(card.start_date)}</span>
             </span>
           )}
           {card.next_followup_date && (
-            <span title="Next follow-up date" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: overdue ? '#dc2626' : '#64748b', fontWeight: overdue ? 700 : 500 }}>
+            <span title="Next follow-up date" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: overdue ? 'var(--m3-error)' : 'var(--m3-on-surface-variant)', fontWeight: overdue ? 700 : 500 }}>
               <span style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3, fontSize: 9.5 }}>Follow-up</span>
               <span>{fmtDate(card.next_followup_date)}{overdue ? ' · overdue' : ''}</span>
             </span>
           )}
           {card.due_date && (
             <span title="Estimated closure" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.3, fontSize: 9.5 }}>Est. Closure</span>
+              <span style={{ fontWeight: 700, color: 'var(--m3-on-surface-variant)', textTransform: 'uppercase', letterSpacing: 0.3, fontSize: 9.5 }}>Est. Closure</span>
               <span>{fmtDate(card.due_date)}</span>
             </span>
           )}
@@ -462,7 +462,7 @@ function CardModal({ card, tabs, members, onSave, onDelete, onClose, readOnly })
           {/* The three story fields — Previous, Recent, Next. Ordered chronologically so the modal
               reads top-to-bottom as "what happened → what's happening → what comes next". */}
           <div>
-            <label className="field-label" style={{ color: '#64748b' }}>Previous Steps</label>
+            <label className="field-label" style={{ color: 'var(--m3-on-surface-variant)' }}>Previous Steps</label>
             <MentionTextarea className="input" rows={2} value={form.previous_steps || ''} onChange={v => set('previous_steps', v)} disabled={readOnly}
               placeholder="What has already been done…" />
           </div>
@@ -472,7 +472,7 @@ function CardModal({ card, tabs, members, onSave, onDelete, onClose, readOnly })
               placeholder="Latest news / status change…" />
           </div>
           <div>
-            <label className="field-label" style={{ color: '#16a34a' }}>Next Steps</label>
+            <label className="field-label" style={{ color: 'var(--m3-success)' }}>Next Steps</label>
             <MentionTextarea className="input" rows={2} value={form.next_steps || ''} onChange={v => set('next_steps', v)} disabled={readOnly}
               placeholder="What comes next…" />
           </div>

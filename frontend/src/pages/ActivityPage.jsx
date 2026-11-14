@@ -17,10 +17,10 @@ import useBusinessUnits from '../utils/useBusinessUnits';
 // are omitted for anyone below the admin tier.
 // ---------------------------------------------------------------------------
 const TYPE_STYLE = {
-  lead:        { bg: '#eef2ff', fg: '#3730a3', br: '#c7d2fe' },
+  lead:        { bg: 'var(--m3-primary-container)', fg: 'var(--m3-primary)', br: 'var(--m3-primary-container)' },
   chain:       { bg: '#f0fdfa', fg: '#0f766e', br: '#99f6e4' },
-  permissions: { bg: '#fef2f2', fg: '#991b1b', br: '#fecaca' },
-  sla:         { bg: '#fffbeb', fg: '#92400e', br: '#fde68a' },
+  permissions: { bg: 'var(--m3-error-container)', fg: 'var(--m3-error)', br: '#fecaca' },
+  sla:         { bg: 'var(--m3-tertiary-container)', fg: 'var(--m3-on-surface)', br: 'var(--m3-outline-variant)' },
 };
 
 const PAGE = 40;
@@ -102,11 +102,11 @@ export default function ActivityPage() {
   if (!canSeeActivityFeed) {
     return (
       <Layout>
-        <div style={{ minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div className="card" style={{ maxWidth: 440, textAlign: 'center' }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>🔒</div>
+            <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center' }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--m3-on-surface-variant)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg></div>
             <h1 style={{ fontSize: 18, margin: '0 0 8px' }}>No access to the activity feed</h1>
-            <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
+            <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', margin: 0 }}>
               The organization-wide activity feed is available to Business Admins and Managers who have
               been granted it. You can still see a lead's own history from its Activity tab.
             </p>
@@ -124,20 +124,20 @@ export default function ActivityPage() {
 
   return (
     <Layout>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--m3-outline-variant)', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Activity Feed</h1>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>
             Recent changes across the tool — leads, chains, permissions and SLA config
           </p>
         </div>
         <button className="btn btn-sm" onClick={load} disabled={loading}>{loading ? 'Refreshing…' : '↻ Refresh'}</button>
       </div>
 
-      <div style={{ padding: 20 }}>
+      <div style={{ padding: 16 }}>
         {/* Filters — the option lists come from the server, built only from what this user can see. */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 14px' }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#334155', alignSelf: 'center' }}>Filters</span>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end', background: 'var(--m3-surface-container-lowest)', border: '1px solid var(--m3-outline-variant)', borderRadius: 12, padding: '12px 14px' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--m3-on-surface-variant)', alignSelf: 'center' }}>Filters</span>
           <div>
             <label className="field-label">User</label>
             <select className="input" style={{ width: 210 }} value={filters.user_id} onChange={set('user_id')}>
@@ -188,16 +188,16 @@ export default function ActivityPage() {
 
         <div className="card" style={{ padding: 0 }}>
           {loading ? (
-            <p style={{ color: '#94a3b8', padding: 28, textAlign: 'center', margin: 0, fontSize: 13 }}>Loading…</p>
+            <p style={{ color: 'var(--m3-outline)', padding: 16, textAlign: 'center', margin: 0, fontSize: 13 }}>Loading…</p>
           ) : entries.length === 0 ? (
             // The dropdown lists the whole team without annotating it, so this is where a person
             // with nothing recorded is called out — as a direct answer, not a generic empty state.
             selectedUser && selectedUser.count === 0 ? (
-              <div style={{ padding: 40, textAlign: 'center' }}>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#334155' }}>
+              <div style={{ padding: 24, textAlign: 'center' }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--m3-on-surface-variant)' }}>
                   No activity by {selectedUser.name}
                 </p>
-                <p style={{ margin: '6px 0 0', fontSize: 12, color: '#94a3b8' }}>
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--m3-outline)' }}>
                   {selectedUser.email ? `${selectedUser.email} · ` : ''}
                   {selectedUser.businessUnit ? `${selectedUser.businessUnit} · ` : ''}
                   this user hasn't made any changes the tool records
@@ -208,7 +208,7 @@ export default function ActivityPage() {
                 </button>
               </div>
             ) : (
-              <p style={{ color: '#94a3b8', padding: 40, textAlign: 'center', margin: 0, fontSize: 13 }}>
+              <p style={{ color: 'var(--m3-outline)', padding: 24, textAlign: 'center', margin: 0, fontSize: 13 }}>
                 {activeCount ? 'No activity matches these filters.' : 'No activity recorded yet.'}
               </p>
             )
@@ -225,7 +225,7 @@ export default function ActivityPage() {
                       display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 18px',
                       borderBottom: '1px solid #f8fafc', cursor: clickable ? 'pointer' : 'default',
                     }}
-                    onMouseEnter={ev => { if (clickable) ev.currentTarget.style.background = '#f8fafc'; }}
+                    onMouseEnter={ev => { if (clickable) ev.currentTarget.style.background = 'var(--m3-surface-container)'; }}
                     onMouseLeave={ev => { if (clickable) ev.currentTarget.style.background = ''; }}
                     title={clickable ? 'Open this lead' : undefined}
                   >
@@ -233,28 +233,28 @@ export default function ActivityPage() {
                       {e.typeLabel}
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: '#0f172a' }}>
+                      <div style={{ fontSize: 13, color: 'var(--m3-on-surface)' }}>
                         <b title={e.userEmail || undefined}>{e.user || 'Unknown user'}</b>
                         {e.field ? <> changed <b>{e.field}</b></> : <> updated</>}
-                        {e.subject && <> on <span style={{ color: clickable ? '#4f46e5' : '#334155', fontWeight: 600 }}>{e.subject}</span></>}
+                        {e.subject && <> on <span style={{ color: clickable ? 'var(--m3-primary)' : 'var(--m3-on-surface)', fontWeight: 600 }}>{e.subject}</span></>}
                       </div>
                       {/* The display name alone is ambiguous — several accounts are called "PMO" —
                           so the account email identifies who actually made the change. */}
                       {e.userEmail && (
-                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>{e.userEmail}</div>
+                        <div style={{ fontSize: 11, color: 'var(--m3-outline)', marginTop: 1 }}>{e.userEmail}</div>
                       )}
                       {(e.from || e.to) && (
-                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, wordBreak: 'break-word' }}>
+                        <div style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', marginTop: 2, wordBreak: 'break-word' }}>
                           <span style={{ textDecoration: e.from ? 'line-through' : 'none', opacity: 0.75 }}>{e.from || '—'}</span>
                           {' → '}
-                          <span style={{ color: '#0f172a' }}>{e.to || '—'}</span>
+                          <span style={{ color: 'var(--m3-on-surface)' }}>{e.to || '—'}</span>
                         </div>
                       )}
-                      {e.note && !e.field && <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{e.note}</div>}
+                      {e.note && !e.field && <div style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', marginTop: 2 }}>{e.note}</div>}
                     </div>
                     <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <div style={{ fontSize: 11, color: '#94a3b8' }} title={new Date(e.at).toLocaleString()}>{fmtTimestamp(e.at)}</div>
-                      {e.businessUnit && <div style={{ fontSize: 10, color: '#cbd5e1', marginTop: 2 }}>{businessOf(e.businessUnit).name}</div>}
+                      <div style={{ fontSize: 11, color: 'var(--m3-outline)' }} title={new Date(e.at).toLocaleString()}>{fmtTimestamp(e.at)}</div>
+                      {e.businessUnit && <div style={{ fontSize: 10, color: 'var(--m3-outline-variant)', marginTop: 2 }}>{businessOf(e.businessUnit).name}</div>}
                     </div>
                   </div>
                 );
@@ -266,7 +266,7 @@ export default function ActivityPage() {
                     {loadingMore ? 'Loading…' : 'Load more'}
                   </button>
                 ) : (
-                  <span style={{ fontSize: 11, color: '#cbd5e1' }}>
+                  <span style={{ fontSize: 11, color: 'var(--m3-outline-variant)' }}>
                     {entries.length} event{entries.length === 1 ? '' : 's'} · end of history
                   </span>
                 )}

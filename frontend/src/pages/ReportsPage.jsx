@@ -11,7 +11,7 @@ import { APP_NAME } from '../config/brand';
 import useBusinessUnits from '../utils/useBusinessUnits';
 import { buildNameCount, bdLabel as _bdLabel, ownerLabel as _ownerLabel } from '../utils/nameLabels';
 
-const CHART_COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
+const CHART_COLORS = ['var(--m3-primary)', '#06b6d4', 'var(--m3-success)', '#f59e0b', 'var(--m3-error)', '#8b5cf6', '#ec4899', 'var(--m3-on-surface-variant)'];
 
 const PHASES = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order Expected', 'Won', 'Lost', 'On Hold'];
 const SOURCES = ['Channel Partner', 'Account Manager', 'Direct Sales', 'Referral Partner'];
@@ -161,10 +161,10 @@ export default function ReportsPage() {
 
   return (
     <Layout>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--m3-outline-variant)', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Custom Reports</h1>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{activeFilterCount > 0 ? `${activeFilterCount} filters active` : 'Filter leads and export to Excel'}</p>
+          <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Custom Reports</h1>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>{activeFilterCount > 0 ? `${activeFilterCount} filters active` : 'Filter leads and export to Excel'}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary" onClick={runReport} disabled={loading}>{loading ? 'Running…' : 'Run Report'}</button>
@@ -174,21 +174,21 @@ export default function ReportsPage() {
       </div>
 
       <div style={{ display: 'flex' }}>
-        <div style={{ width: 240, flexShrink: 0, background: '#fff', borderRight: '1px solid #e2e8f0', padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ width: 240, flexShrink: 0, background: 'var(--m3-surface-container-lowest)', borderRight: '1px solid var(--m3-outline-variant)', padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <label className="field-label" style={{ marginBottom: 6 }}>Report View</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {[{ key: 'pipeline', label: 'Pipeline' }, { key: 'customers', label: 'Customer Details' }, { key: 'bd-performance', label: 'Sales Rep Performance' }, { key: 'source-analysis', label: 'Source Analysis' }, { key: 'monthly-trend', label: 'Monthly Trend' }, { key: 'campaign-roi', label: 'Campaign ROI' }].map(v => (
                 <button key={v.key} type="button" onClick={() => setView(v.key)}
-                  style={{ border: view === v.key ? '1.5px solid #4f46e5' : '1.5px solid #e2e8f0', borderRadius: 8,
+                  style={{ border: view === v.key ? '1.5px solid #4f46e5' : '1.5px solid #e8eaf0', borderRadius: 8,
                     padding: '8px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                    background: view === v.key ? '#eef2ff' : '#fff', color: view === v.key ? '#4f46e5' : '#64748b' }}>
+                    background: view === v.key ? 'var(--m3-primary-container)' : '#fff', color: view === v.key ? 'var(--m3-primary)' : 'var(--m3-on-surface-variant)' }}>
                   {v.label}
                 </button>
               ))}
             </div>
           </div>
-          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+          <div style={{ borderTop: '1px solid var(--m3-outline-variant)', paddingTop: 14 }}>
             <label className="field-label">Date Range (Created)</label>
             <input type="date" className="input" style={{ marginBottom: 6 }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
             <input type="date" className="input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
@@ -203,18 +203,18 @@ export default function ReportsPage() {
           {activeFilterCount > 0 && <button className="btn btn-sm btn-danger" onClick={clearAll}>✕ Clear all</button>}
         </div>
 
-        <div style={{ flex: 1, padding: 20 }}>
+        <div style={{ flex: 1, padding: 16 }}>
           {!ran ? (
-            <p style={{ textAlign: 'center', color: '#94a3b8', padding: 60 }}>Set your filters and click Run Report.</p>
+            <p style={{ textAlign: 'center', color: 'var(--m3-outline)', padding: 32 }}>Set your filters and click Run Report.</p>
           ) : (
             <>
               {/* KPI cards — context-sensitive per view */}
               {(view === 'pipeline' || view === 'customers') && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
-                  <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{filtered.length}</p></div>
-                  <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Deal Value</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{'₹'}{totalTCV.toFixed(1)}L</p></div>
-                  <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{wonLeads.length}</p></div>
-                  <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Deal Value</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{'₹'}{wonTCV.toFixed(1)}L</p></div>
+                  <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{filtered.length}</p></div>
+                  <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Deal Value</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{'₹'}{totalTCV.toFixed(1)}L</p></div>
+                  <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Won Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: 'var(--m3-success)' }}>{wonLeads.length}</p></div>
+                  <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Won Deal Value</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: 'var(--m3-success)' }}>{'₹'}{wonTCV.toFixed(1)}L</p></div>
                 </div>
               )}
 
@@ -226,10 +226,10 @@ export default function ReportsPage() {
                 const avgConv = totalLeads > 0 ? ((wonLeadsCount / totalLeads) * 100).toFixed(1) : '0';
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Sales Reps</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalBds}</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalLeads}</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{wonLeadsCount}</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Avg Conversion</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{avgConv}%</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Sales Reps</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalBds}</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalLeads}</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Won Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: 'var(--m3-success)' }}>{wonLeadsCount}</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Avg Conversion</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{avgConv}%</p></div>
                   </div>
                 );
               })()}
@@ -243,10 +243,10 @@ export default function ReportsPage() {
                 const conv = totalLeads > 0 ? ((totalWon / totalLeads) * 100).toFixed(1) : '0';
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Sources</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalSources}</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalLeads}</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Top Source</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{topSource}</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Conversion</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{conv}%</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Sources</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalSources}</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Leads</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalLeads}</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Top Source</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{topSource}</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Conversion</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{conv}%</p></div>
                   </div>
                 );
               })()}
@@ -259,10 +259,10 @@ export default function ReportsPage() {
                 const totalWonTcv = rows.reduce((s, r) => s + (parseFloat(r.won_tcv) || 0), 0);
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total New</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalNew}</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Won</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{totalWon}</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>New Deal Value</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{'₹'}{totalNewTcv.toFixed(1)}L</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Deal Value</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{'₹'}{totalWonTcv.toFixed(1)}L</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total New</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalNew}</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Won</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: 'var(--m3-success)' }}>{totalWon}</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>New Deal Value</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{'₹'}{totalNewTcv.toFixed(1)}L</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Won Deal Value</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: 'var(--m3-success)' }}>{'₹'}{totalWonTcv.toFixed(1)}L</p></div>
                   </div>
                 );
               })()}
@@ -275,10 +275,10 @@ export default function ReportsPage() {
                 const avgRoi = totalBudget > 0 ? (((totalRevenue - totalBudget) / totalBudget) * 100).toFixed(0) : '0';
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Campaigns</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalCampaigns}</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Budget</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{'₹'}{totalBudget.toFixed(1)}L</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Revenue</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{'₹'}{totalRevenue.toFixed(1)}L</p></div>
-                    <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Avg ROI</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{avgRoi}%</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Campaigns</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{totalCampaigns}</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Budget</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{'₹'}{totalBudget.toFixed(1)}L</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Revenue</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0', color: 'var(--m3-success)' }}>{'₹'}{totalRevenue.toFixed(1)}L</p></div>
+                    <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Avg ROI</p><p style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 0' }}>{avgRoi}%</p></div>
                   </div>
                 );
               })()}
@@ -322,7 +322,7 @@ export default function ReportsPage() {
                   <>
                     {rows.length > 0 && (
                       <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-                        <p style={{ fontWeight: 700, fontSize: 14, margin: '0 0 12px', color: '#334155' }}>Won vs Total Leads per Sales Rep</p>
+                        <p style={{ fontWeight: 700, fontSize: 14, margin: '0 0 12px', color: 'var(--m3-on-surface-variant)' }}>Won vs Total Leads per Sales Rep</p>
                         <ResponsiveContainer width="100%" height={300}>
                           <BarChart data={rows}>
                             <XAxis dataKey="bd_name" tick={{ fontSize: 11 }} />
@@ -346,15 +346,15 @@ export default function ReportsPage() {
                                 <td style={{ fontWeight: 600 }}>{r.bd_name}</td>
                                 <td style={{ textAlign: 'right' }}>{r.total_leads}</td>
                                 <td style={{ textAlign: 'right' }}>{activeOf(r)}</td>
-                                <td style={{ textAlign: 'right', color: '#059669', fontWeight: 700 }}>{wonOf(r)}</td>
-                                <td style={{ textAlign: 'right', color: '#dc2626' }}>{lostOf(r)}</td>
+                                <td style={{ textAlign: 'right', color: 'var(--m3-success)', fontWeight: 700 }}>{wonOf(r)}</td>
+                                <td style={{ textAlign: 'right', color: 'var(--m3-error)' }}>{lostOf(r)}</td>
                                 <td style={{ textAlign: 'right' }}>{'₹'}{parseFloat(r.total_tcv || 0).toFixed(1)}</td>
                                 <td style={{ textAlign: 'right', fontWeight: 700 }}>{'₹'}{parseFloat(r.won_tcv || 0).toFixed(1)}</td>
                                 <td style={{ textAlign: 'right' }}>{conv}%</td>
                               </tr>
                             );
                           })}
-                          {rows.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: '#94a3b8', padding: 30 }}>No data</td></tr>}
+                          {rows.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--m3-outline)', padding: 20 }}>No data</td></tr>}
                         </tbody>
                       </table>
                     </div>
@@ -370,7 +370,7 @@ export default function ReportsPage() {
                   <>
                     {rows.length > 0 && (
                       <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-                        <p style={{ fontWeight: 700, fontSize: 14, margin: '0 0 12px', color: '#334155' }}>Leads by Source</p>
+                        <p style={{ fontWeight: 700, fontSize: 14, margin: '0 0 12px', color: 'var(--m3-on-surface-variant)' }}>Leads by Source</p>
                         <ResponsiveContainer width="100%" height={300}>
                           <PieChart>
                             <Pie data={pieData} cx="50%" cy="50%" outerRadius={100} dataKey="value" nameKey="name" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -391,14 +391,14 @@ export default function ReportsPage() {
                               <tr key={i}>
                                 <td style={{ fontWeight: 600 }}>{r.source}</td>
                                 <td style={{ textAlign: 'right' }}>{r.total_leads}</td>
-                                <td style={{ textAlign: 'right', color: '#059669', fontWeight: 700 }}>{wonOf(r)}</td>
+                                <td style={{ textAlign: 'right', color: 'var(--m3-success)', fontWeight: 700 }}>{wonOf(r)}</td>
                                 <td style={{ textAlign: 'right' }}>{'₹'}{parseFloat(r.tcv || r.total_tcv || 0).toFixed(1)}</td>
                                 <td style={{ textAlign: 'right', fontWeight: 700 }}>{'₹'}{parseFloat(r.won_tcv || 0).toFixed(1)}</td>
                                 <td style={{ textAlign: 'right' }}>{conv}%</td>
                               </tr>
                             );
                           })}
-                          {rows.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: '#94a3b8', padding: 30 }}>No data</td></tr>}
+                          {rows.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--m3-outline)', padding: 20 }}>No data</td></tr>}
                         </tbody>
                       </table>
                     </div>
@@ -413,7 +413,7 @@ export default function ReportsPage() {
                   <>
                     {rows.length > 0 && (
                       <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-                        <p style={{ fontWeight: 700, fontSize: 14, margin: '0 0 12px', color: '#334155' }}>New vs Won Trend</p>
+                        <p style={{ fontWeight: 700, fontSize: 14, margin: '0 0 12px', color: 'var(--m3-on-surface-variant)' }}>New vs Won Trend</p>
                         <ResponsiveContainer width="100%" height={300}>
                           <LineChart data={rows}>
                             <XAxis dataKey="month" tick={{ fontSize: 11 }} />
@@ -434,13 +434,13 @@ export default function ReportsPage() {
                             <tr key={i}>
                               <td style={{ fontWeight: 600 }}>{r.month}</td>
                               <td style={{ textAlign: 'right' }}>{r.new_leads ?? r.new_count ?? '—'}</td>
-                              <td style={{ textAlign: 'right', color: '#059669', fontWeight: 700 }}>{r.won ?? r.won_count ?? '—'}</td>
-                              <td style={{ textAlign: 'right', color: '#dc2626' }}>{lostOf(r)}</td>
+                              <td style={{ textAlign: 'right', color: 'var(--m3-success)', fontWeight: 700 }}>{r.won ?? r.won_count ?? '—'}</td>
+                              <td style={{ textAlign: 'right', color: 'var(--m3-error)' }}>{lostOf(r)}</td>
                               <td style={{ textAlign: 'right' }}>{'₹'}{parseFloat(r.new_tcv || 0).toFixed(1)}</td>
                               <td style={{ textAlign: 'right', fontWeight: 700 }}>{'₹'}{parseFloat(r.won_tcv || 0).toFixed(1)}</td>
                             </tr>
                           ))}
-                          {rows.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: '#94a3b8', padding: 30 }}>No data</td></tr>}
+                          {rows.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--m3-outline)', padding: 20 }}>No data</td></tr>}
                         </tbody>
                       </table>
                     </div>
@@ -460,7 +460,7 @@ export default function ReportsPage() {
                   <>
                     {rows.length > 0 && (
                       <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-                        <p style={{ fontWeight: 700, fontSize: 14, margin: '0 0 12px', color: '#334155' }}>ROI per Campaign</p>
+                        <p style={{ fontWeight: 700, fontSize: 14, margin: '0 0 12px', color: 'var(--m3-on-surface-variant)' }}>ROI per Campaign</p>
                         <ResponsiveContainer width="100%" height={300}>
                           <BarChart data={chartData}>
                             <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -486,13 +486,13 @@ export default function ReportsPage() {
                                 <td style={{ fontWeight: 600 }}>{r.campaign || r.name}</td>
                                 <td style={{ textAlign: 'right' }}>{'₹'}{budget.toFixed(1)}</td>
                                 <td style={{ textAlign: 'right' }}>{r.leads ?? r.lead_count ?? '—'}</td>
-                                <td style={{ textAlign: 'right', color: '#059669', fontWeight: 700 }}>{r.won ?? r.won_count ?? '—'}</td>
+                                <td style={{ textAlign: 'right', color: 'var(--m3-success)', fontWeight: 700 }}>{r.won ?? r.won_count ?? '—'}</td>
                                 <td style={{ textAlign: 'right', fontWeight: 700 }}>{'₹'}{revenue.toFixed(1)}</td>
                                 <td style={{ textAlign: 'right' }}>{roi !== '—' ? `${roi}%` : '—'}</td>
                               </tr>
                             );
                           })}
-                          {rows.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: '#94a3b8', padding: 30 }}>No data</td></tr>}
+                          {rows.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--m3-outline)', padding: 20 }}>No data</td></tr>}
                         </tbody>
                       </table>
                     </div>

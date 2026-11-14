@@ -80,7 +80,7 @@ export default function MentionTextarea({ value, onChange, placeholder, style, .
       {show && filtered.length > 0 && (
         <div style={{
           position: 'absolute', left: 0, bottom: '100%', marginBottom: 4,
-          background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
+          background: 'var(--m3-surface-container-lowest)', border: '1px solid var(--m3-outline-variant)', borderRadius: 8,
           boxShadow: '0 4px 12px rgba(0,0,0,0.12)', maxHeight: 200, overflowY: 'auto',
           width: '100%', zIndex: 100,
         }}>
@@ -89,17 +89,17 @@ export default function MentionTextarea({ value, onChange, placeholder, style, .
               onMouseDown={(e) => { e.preventDefault(); pick(u); }}
               style={{
                 padding: '8px 12px', cursor: 'pointer', fontSize: 13,
-                background: i === sel ? '#eef2ff' : '#fff',
+                background: i === sel ? 'var(--m3-primary-container)' : '#fff',
                 display: 'flex', alignItems: 'center', gap: 8,
                 borderBottom: i < filtered.length - 1 ? '1px solid #f1f5f9' : 'none',
               }}>
               <span style={{
                 width: 26, height: 26, borderRadius: '50%', display: 'inline-flex',
                 alignItems: 'center', justifyContent: 'center', fontSize: 10,
-                fontWeight: 700, color: '#fff', background: u.color || '#6366f1', flexShrink: 0,
+                fontWeight: 700, color: '#fff', background: u.color || 'var(--m3-primary)', flexShrink: 0,
               }}>{u.initials || u.name?.charAt(0)?.toUpperCase()}</span>
               <span style={{ fontWeight: 500 }}>{u.name}</span>
-              <span style={{ color: '#94a3b8', fontSize: 11, marginLeft: 'auto' }}>{u.role}</span>
+              <span style={{ color: 'var(--m3-outline)', fontSize: 11, marginLeft: 'auto' }}>{u.role}</span>
             </div>
           ))}
         </div>

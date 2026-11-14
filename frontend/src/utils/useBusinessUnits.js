@@ -3,7 +3,7 @@ import { getBusinessUnits } from '../services/api';
 
 // The list of businesses always comes from the database (GET /api/business-units); the code itself
 // knows no business names. The list is loaded once and shared by every screen that asks for it.
-export const DEFAULT_BUSINESS_COLOR = '#4f46e5';
+export const DEFAULT_BUSINESS_COLOR = 'var(--m3-primary)';
 let cache = null;      // the loaded list
 let pending = null;    // the request in flight
 const listeners = new Set(); // screens showing the list, told when it is reloaded

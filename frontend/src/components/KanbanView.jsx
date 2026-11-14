@@ -9,12 +9,12 @@ function ConfChip({ lead }) {
   if (!hasConfidence(lead)) return null;
   const c = Math.round(Number(lead.confidence_score));
   const t = confidenceTrend(lead);
-  const bg = c >= 60 ? '#dcfce7' : c >= 30 ? '#fef3c7' : '#f1f5f9';
-  const fg = c >= 60 ? '#166534' : c >= 30 ? '#92400e' : '#475569';
-  const mark = t === 'up' ? <span style={{ color: '#16a34a' }}>▲</span>
-    : t === 'down' ? <span style={{ color: '#dc2626' }}>▼</span>
-    : t === 'hold' ? <span style={{ color: '#0ea5e9' }}>❄</span>
-    : <span style={{ color: '#94a3b8', fontSize: 8 }}>●</span>;
+  const bg = c >= 60 ? '#dcfce7' : c >= 30 ? 'var(--m3-tertiary-container)' : 'var(--m3-surface-container-high)';
+  const fg = c >= 60 ? '#166534' : c >= 30 ? 'var(--m3-on-surface)' : 'var(--m3-on-surface-variant)';
+  const mark = t === 'up' ? <span style={{ color: 'var(--m3-success)' }}>▲</span>
+    : t === 'down' ? <span style={{ color: 'var(--m3-error)' }}>▼</span>
+    : t === 'hold' ? <span style={{ color: 'var(--m3-tertiary)' }}>❄</span>
+    : <span style={{ color: 'var(--m3-outline)', fontSize: 8 }}>●</span>;
   return (
     <span title="Win-confidence score" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: bg, color: fg, borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 700 }}>
       {c}% {mark}
@@ -27,8 +27,8 @@ function ConfChip({ lead }) {
 function AgingChip({ lead, tatMap }) {
   const a = stageAging(lead, tatMap || {});
   if (a.days === null) return null;
-  const color = a.level === 'over' ? '#dc2626' : a.level === 'warn' ? '#b45309' : a.level === 'ok' ? '#059669' : '#64748b';
-  const bg    = a.level === 'over' ? '#fef2f2' : a.level === 'warn' ? '#fffbeb' : a.level === 'ok' ? '#ecfdf5' : '#f1f5f9';
+  const color = a.level === 'over' ? 'var(--m3-error)' : a.level === 'warn' ? 'var(--color-warning)' : a.level === 'ok' ? 'var(--m3-success)' : 'var(--m3-on-surface-variant)';
+  const bg    = a.level === 'over' ? 'var(--m3-error-container)' : a.level === 'warn' ? 'var(--m3-tertiary-container)' : a.level === 'ok' ? 'var(--m3-success-container)' : 'var(--m3-surface-container-high)';
   const tip   = a.target != null ? `${a.days}d in ${lead.phase} · target ${a.target}d` : `${a.days}d in ${lead.phase} · no target set`;
   return (
     <span title={tip} style={{ background: bg, color, border: `1px solid ${color}22`, borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 700 }}>
@@ -42,15 +42,15 @@ const COLUMNS = ['New', 'Qualified', 'Demo', 'Proposal', 'Negotiation', 'Order E
 // Per-column tint + accent so every column is clearly distinguishable and never renders low-contrast
 // (light) text on a white background. Card text stays dark on white for readability.
 const COLUMN_STYLE = {
-  New:           { bg: '#f1f5f9', accent: '#64748b' },
-  Qualified:     { bg: '#f5f3ff', accent: '#7c3aed' },
-  Demo:          { bg: '#fffbeb', accent: '#b45309' },
+  New:           { bg: 'var(--m3-surface-container-high)', accent: 'var(--m3-on-surface-variant)' },
+  Qualified:     { bg: '#f5f3ff', accent: 'var(--m3-primary)' },
+  Demo:          { bg: 'var(--m3-tertiary-container)', accent: 'var(--color-warning)' },
   Proposal:      { bg: '#eff6ff', accent: '#1d4ed8' },
-  Negotiation:   { bg: '#fff7ed', accent: '#c2410c' },
+  Negotiation:   { bg: 'var(--m3-tertiary-container)', accent: 'var(--m3-error)' },
   'Order Expected': { bg: '#f0fdfa', accent: '#0f766e' },
-  'Won': { bg: '#f0fdf4', accent: '#15803d' },
-  Lost:          { bg: '#fef2f2', accent: '#b91c1c' },
-  'On Hold':     { bg: '#f1f5f9', accent: '#64748b' },
+  'Won': { bg: 'var(--m3-success-container)', accent: 'var(--m3-success)' },
+  Lost:          { bg: 'var(--m3-error-container)', accent: 'var(--m3-error)' },
+  'On Hold':     { bg: 'var(--m3-surface-container-high)', accent: 'var(--m3-on-surface-variant)' },
 };
 
 export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap, bds }) {
@@ -58,6 +58,7 @@ export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap, bds }
   const [overCol, setOverCol] = useState(null);
   const bdNameCount = useMemo(() => buildNameCount(bds), [bds]);
   const ownerLabel = (owner) => _ownerLabel(owner, bdNameCount);
+  const ownerUsername = (owner) => owner?.username || '';
 
   return (
     <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12 }}>
@@ -65,7 +66,7 @@ export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap, bds }
         // Cards within a column follow the shared prioritization order (confidence → chain
         // → TCV; stage is constant inside a column). See utils/leadPriority.js.
         const items = sortByPriority(leads.filter(l => l.phase === col));
-        const cs = COLUMN_STYLE[col] || { bg: '#f1f5f9', accent: '#64748b' };
+        const cs = COLUMN_STYLE[col] || { bg: 'var(--m3-surface-container-high)', accent: 'var(--m3-on-surface-variant)' };
         const isOver = overCol === col;
         return (
           <div
@@ -81,9 +82,9 @@ export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap, bds }
               minWidth: 230, flexShrink: 0,
               background: isOver ? '#e0e7ff' : cs.bg,
               // Separate sides (not the `border` shorthand) so React doesn't warn about mixing it with borderTop.
-              borderLeft: isOver ? '2px dashed #6366f1' : '1px solid #e2e8f0',
-              borderRight: isOver ? '2px dashed #6366f1' : '1px solid #e2e8f0',
-              borderBottom: isOver ? '2px dashed #6366f1' : '1px solid #e2e8f0',
+              borderLeft: isOver ? '2px dashed #6366f1' : '1px solid var(--m3-outline-variant)',
+              borderRight: isOver ? '2px dashed #6366f1' : '1px solid var(--m3-outline-variant)',
+              borderBottom: isOver ? '2px dashed #6366f1' : '1px solid var(--m3-outline-variant)',
               borderTop: `3px solid ${cs.accent}`,
               borderRadius: 12, padding: 10,
             }}>
@@ -95,7 +96,7 @@ export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap, bds }
               {items.map(l => {
                 // Left-edge tint by aging level, so a red card jumps out of the column at a glance.
                 const ageLvl = stageAging(l, tatMap || {}).level;
-                const leftEdge = ageLvl === 'over' ? '#dc2626' : ageLvl === 'warn' ? '#b45309' : ageLvl === 'ok' ? '#059669' : '#e2e8f0';
+                const leftEdge = ageLvl === 'over' ? 'var(--m3-error)' : ageLvl === 'warn' ? 'var(--color-warning)' : ageLvl === 'ok' ? 'var(--m3-success)' : 'var(--m3-outline-variant)';
                 return (
                   <div
                     key={l.id}
@@ -103,22 +104,24 @@ export default function KanbanView({ leads, onOpen, onPhaseChange, tatMap, bds }
                     onDragStart={() => setDragId(l.id)}
                     onClick={() => onOpen(l)}
                     style={{
-                      cursor: 'grab', background: '#fff', borderTop: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', borderLeft: `3px solid ${leftEdge}`, borderRadius: 10,
+                      cursor: 'grab', background: 'var(--m3-surface-container-lowest)', borderTop: '1px solid var(--m3-outline-variant)', borderRight: '1px solid var(--m3-outline-variant)', borderBottom: '1px solid var(--m3-outline-variant)', borderLeft: `3px solid ${leftEdge}`, borderRadius: 10,
                       padding: 10, boxShadow: '0 1px 2px rgba(15,23,42,.06)',
                     }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
-                      <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 4px', color: '#0f172a' }}>{l.customer_name}</p>
+                      <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 4px', color: 'var(--m3-on-surface)' }}>{l.customer_name}</p>
                       <span style={{ display: 'inline-flex', gap: 4, flexShrink: 0 }}>
                         <AgingChip lead={l} tatMap={tatMap} />
                         <ConfChip lead={l} />
                       </span>
                     </div>
-                    <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>{ownerLabel(l.owner)} · {hasMoney(l.potential_tcv_lakhs) ? `₹${l.potential_tcv_lakhs}L` : '—'}</p>
+                    <p style={{ fontSize: 11, color: 'var(--m3-on-surface-variant)', margin: 0 }}>
+                      {ownerLabel(l.owner)}{ownerUsername(l.owner) ? ` (${ownerUsername(l.owner)})` : ''} · {hasMoney(l.potential_tcv_lakhs) ? `₹${l.potential_tcv_lakhs}L` : '—'}
+                    </p>
                   </div>
                 );
               })}
               {items.length === 0 && (
-                <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', padding: '12px 0', fontStyle: 'italic' }}>
+                <div style={{ fontSize: 11, color: 'var(--m3-outline)', textAlign: 'center', padding: '12px 0', fontStyle: 'italic' }}>
                   Drop here
                 </div>
               )}

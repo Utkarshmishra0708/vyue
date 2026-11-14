@@ -1,4 +1,4 @@
-# Jio Sales CRM — Release Notes
+# VYUE — Release Notes
 
 ---
 
@@ -31,7 +31,7 @@
 
 ### Documentation
 
-- **README completely rewritten** as a customer-facing product showcase for Jio Sales CRM
+- **README completely rewritten** as a customer-facing product showcase for VYUE
 - Covers: MVP features (6), MSP features (15), full dependency tables, architecture diagram, quick start, production deployment, and industry use cases
 - All internal references removed; positioned as a business-agnostic SaaS platform
 
@@ -220,4 +220,4 @@
 ---
 
 *Document generated: 14 October 2026*
-*Maintained by: Jio Sales CRM Development Team*
+*Maintained by: VYUE Development Team*

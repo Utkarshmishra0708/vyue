@@ -162,7 +162,7 @@ export default function ForecastPage() {
           : isForecastOnly ? 'Forecast accounts cannot open lead records'
           : 'This lead belongs to another Sales Rep'}
         style={clickable ? { cursor: 'pointer' } : undefined}
-        onMouseEnter={(e) => { if (clickable) e.currentTarget.style.background = '#f8fafc'; }}
+        onMouseEnter={(e) => { if (clickable) e.currentTarget.style.background = 'var(--m3-surface-container)'; }}
         onMouseLeave={(e) => { if (clickable) e.currentTarget.style.background = ''; }}
       >
         {viewColumns.map(c => (
@@ -183,7 +183,7 @@ export default function ForecastPage() {
                   onChange={(e) => toggleSentToScm(l, e.target.checked)}
                   style={{ cursor: 'inherit' }}
                 />
-                <span style={{ fontSize: 11, color: l.sent_to_scm ? '#15803d' : '#94a3b8', fontWeight: l.sent_to_scm ? 700 : 400 }}>
+                <span style={{ fontSize: 11, color: l.sent_to_scm ? 'var(--m3-success)' : 'var(--m3-outline)', fontWeight: l.sent_to_scm ? 700 : 400 }}>
                   {l.sent_to_scm ? 'Sent' : 'Pending'}
                 </span>
               </label>
@@ -273,12 +273,12 @@ export default function ForecastPage() {
 
   return (
     <Layout>
-    <div style={{ minHeight: '100%', background: '#f1f5f9' }}>
-      <div style={{ position: 'sticky', top: 0, zIndex: 20, background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div style={{ minHeight: '100%', background: 'var(--m3-surface-container-high)' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--m3-outline-variant)', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Inventory Pipeline</h1>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Hardware units expected — by month &amp; item · prioritized by stage, confidence, parent account, then Deal Value</p>
+            <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Inventory Pipeline</h1>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>Hardware units expected — by month &amp; item · prioritized by stage, confidence, parent account, then Deal Value</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -299,11 +299,11 @@ export default function ForecastPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {/* Gated on the UNFILTERED set: if filters exclude everything the table must stay on
             screen, or the user loses the controls needed to clear them. */}
-        {loading ? <p style={{ color: '#94a3b8' }}>Loading…</p> : allLeads.length === 0 ? (
-          <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>
+        {loading ? <p style={{ color: 'var(--m3-outline)' }}>Loading…</p> : allLeads.length === 0 ? (
+          <p style={{ color: 'var(--m3-outline)', textAlign: 'center', padding: 24 }}>
             {catalogHasHardware === false
               ? "This business's catalog has no hardware services. Mark a service as Hardware (or Hardware + Software) in Edit template, and leads with that service will appear here."
               : 'No hardware items yet. Leads with a hardware service and a quantity above 0 appear here.'}
@@ -311,10 +311,10 @@ export default function ForecastPage() {
         ) : (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-              <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Total Units in Pipeline</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{grandTotal.toLocaleString()}</p></div>
-              <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Hardware Lines</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{deviceLeads.length}</p></div>
-              <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Hardware Types</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{skus.length}</p></div>
-              <div className="kpi-card"><p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Won Units</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0', color: '#059669' }}>{deviceLeads.filter(l => l.phase === 'Won').reduce((s,l) => s + units(l), 0).toLocaleString()}</p></div>
+              <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Total Units in Pipeline</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{grandTotal.toLocaleString()}</p></div>
+              <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Hardware Lines</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{deviceLeads.length}</p></div>
+              <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Hardware Types</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0' }}>{skus.length}</p></div>
+              <div className="kpi-card"><p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Won Units</p><p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 0', color: 'var(--m3-success)' }}>{deviceLeads.filter(l => l.phase === 'Won').reduce((s,l) => s + units(l), 0).toLocaleString()}</p></div>
             </div>
 
             <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -327,7 +327,7 @@ export default function ForecastPage() {
                   {months.map(m => (
                     <tr key={m}><td>{monthLabel(m)}</td>{skus.map(s => <td key={s} style={{ textAlign: 'right' }}>{pivot[m][s] || '—'}</td>)}<td style={{ textAlign: 'right', fontWeight: 700 }}>{monthTotal(m)}</td></tr>
                   ))}
-                  <tr style={{ background: '#f8fafc', fontWeight: 700 }}>
+                  <tr style={{ background: 'var(--m3-surface-container)', fontWeight: 700 }}>
                     <td>TOTAL</td>{skus.map(s => <td key={s} style={{ textAlign: 'right' }}>{skuTotal(s)}</td>)}<td style={{ textAlign: 'right' }}>{grandTotal}</td>
                   </tr>
                 </tbody>
@@ -340,12 +340,12 @@ export default function ForecastPage() {
             <div className="card" style={{ padding: 0 }}>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Hardware Load by State</p>
-                <span style={{ fontSize: 12, color: '#64748b' }}>
+                <span style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>
                   {stateRollupTotal.toLocaleString()} unit{stateRollupTotal === 1 ? '' : 's'} across {stateRollup.length} {stateRollup.length === 1 ? 'state' : 'states'} · {INSTALL_STAGES.join(' + ')} only
                 </span>
               </div>
               {stateRollup.length === 0 ? (
-                <p style={{ color: '#94a3b8', textAlign: 'center', padding: 28, margin: 0, fontSize: 13 }}>
+                <p style={{ color: 'var(--m3-outline)', textAlign: 'center', padding: 16, margin: 0, fontSize: 13 }}>
                   No committed hardware yet — nothing at {INSTALL_STAGES.join(' or ')}{activeKeys.length ? ' matching the current filters' : ''}.
                 </p>
               ) : (
@@ -374,19 +374,19 @@ export default function ForecastPage() {
                               style={{ cursor: 'pointer' }}
                             >
                               <td style={{ fontWeight: 600 }}>
-                                <span style={{ display: 'inline-block', width: 14, color: '#94a3b8' }}>{open ? '▾' : '▸'}</span>
-                                <span style={unspecified ? { color: '#b45309' } : undefined}>{row.state}</span>
-                                {unspecified && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>no state recorded</span>}
+                                <span style={{ display: 'inline-block', width: 14, color: 'var(--m3-outline)' }}>{open ? '▾' : '▸'}</span>
+                                <span style={unspecified ? { color: 'var(--color-warning)' } : undefined}>{row.state}</span>
+                                {unspecified && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: 'var(--m3-outline)' }}>no state recorded</span>}
                               </td>
                               <td style={{ textAlign: 'right' }}>{row.propertyCount}</td>
                               <td style={{ textAlign: 'right', fontWeight: 700 }}>{row.totalQty.toLocaleString()}</td>
                             </tr>
                             {open && row.leads.map(l => (
-                              <tr key={`${row.state}-${l._row_id || l.id}`} style={{ background: '#f8fafc' }}>
+                              <tr key={`${row.state}-${l._row_id || l.id}`} style={{ background: 'var(--m3-surface-container)' }}>
                                 <td style={{ paddingLeft: 34, fontSize: 12 }}>
                                   {l.customer_name}
-                                  {l.hw_service && <span style={{ color: '#6366f1', fontWeight: 600 }}>{` · ${l.hw_service}`}</span>}
-                                  <span style={{ color: '#94a3b8' }}>{l.city ? ` · ${l.city}` : ''} · {l.phase}</span>
+                                  {l.hw_service && <span style={{ color: 'var(--m3-primary)', fontWeight: 600 }}>{` · ${l.hw_service}`}</span>}
+                                  <span style={{ color: 'var(--m3-outline)' }}>{l.city ? ` · ${l.city}` : ''} · {l.phase}</span>
                                 </td>
                                 <td />
                                 <td style={{ textAlign: 'right', fontSize: 12 }}>{deviceOnlyQty(l).toLocaleString()}</td>
@@ -395,7 +395,7 @@ export default function ForecastPage() {
                           </React.Fragment>
                         );
                       })}
-                      <tr style={{ background: '#f8fafc', fontWeight: 700 }}>
+                      <tr style={{ background: 'var(--m3-surface-container)', fontWeight: 700 }}>
                         <td>TOTAL</td>
                         <td style={{ textAlign: 'right' }}>{stateRollup.reduce((s, r) => s + r.propertyCount, 0)}</td>
                         <td style={{ textAlign: 'right' }}>{stateRollupTotal.toLocaleString()}</td>
@@ -412,7 +412,7 @@ export default function ForecastPage() {
               <div ref={tableTopRef} style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Hardware Demand — Detail</p>
-                  <span style={{ fontSize: 12, color: '#64748b' }}>
+                  <span style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>
                     {activeKeys.length ? `${deviceLeads.length} of ${allLeads.length} rows` : `${allLeads.length} rows`}
                   </span>
                 </div>
@@ -427,18 +427,18 @@ export default function ForecastPage() {
               {/* Active-filter summary: names every filter in force — including ones whose
                   column is currently hidden — with a one-click clear for each and for all. */}
               {activeKeys.length > 0 && (
-                <div style={{ padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>Filters:</span>
+                <div style={{ padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: 'var(--m3-surface-container)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--m3-on-surface-variant)' }}>Filters:</span>
                   {activeKeys.map(k => {
                     const col = FORECAST_COLUMNS.find(c => c.key === k);
                     const hidden = !viewKeys.includes(k);
                     return (
                       <span key={k} title={hidden ? `${col.label} is filtered but currently hidden` : undefined}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#e0e7ff', color: '#3730a3', borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#e0e7ff', color: 'var(--m3-primary)', borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
                         {col.label}{hidden && <span style={{ fontWeight: 400, opacity: 0.75 }}>(hidden)</span>}
                         <button type="button" onClick={() => setFilter(k, emptyFilterFor(col.filter))}
                           aria-label={`Clear ${col.label} filter`}
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#3730a3', fontSize: 13, lineHeight: 1, padding: 0 }}>×</button>
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--m3-primary)', fontSize: 13, lineHeight: 1, padding: 0 }}>×</button>
                       </span>
                     );
                   })}
@@ -459,7 +459,7 @@ export default function ForecastPage() {
                 <tbody>
                   {activeLeads.length === 0 && (
                     <tr>
-                      <td colSpan={viewColumns.length} style={{ textAlign: 'center', color: '#94a3b8', padding: 28 }}>
+                      <td colSpan={viewColumns.length} style={{ textAlign: 'center', color: 'var(--m3-outline)', padding: 16 }}>
                         {activeKeys.length ? (
                           <>No rows match the current filters.{' '}
                             <button type="button" className="btn btn-sm" onClick={clearAllFilters}>Clear all filters</button></>
@@ -478,8 +478,8 @@ export default function ForecastPage() {
             {wonLeads.length > 0 && (
               <div className="card" style={{ padding: 0, opacity: 0.92 }}>
                 <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <p style={{ fontWeight: 700, fontSize: 14, margin: 0, color: '#15803d' }}>Won</p>
-                  <span style={{ fontSize: 12, color: '#64748b' }}>
+                  <p style={{ fontWeight: 700, fontSize: 14, margin: 0, color: 'var(--m3-success)' }}>Won</p>
+                  <span style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>
                     {wonLeads.length} deal{wonLeads.length === 1 ? '' : 's'} · {wonLeads.reduce((s, l) => s + units(l), 0).toLocaleString()} units · excluded from the prioritized ranking above
                   </span>
                 </div>

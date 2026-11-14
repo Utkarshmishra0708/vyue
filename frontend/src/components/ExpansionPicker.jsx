@@ -46,16 +46,16 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
   const go = (next) => { setStep(next); setSearch(''); };
 
   const st = {
-    card: { flex: 1, minWidth: 220, textAlign: 'left', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, background: '#fff', cursor: 'pointer' },
-    cardTitle: { fontSize: 15, fontWeight: 700, color: '#0f172a', marginBottom: 6 },
-    cardText: { fontSize: 12.5, color: '#475569', lineHeight: 1.45 },
-    cardCount: { marginTop: 10, fontSize: 12, fontWeight: 600, color: '#4338ca' },
-    list: { border: '1px solid #e2e8f0', borderRadius: 10, maxHeight: 380, overflowY: 'auto' },
-    row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px', background: '#fff', border: 'none', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', textAlign: 'left' },
-    name: { fontWeight: 700, color: '#0f172a', fontSize: 13 },
-    sub: { fontSize: 11.5, color: '#64748b', marginTop: 2 },
-    empty: { padding: 24, textAlign: 'center', color: '#94a3b8', fontStyle: 'italic', fontSize: 13 },
-    back: { background: 'none', border: 'none', color: '#4338ca', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', padding: 0 },
+    card: { flex: 1, minWidth: 220, textAlign: 'left', border: '1px solid var(--m3-outline-variant)', borderRadius: 12, padding: 16, background: 'var(--m3-surface-container-lowest)', cursor: 'pointer' },
+    cardTitle: { fontSize: 15, fontWeight: 700, color: 'var(--m3-on-surface)', marginBottom: 6 },
+    cardText: { fontSize: 12.5, color: 'var(--m3-on-surface-variant)', lineHeight: 1.45 },
+    cardCount: { marginTop: 10, fontSize: 12, fontWeight: 600, color: 'var(--m3-primary)' },
+    list: { border: '1px solid var(--m3-outline-variant)', borderRadius: 10, maxHeight: 380, overflowY: 'auto' },
+    row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px', background: 'var(--m3-surface-container-lowest)', border: 'none', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', textAlign: 'left' },
+    name: { fontWeight: 700, color: 'var(--m3-on-surface)', fontSize: 13 },
+    sub: { fontSize: 11.5, color: 'var(--m3-on-surface-variant)', marginTop: 2 },
+    empty: { padding: 24, textAlign: 'center', color: 'var(--m3-outline)', fontStyle: 'italic', fontSize: 13 },
+    back: { background: 'none', border: 'none', color: 'var(--m3-primary)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', padding: 0 },
   };
   const badge = (status) => {
     if (!status) return null;
@@ -72,7 +72,7 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
       <div className="modal" style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--m3-on-surface)' }}>
               {step === 'choose' ? 'Existing customer' : step === 'renew' ? 'Renew an order' : 'Add a new order'}
             </div>
             {step !== 'choose' && (
@@ -84,7 +84,7 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {step === 'choose' && (<>
-            <p style={{ fontSize: 13, color: '#475569', margin: 0 }}>What do you want to do?</p>
+            <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', margin: 0 }}>What do you want to do?</p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <button type="button" style={st.card} onClick={() => go('renew')}>
                 <div style={st.cardTitle}>🔁 Renew an order</div>
@@ -100,7 +100,7 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
           </>)}
 
           {step === 'renew' && (<>
-            <p style={{ fontSize: 13, color: '#475569', margin: 0 }}>Pick the order the customer is extending.</p>
+            <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Pick the order the customer is extending.</p>
             <input className="input" placeholder="Search customer or order no." value={search} onChange={e => setSearch(e.target.value)} autoFocus />
             <div style={st.list}>
               {toRenew.filter(o => match(o.customer_name, o.po_number, o.customer_code)).map(o => (
@@ -113,7 +113,7 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {badge(renewalStatus(o, renewedIds))}
-                    <span style={{ color: '#4338ca', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>Renew →</span>
+                    <span style={{ color: 'var(--m3-primary)', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>Renew →</span>
                   </div>
                 </button>
               ))}
@@ -121,9 +121,9 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
                 <div style={st.empty}>{toRenew.length === 0 ? 'Nothing to renew yet.' : 'No matches.'}</div>
               )}
               {alreadyRenewed.filter(o => match(o.customer_name, o.po_number, o.customer_code)).map(o => (
-                <div key={o.id} style={{ ...st.row, cursor: 'default', background: '#f8fafc' }}>
+                <div key={o.id} style={{ ...st.row, cursor: 'default', background: 'var(--m3-surface-container)' }}>
                   <div>
-                    <div style={{ ...st.name, color: '#64748b' }}>{o.customer_name}</div>
+                    <div style={{ ...st.name, color: 'var(--m3-on-surface-variant)' }}>{o.customer_name}</div>
                     <div style={st.sub}>{[o.po_number, value(o)].filter(Boolean).join(' · ')}</div>
                   </div>
                   {badge(renewalStatus(o, renewedIds))}
@@ -133,7 +133,7 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
           </>)}
 
           {step === 'add' && (<>
-            <p style={{ fontSize: 13, color: '#475569', margin: 0 }}>Pick the customer who is buying more.</p>
+            <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', margin: 0 }}>Pick the customer who is buying more.</p>
             <input className="input" placeholder="Search customer" value={search} onChange={e => setSearch(e.target.value)} autoFocus />
             <div style={st.list}>
               {customers.filter(c => match(c.name, c.code)).map(c => {
@@ -146,7 +146,7 @@ export default function ExpansionPicker({ leads, onPick, onClose }) {
                       <div style={st.name}>{c.name}</div>
                       <div style={st.sub}>{where} · {parts}</div>
                     </div>
-                    <span style={{ color: '#4338ca', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>Add →</span>
+                    <span style={{ color: 'var(--m3-primary)', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>Add →</span>
                   </button>
                 );
               })}

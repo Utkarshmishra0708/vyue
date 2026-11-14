@@ -9,8 +9,8 @@ import { buildNameCount, bdLabel as _bdLabel } from '../utils/nameLabels';
 
 // Small renewal badge used in the Customers list and on PO cards.
 function RenewalBadge({ status, showOk = false }) {
-  if (!status) return <span style={{ color: '#cbd5e1' }}>—</span>;
-  if (status.band === 'ok' && !showOk) return <span style={{ color: '#94a3b8', fontSize: 12 }}>Due in {status.days}d</span>;
+  if (!status) return <span style={{ color: 'var(--m3-outline-variant)' }}>—</span>;
+  if (status.band === 'ok' && !showOk) return <span style={{ color: 'var(--m3-outline)', fontSize: 12 }}>Due in {status.days}d</span>;
   const s = RENEWAL_BAND_STYLE[status.band] || RENEWAL_BAND_STYLE.ok;
   return (
     <span style={{ background: s.bg, color: s.fg, border: `1px solid ${s.border}`, borderRadius: 999, padding: '2px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
@@ -141,16 +141,16 @@ function ContactsPanel({ customerName }) {
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   return (
-    <div style={{ marginTop: 12, padding: '12px 16px', background: '#fafbfc', border: '1px solid #e2e8f0', borderRadius: 10 }}>
+    <div style={{ marginTop: 12, padding: '12px 16px', background: 'var(--m3-surface-container)', border: '1px solid var(--m3-outline-variant)', borderRadius: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>Contacts</div>
+        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--m3-on-surface-variant)' }}>Contacts</div>
         {editing === null && <button className="btn btn-sm btn-primary" onClick={startAdd}>+ Add Contact</button>}
       </div>
 
-      {loading && <div style={{ color: '#94a3b8', fontSize: 12 }}>Loading contacts...</div>}
+      {loading && <div style={{ color: 'var(--m3-outline)', fontSize: 12 }}>Loading contacts...</div>}
 
       {editing !== null && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12, padding: 12, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12, padding: 12, background: 'var(--m3-surface-container-lowest)', border: '1px solid var(--m3-outline-variant)', borderRadius: 8 }}>
           <div>
             <label className="field-label">Contact Name *</label>
             <input className="input" value={form.contact_name} onChange={e => setF('contact_name', e.target.value)} placeholder="Name" />
@@ -186,7 +186,7 @@ function ContactsPanel({ customerName }) {
       )}
 
       {!loading && contacts.length === 0 && editing === null && (
-        <div style={{ color: '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>No contacts yet. Click "+ Add Contact" to add one.</div>
+        <div style={{ color: 'var(--m3-outline)', fontSize: 12, fontStyle: 'italic' }}>No contacts yet. Click "+ Add Contact" to add one.</div>
       )}
 
       {contacts.length > 0 && (
@@ -194,7 +194,7 @@ function ContactsPanel({ customerName }) {
           <thead>
             <tr>
               {['Name', 'Role', 'Designation', 'Phone', 'Email', 'Notes', ''].map(h => (
-                <th key={h} style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 700, color: '#64748b', borderBottom: '1px solid #e2e8f0', fontSize: 11 }}>{h}</th>
+                <th key={h} style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 700, color: 'var(--m3-on-surface-variant)', borderBottom: '1px solid var(--m3-outline-variant)', fontSize: 11 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -368,30 +368,30 @@ export default function CustomersPage() {
   const anyFilterActive = !!(search || filterPhases.length || filterScores.length || filterSources.length || filterBDs.length || filterCustomers.length || filterRenewal.length || filterOverdue);
   const clearAll = () => { setSearch(''); setFilterPhases([]); setFilterScores([]); setFilterSources([]); setFilterBDs([]); setFilterCustomers([]); setFilterRenewal([]); setFilterOverdue(false); };
 
-  const headerCell = { textAlign: 'left', padding: '10px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', letterSpacing: 0.3 };
-  const bodyCell   = { padding: '12px', fontSize: 13, color: '#334155', borderBottom: '1px solid #f1f5f9', verticalAlign: 'top' };
+  const headerCell = { textAlign: 'left', padding: '10px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--m3-on-surface-variant)', borderBottom: '1px solid var(--m3-outline-variant)', background: 'var(--m3-surface-container)', letterSpacing: 0.3 };
+  const bodyCell   = { padding: '12px', fontSize: 13, color: 'var(--m3-on-surface-variant)', borderBottom: '1px solid #f1f5f9', verticalAlign: 'top' };
 
   const title = activeLocation ? `${activeCustomer.customer_name} · ${activeLocation.city || activeLocation.location_code}` : 'Customers';
 
   return (
     <Layout>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--m3-outline-variant)', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button className="btn btn-sm" onClick={() => navigate(activeLocation ? '/customers' : '/leads')}>← Back</button>
           <div>
-            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{title}</h1>
-            {!activeLocation && <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{customers.length} customer{customers.length === 1 ? '' : 's'}{anyFilterActive ? ' · filtered' : ''}</p>}
-            {activeLocation && <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>{activeCustomer.customer_code}-{activeLocation.location_code} · {activeLocation.pos.length} order{activeLocation.pos.length === 1 ? '' : 's'}</p>}
+            <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h1>
+            {!activeLocation && <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>{customers.length} customer{customers.length === 1 ? '' : 's'}{anyFilterActive ? ' · filtered' : ''}</p>}
+            {activeLocation && <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>{activeCustomer.customer_code}-{activeLocation.location_code} · {activeLocation.pos.length} order{activeLocation.pos.length === 1 ? '' : 's'}</p>}
           </div>
         </div>
       </div>
 
       <div style={{ padding: 20 }}>
-        {err && <div style={{ marginBottom: 16, background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>{err}</div>}
+        {err && <div style={{ marginBottom: 16, background: 'var(--m3-error-container)', border: '1px solid #fecaca', color: 'var(--m3-error)', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>{err}</div>}
 
         {/* ---- Filter bar (own state, not shared with Leads) ---- */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 14px' }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginRight: 2 }}>Filters</span>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center', background: 'var(--m3-surface-container-lowest)', border: '1px solid var(--m3-outline-variant)', borderRadius: 12, padding: '12px 14px' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--m3-on-surface-variant)', marginRight: 2 }}>Filters</span>
           <input className="input" style={{ width: 240 }} placeholder="Search customer, city, ref…" value={search} onChange={e => setSearch(e.target.value)} />
           <MultiSelect label="Phase" options={PHASES} selected={filterPhases} onChange={setFilterPhases} />
           <MultiSelect label="Lead Scoring" options={SCORE_BANDS} selected={filterScores} onChange={setFilterScores} />
@@ -399,29 +399,29 @@ export default function CustomersPage() {
           <MultiSelect label="Customer" options={customerNames} selected={filterCustomers} onChange={setFilterCustomers} />
           <MultiSelect label="Renewal Due" options={RENEWAL_FILTER_OPTS} selected={filterRenewal} onChange={setFilterRenewal} />
           {isAdmin && <MultiSelect label="Sales Rep" options={bdOpts} selected={filterBDs} onChange={setFilterBDs} />}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#334155' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--m3-on-surface-variant)' }}>
             <input type="checkbox" checked={filterOverdue} onChange={e => setFilterOverdue(e.target.checked)} /> Followup overdue only
           </label>
           {anyFilterActive && <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={clearAll}>Clear all</button>}
         </div>
 
-        {!leads && <p style={{ color: '#94a3b8' }}>Loading…</p>}
+        {!leads && <p style={{ color: 'var(--m3-outline)' }}>Loading…</p>}
 
         {/* ---- View toggle: Customers | Partners (only on the list, not on PO details) ---- */}
         {showList && (
-          <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', width: 'fit-content', marginBottom: 16 }}>
-            <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, background: view === 'customers' ? '#eef2ff' : '#fff', fontWeight: view === 'customers' ? 700 : 500 }} onClick={() => setView('customers')}>Customers</button>
-            <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, background: view === 'partners' ? '#eef2ff' : '#fff', fontWeight: view === 'partners' ? 700 : 500 }} onClick={() => setView('partners')}>Partners</button>
+          <div style={{ display: 'flex', border: '1px solid var(--m3-outline-variant)', borderRadius: 8, overflow: 'hidden', width: 'fit-content', marginBottom: 16 }}>
+            <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, background: view === 'customers' ? 'var(--m3-primary-container)' : '#fff', fontWeight: view === 'customers' ? 700 : 500 }} onClick={() => setView('customers')}>Customers</button>
+            <button className="btn btn-sm" style={{ border: 'none', borderRadius: 0, background: view === 'partners' ? 'var(--m3-primary-container)' : '#fff', fontWeight: view === 'partners' ? 700 : 500 }} onClick={() => setView('partners')}>Partners</button>
           </div>
         )}
 
         {leads && showList && view === 'customers' && customers.length === 0 && (
-          <div className="card" style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontStyle: 'italic' }}>
+          <div className="card" style={{ textAlign: 'center', padding: 24, color: 'var(--m3-outline)', fontStyle: 'italic' }}>
             {anyFilterActive ? 'No customers match the current filters.' : 'No customers yet.'}
           </div>
         )}
         {leads && showList && view === 'partners' && partners.length === 0 && (
-          <div className="card" style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontStyle: 'italic' }}>
+          <div className="card" style={{ textAlign: 'center', padding: 24, color: 'var(--m3-outline)', fontStyle: 'italic' }}>
             {anyFilterActive ? 'No channel-partner-sourced leads match the current filters.' : 'No channel-partner-sourced leads yet.'}
           </div>
         )}
@@ -447,16 +447,16 @@ export default function CustomersPage() {
                   const custSummary = names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} +${names.length - 3} more`;
                   return (
                     <React.Fragment key={p.name}>
-                      <tr style={{ cursor: 'pointer', background: popen ? '#eef2ff' : '#fff' }} onClick={() => togglePartner(p.name)}>
-                        <td style={{ ...bodyCell, textAlign: 'center', color: '#6366f1', fontWeight: 700 }}>{popen ? '▼' : '▶'}</td>
+                      <tr style={{ cursor: 'pointer', background: popen ? 'var(--m3-primary-container)' : '#fff' }} onClick={() => togglePartner(p.name)}>
+                        <td style={{ ...bodyCell, textAlign: 'center', color: 'var(--m3-primary)', fontWeight: 700 }}>{popen ? '▼' : '▶'}</td>
                         <td style={bodyCell}>
-                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{p.name}</div>
-                          <div style={{ fontSize: 11, color: '#94a3b8' }}>{p.customers.length} customer{p.customers.length === 1 ? '' : 's'}</div>
+                          <div style={{ fontWeight: 700, color: 'var(--m3-on-surface)' }}>{p.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>{p.customers.length} customer{p.customers.length === 1 ? '' : 's'}</div>
                         </td>
-                        <td style={{ ...bodyCell, fontSize: 12, color: '#475569' }}>{custSummary}</td>
+                        <td style={{ ...bodyCell, fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>{custSummary}</td>
                         <td style={{ ...bodyCell, textAlign: 'right', fontWeight: 700 }}>{p.poCount}</td>
                         <td style={{ ...bodyCell, textAlign: 'right', fontWeight: 700 }}>
-                          <span style={{ color: '#059669' }}>₹{p.wonVal.toFixed(1)}L</span> <span style={{ color: '#cbd5e1' }}>/</span> <span>₹{p.openVal.toFixed(1)}L</span>
+                          <span style={{ color: 'var(--m3-success)' }}>₹{p.wonVal.toFixed(1)}L</span> <span style={{ color: 'var(--m3-outline-variant)' }}>/</span> <span>₹{p.openVal.toFixed(1)}L</span>
                         </td>
                         <td style={{ ...bodyCell, textAlign: 'right', fontWeight: 700 }}>{p.totalQty || '—'}</td>
                       </tr>
@@ -467,17 +467,17 @@ export default function CustomersPage() {
                         const custVal = cust.pos.reduce((s, l) => s + poValue(l), 0);
                         return (
                           <React.Fragment key={pcKey}>
-                            <tr style={{ cursor: 'pointer', background: '#f8fafc' }} onClick={() => togglePC(pcKey)}>
+                            <tr style={{ cursor: 'pointer', background: 'var(--m3-surface-container)' }} onClick={() => togglePC(pcKey)}>
                               <td style={bodyCell} />
                               <td style={{ ...bodyCell, paddingLeft: 24 }} colSpan={5}>
-                                <span style={{ color: '#6366f1', fontWeight: 700, marginRight: 8 }}>{copen ? '▼' : '▶'}</span>
-                                <strong style={{ color: '#0f172a' }}>{cust.customer_name}</strong>
-                                <span style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace', marginLeft: 8 }}>{cust.customer_code}</span>
-                                <span style={{ color: '#94a3b8', marginLeft: 8 }}>— {cust.pos.length} order{cust.pos.length === 1 ? '' : 's'} · ₹{custVal.toFixed(1)}L</span>
+                                <span style={{ color: 'var(--m3-primary)', fontWeight: 700, marginRight: 8 }}>{copen ? '▼' : '▶'}</span>
+                                <strong style={{ color: 'var(--m3-on-surface)' }}>{cust.customer_name}</strong>
+                                <span style={{ fontSize: 11, color: 'var(--m3-primary)', fontFamily: 'monospace', marginLeft: 8 }}>{cust.customer_code}</span>
+                                <span style={{ color: 'var(--m3-outline)', marginLeft: 8 }}>— {cust.pos.length} order{cust.pos.length === 1 ? '' : 's'} · ₹{custVal.toFixed(1)}L</span>
                               </td>
                             </tr>
                             {copen && (
-                              <tr style={{ background: '#fff' }}>
+                              <tr style={{ background: 'var(--m3-surface-container-lowest)' }}>
                                 <td style={bodyCell} />
                                 <td style={{ ...bodyCell, paddingLeft: 48 }} colSpan={5}>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -524,11 +524,11 @@ export default function CustomersPage() {
                   return (
                     <React.Fragment key={c.customer_code}>
                       {/* Customer row — click toggles the inline tree. */}
-                      <tr style={{ cursor: 'pointer', background: open ? '#eef2ff' : '#fff' }} onClick={() => toggle(c.customer_code)}>
-                        <td style={{ ...bodyCell, textAlign: 'center', color: '#6366f1', fontWeight: 700 }}>{open ? '▼' : '▶'}</td>
+                      <tr style={{ cursor: 'pointer', background: open ? 'var(--m3-primary-container)' : '#fff' }} onClick={() => toggle(c.customer_code)}>
+                        <td style={{ ...bodyCell, textAlign: 'center', color: 'var(--m3-primary)', fontWeight: 700 }}>{open ? '▼' : '▶'}</td>
                         <td style={bodyCell}>
-                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{c.customer_name}</div>
-                          <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace' }}>{c.customer_code} · {c.poCount} order{c.poCount === 1 ? '' : 's'}</div>
+                          <div style={{ fontWeight: 700, color: 'var(--m3-on-surface)' }}>{c.customer_name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--m3-primary)', fontFamily: 'monospace' }}>{c.customer_code} · {c.poCount} order{c.poCount === 1 ? '' : 's'}</div>
                         </td>
                         <td style={bodyCell}>{statesSummary}</td>
                         <td style={{ ...bodyCell, textAlign: 'right', fontWeight: 700 }}>₹{c.clv.toFixed(1)}L</td>
@@ -538,37 +538,37 @@ export default function CustomersPage() {
                             <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
                               <RenewalBadge status={renewal} />
                               {/* Name the location so it's clear this is ONE PO expiring, not the whole customer. */}
-                              <span style={{ fontSize: 10, color: '#94a3b8' }}>{renewal.lead.city || renewal.lead.location_code || '—'}{c.poCount > 1 ? ' (earliest)' : ''}</span>
+                              <span style={{ fontSize: 10, color: 'var(--m3-outline)' }}>{renewal.lead.city || renewal.lead.location_code || '—'}{c.poCount > 1 ? ' (earliest)' : ''}</span>
                             </span>
-                          ) : <span style={{ color: '#cbd5e1' }}>—</span>}
+                          ) : <span style={{ color: 'var(--m3-outline-variant)' }}>—</span>}
                         </td>
-                        <td style={{ ...bodyCell, fontSize: 12, color: '#475569' }}>{svc}</td>
+                        <td style={{ ...bodyCell, fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>{svc}</td>
                       </tr>
 
                       {/* Inline tree: State header rows + clickable City rows → PO cards. */}
                       {open && c.states.map(s => (
                         <React.Fragment key={`${c.customer_code}-${s.state}`}>
-                          <tr style={{ background: '#f8fafc' }}>
+                          <tr style={{ background: 'var(--m3-surface-container)' }}>
                             <td style={bodyCell} />
-                            <td style={{ ...bodyCell, paddingLeft: 24, fontWeight: 700, color: '#334155' }} colSpan={6}>
-                              📍 {s.state} <span style={{ color: '#94a3b8', fontWeight: 500 }}>— {s.poCount} order{s.poCount === 1 ? '' : 's'}</span>
+                            <td style={{ ...bodyCell, paddingLeft: 24, fontWeight: 700, color: 'var(--m3-on-surface-variant)' }} colSpan={6}>
+                              📍 {s.state} <span style={{ color: 'var(--m3-outline)', fontWeight: 500 }}>— {s.poCount} order{s.poCount === 1 ? '' : 's'}</span>
                             </td>
                           </tr>
                           {s.locations.map(loc => (
-                            <tr key={`${c.customer_code}-${loc.location_code}`} style={{ cursor: 'pointer', background: '#fff' }}
+                            <tr key={`${c.customer_code}-${loc.location_code}`} style={{ cursor: 'pointer', background: 'var(--m3-surface-container-lowest)' }}
                                 onClick={() => navigate(`/customers/${c.customer_code}/${loc.location_code}`)}>
                               <td style={bodyCell} />
                               <td style={{ ...bodyCell, paddingLeft: 48 }} colSpan={6}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                                   <span>
-                                    🏙 {loc.city || <span style={{ color: '#94a3b8' }}>No city</span>}
-                                    <span style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace', marginLeft: 8 }}>{loc.location_code}</span>
-                                    <span style={{ color: '#94a3b8', marginLeft: 8 }}>— {loc.pos.length} order{loc.pos.length === 1 ? '' : 's'}</span>
+                                    🏙 {loc.city || <span style={{ color: 'var(--m3-outline)' }}>No city</span>}
+                                    <span style={{ fontSize: 11, color: 'var(--m3-primary)', fontFamily: 'monospace', marginLeft: 8 }}>{loc.location_code}</span>
+                                    <span style={{ color: 'var(--m3-outline)', marginLeft: 8 }}>— {loc.pos.length} order{loc.pos.length === 1 ? '' : 's'}</span>
                                   </span>
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
                                     {/* Per-location renewal — this is the badge the user actually needs: which city/PO is due. */}
                                     <RenewalBadge status={nearestRenewal(loc.pos, renewedIds)} />
-                                    <span style={{ color: '#6366f1', fontWeight: 700 }}>›</span>
+                                    <span style={{ color: 'var(--m3-primary)', fontWeight: 700 }}>›</span>
                                   </span>
                                 </div>
                               </td>
@@ -595,7 +595,7 @@ export default function CustomersPage() {
 
         {/* ---- PO Details (one customer + one city) — read-only cards ---- */}
         {paramLoc && !activeLocation && leads && (
-          <div className="card" style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontStyle: 'italic' }}>
+          <div className="card" style={{ textAlign: 'center', padding: 24, color: 'var(--m3-outline)', fontStyle: 'italic' }}>
             Not found, or hidden by the current filters.
           </div>
         )}
@@ -607,10 +607,10 @@ export default function CustomersPage() {
               const won = activeLocation.pos.filter(l => l.phase === 'Won').length;
               return (
                 <div className="card" style={{ display: 'flex', gap: 24, padding: '12px 16px', marginBottom: 16, flexWrap: 'wrap' }}>
-                  <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Orders</div><div style={{ fontSize: 18, fontWeight: 700 }}>{activeLocation.pos.length}</div></div>
-                  <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Won</div><div style={{ fontSize: 18, fontWeight: 700, color: '#059669' }}>{won}</div></div>
-                  <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Total Deal Value</div><div style={{ fontSize: 18, fontWeight: 700 }}>₹{totalTcv.toFixed(1)}L</div></div>
-                  <div><div style={{ fontSize: 11, color: '#94a3b8' }}>Total Annual Value</div><div style={{ fontSize: 18, fontWeight: 700 }}>₹{totalAcv.toFixed(1)}L</div></div>
+                  <div><div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>Orders</div><div style={{ fontSize: 18, fontWeight: 700 }}>{activeLocation.pos.length}</div></div>
+                  <div><div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>Won</div><div style={{ fontSize: 18, fontWeight: 700, color: 'var(--m3-success)' }}>{won}</div></div>
+                  <div><div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>Total Deal Value</div><div style={{ fontSize: 18, fontWeight: 700 }}>₹{totalTcv.toFixed(1)}L</div></div>
+                  <div><div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>Total Annual Value</div><div style={{ fontSize: 18, fontWeight: 700 }}>₹{totalAcv.toFixed(1)}L</div></div>
                 </div>
               );
             })()}
@@ -634,7 +634,7 @@ function PoCard({ l, renewedIds }) {
   const renewal = renewalStatus(l, renewedIds);
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, padding: '14px 16px', background: '#eef2ff', borderBottom: '1px solid #c7d2fe' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, padding: '14px 16px', background: 'var(--m3-primary-container)', borderBottom: '1px solid #c7d2fe' }}>
         <Stat label="Sales Rep" value={bdLabel(l.owner) || '—'} />
         <Stat label="Order Number" value={l.po_number || '—'} />
         <Stat label="Quantity" value={l.quantity || '—'} />
@@ -654,7 +654,7 @@ function PoCard({ l, renewedIds }) {
           : '—'} full />
         {renewal && (
           <div style={{ gridColumn: '1 / -1', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: '#64748b', fontWeight: 600 }}>Renewal:</span>
+            <span style={{ color: 'var(--m3-on-surface-variant)', fontWeight: 600 }}>Renewal:</span>
             <RenewalBadge status={renewal} showOk />
           </div>
         )}
@@ -669,8 +669,8 @@ function PoCard({ l, renewedIds }) {
 function Stat({ label, value }) {
   return (
     <div>
-      <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.3, fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>{value}</div>
+      <div style={{ fontSize: 10, color: 'var(--m3-on-surface-variant)', textTransform: 'uppercase', letterSpacing: 0.3, fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--m3-on-surface)', marginTop: 2 }}>{value}</div>
     </div>
   );
 }
@@ -678,8 +678,8 @@ function Stat({ label, value }) {
 function Detail({ label, value, mono = false, full = false }) {
   return (
     <div style={{ gridColumn: full ? '1 / -1' : undefined, fontSize: 12 }}>
-      <span style={{ color: '#64748b', fontWeight: 600 }}>{label}: </span>
-      <span style={{ color: '#0f172a', fontFamily: mono ? 'monospace' : undefined }}>{value}</span>
+      <span style={{ color: 'var(--m3-on-surface-variant)', fontWeight: 600 }}>{label}: </span>
+      <span style={{ color: 'var(--m3-on-surface)', fontFamily: mono ? 'monospace' : undefined }}>{value}</span>
     </div>
   );
 }

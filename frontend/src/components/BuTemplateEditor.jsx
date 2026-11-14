@@ -121,14 +121,14 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
             <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Edit Lead Template — {bu.name}</h2>
             <button onClick={onClose} style={ov.x}>×</button>
           </div>
-          <p style={{ fontSize: 12.5, color: '#64748b', margin: '6px 0 0' }}>
+          <p style={{ fontSize: 12.5, color: 'var(--m3-on-surface-variant)', margin: '6px 0 0' }}>
             Turn sections on/off, toggle fields, mark mandatory, and add custom fields/sections. Changes apply to this business's New Lead form.
           </p>
         </div>
 
         <div style={{ padding: 22, overflowY: 'auto', flex: 1 }}>
           {err && <div style={ov.error}>{err}</div>}
-          {!sections && !err && <p style={{ fontSize: 13, color: '#64748b' }}>Loading template…</p>}
+          {!sections && !err && <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)' }}>Loading template…</p>}
           {sections && catalog && sections.map(sec => (
             <SectionCard key={sec.key} sec={sec} catalog={catalog}
               onToggle={() => toggleSection(sec.key)} onCollapse={() => collapseSection(sec.key)}
@@ -146,8 +146,8 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
 
           {sections && (
             <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>Services Offered</div>
-              <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 10px' }}>Build this business's catalog by category. Items appear on its New Lead form, grouped the same way; the default Recurring/One-time pre-fills the lead line. <b>Hardware</b> and <b>Hardware + Software</b> flow into the Inventory Pipeline — <b>Software / Service</b> does not.</p>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--m3-on-surface)', marginBottom: 6 }}>Services Offered</div>
+              <p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: '0 0 10px' }}>Build this business's catalog by category. Items appear on its New Lead form, grouped the same way; the default Recurring/One-time pre-fills the lead line. <b>Hardware</b> and <b>Hardware + Software</b> flow into the Inventory Pipeline — <b>Software / Service</b> does not.</p>
               {SERVICE_CATEGORIES.map(cat => (
                 <ServiceCategoryBuilder key={cat.key}
                   category={cat}
@@ -161,25 +161,25 @@ export default function BuTemplateEditor({ bu, onClose, onSaved }) {
 
           {modules.length > 0 && (
             <div style={{ border: '1px solid #e5e9f0', borderRadius: 10, marginTop: 16 }}>
-              <div style={{ padding: '9px 12px', background: '#f8fafc', borderRadius: '10px 10px 0 0', fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                Modules <span style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8' }}>({modules.filter(m => m.enabled).length} of {modules.length} enabled)</span>
+              <div style={{ padding: '9px 12px', background: 'var(--m3-surface-container)', borderRadius: '10px 10px 0 0', fontSize: 13, fontWeight: 700, color: 'var(--m3-on-surface)' }}>
+                Modules <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--m3-outline)' }}>({modules.filter(m => m.enabled).length} of {modules.length} enabled)</span>
               </div>
               <div style={{ padding: '8px 12px' }}>
-                <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 8px' }}>Turn modules on or off for this business. Core modules (Leads, Dashboard) can't be disabled — everyone needs them.</p>
+                <p style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', margin: '0 0 8px' }}>Turn modules on or off for this business. Core modules (Leads, Dashboard) can't be disabled — everyone needs them.</p>
                 {modules.map(m => (
                   <label key={m.slug} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #f1f5f9', cursor: switchLocked(m) ? 'not-allowed' : 'pointer' }}>
                     <input type="checkbox" checked={shownOn(m)} disabled={switchLocked(m)} onChange={() => toggleModule(m.slug)} />
-                    <span style={{ fontSize: 13, color: shownOn(m) ? '#0f172a' : '#94a3b8', flex: 1 }}>
+                    <span style={{ fontSize: 13, color: shownOn(m) ? 'var(--m3-on-surface)' : 'var(--m3-outline)', flex: 1 }}>
                       {m.label}
                       {m.slug === 'forecast' && (
-                        <span style={{ display: 'block', fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>
+                        <span style={{ display: 'block', fontSize: 11, color: 'var(--m3-outline)', fontWeight: 400 }}>
                           {sellsHardware
                             ? 'Plans the hardware on this business\'s leads.'
                             : 'Available once a service is marked Hardware (or Hardware + Software) in Services above.'}
                         </span>
                       )}
                     </span>
-                    {m.core && <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', background: '#f1f5f9', padding: '1px 8px', borderRadius: 999 }}>CORE</span>}
+                    {m.core && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--m3-on-surface-variant)', background: 'var(--m3-surface-container-high)', padding: '1px 8px', borderRadius: 999 }}>CORE</span>}
                   </label>
                 ))}
               </div>

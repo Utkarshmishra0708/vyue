@@ -159,10 +159,10 @@ export function renewalStatus(lead, renewedIds) {
 // Colours for each renewal band (yellow → amber → red → dark-red Expired; ok = neutral; renewed = green).
 export const RENEWAL_BAND_STYLE = {
   yellow:  { bg: '#fef08a', fg: '#854d0e', border: '#fde047' },
-  amber:   { bg: '#fdba74', fg: '#9a3412', border: '#fb923c' },
-  red:     { bg: '#fca5a5', fg: '#991b1b', border: '#f87171' },
+  amber:   { bg: '#fdba74', fg: 'var(--m3-error)', border: '#fb923c' },
+  red:     { bg: '#fca5a5', fg: 'var(--m3-error)', border: '#f87171' },
   expired: { bg: '#7f1d1d', fg: '#ffffff', border: '#7f1d1d' },
-  ok:      { bg: '#f1f5f9', fg: '#64748b', border: '#e2e8f0' },
+  ok:      { bg: 'var(--color-bg)', fg: 'var(--m3-on-surface-variant)', border: 'var(--m3-outline-variant)' },
   renewed: { bg: '#dcfce7', fg: '#166534', border: '#86efac' },
 };
 

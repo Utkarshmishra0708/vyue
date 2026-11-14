@@ -6,10 +6,10 @@ import NotificationPreferences from './NotificationPreferences';
 const POLL_MS = 60_000;
 
 const SEVERITY_COLORS = {
-  critical: { bg: '#fef2f2', border: '#fca5a5', dot: '#dc2626', label: 'Critical' },
-  warning:  { bg: '#fffbeb', border: '#fcd34d', dot: '#f59e0b', label: 'Important' },
-  info:     { bg: '#f0f9ff', border: '#93c5fd', dot: '#3b82f6', label: 'Info' },
-  low:      { bg: '#f0fdf4', border: '#86efac', dot: '#22c55e', label: 'Low' },
+  critical: { bg: 'var(--m3-error-container)', border: '#fca5a5', dot: 'var(--m3-error)', label: 'Critical' },
+  warning:  { bg: 'var(--m3-tertiary-container)', border: '#fcd34d', dot: '#f59e0b', label: 'Important' },
+  info:     { bg: '#f0f9ff', border: '#93c5fd', dot: 'var(--m3-primary)', label: 'Info' },
+  low:      { bg: 'var(--m3-success-container)', border: '#86efac', dot: 'var(--m3-success)', label: 'Low' },
 };
 
 const RULE_LABELS = {
@@ -108,18 +108,20 @@ export default function NotificationBell() {
         onClick={() => setOpen(o => !o)}
         style={{
           background: 'none', border: 'none', cursor: 'pointer', position: 'relative',
-          fontSize: 20, padding: '4px 8px', color: '#64748b',
+          fontSize: 20, padding: '4px 8px', color: 'var(--m3-on-surface-variant)',
         }}
         title="Notifications"
       >
-        🔔
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
+        </svg>
         {count > 0 && (
           <span style={{
-            position: 'absolute', top: 0, right: 2,
-            background: '#ef4444', color: '#fff', borderRadius: '50%',
-            fontSize: 11, fontWeight: 700, minWidth: 18, height: 18,
+            position: 'absolute', top: -2, right: 0,
+            background: 'var(--m3-error)', color: '#fff', borderRadius: '50%',
+            fontSize: 10, fontWeight: 700, minWidth: 16, height: 16,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '0 4px', lineHeight: 1,
+            padding: '0 3px', lineHeight: 1,
           }}>
             {count > 99 ? '99+' : count}
           </span>
@@ -129,14 +131,14 @@ export default function NotificationBell() {
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, zIndex: 999,
-          width: 380, maxHeight: 480, background: '#fff',
-          border: '1px solid #e2e8f0', borderRadius: 8,
-          boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+          width: 380, maxHeight: 480, background: 'var(--m3-surface-container-lowest)',
+          border: '1px solid var(--m3-outline-variant)', borderRadius: 12,
+          boxShadow: 'var(--elevation-3)',
           display: 'flex', flexDirection: 'column',
           marginTop: 4,
         }}>
           <div style={{
-            padding: '12px 16px', borderBottom: '1px solid #e2e8f0',
+            padding: '12px 16px', borderBottom: '1px solid var(--m3-outline-variant)',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             <span style={{ fontWeight: 600, fontSize: 15 }}>{showPrefs ? 'Preferences' : 'Notifications'}</span>
@@ -145,7 +147,7 @@ export default function NotificationBell() {
                 <button
                   onClick={handleMarkAllRead}
                   style={{
-                    background: 'none', border: 'none', color: '#3b82f6',
+                    background: 'none', border: 'none', color: 'var(--m3-primary)',
                     cursor: 'pointer', fontSize: 13, fontWeight: 500,
                   }}
                 >
@@ -156,11 +158,15 @@ export default function NotificationBell() {
                 onClick={() => setShowPrefs(p => !p)}
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: 16, color: '#64748b', padding: '0 2px',
+                  fontSize: 16, color: 'var(--m3-on-surface-variant)', padding: '0 2px',
                 }}
                 title={showPrefs ? 'Back to notifications' : 'Notification settings'}
               >
-                {showPrefs ? '←' : '⚙️'}
+                {showPrefs ? '←' : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066zM15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>
@@ -172,10 +178,10 @@ export default function NotificationBell() {
           ) : (
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {loading && !items.length && (
-              <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>Loading...</div>
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--m3-outline)' }}>Loading...</div>
             )}
             {!loading && !items.length && (
-              <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>No notifications yet</div>
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--m3-outline)' }}>No notifications yet</div>
             )}
             {items.map(n => {
               const sev = SEVERITY_COLORS[n.severity] || SEVERITY_COLORS.info;
@@ -193,9 +199,9 @@ export default function NotificationBell() {
                     }
                   }}
                   style={{
-                    padding: '10px 16px', borderBottom: '1px solid #f1f5f9',
+                    padding: '10px 16px', borderBottom: '1px solid var(--m3-surface-container-high)',
                     cursor: 'pointer',
-                    background: n.is_read ? '#fff' : sev.bg,
+                    background: n.is_read ? 'var(--m3-surface-container-lowest)' : sev.bg,
                     borderLeft: `3px solid ${n.is_read ? 'transparent' : sev.border}`,
                     transition: 'background 0.15s',
                   }}
@@ -206,22 +212,22 @@ export default function NotificationBell() {
                       flexShrink: 0, marginTop: 4,
                     }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: n.is_read ? 400 : 600, color: '#1e293b', lineHeight: 1.3 }}>
+                      <div style={{ fontSize: 13, fontWeight: n.is_read ? 400 : 600, color: 'var(--m3-on-surface)', lineHeight: 1.3 }}>
                         {n.title}
                       </div>
                       {n.body && (
-                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, lineHeight: 1.3 }}>
+                        <div style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', marginTop: 2, lineHeight: 1.3 }}>
                           {n.body}
                         </div>
                       )}
                       <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
                         <span style={{
                           fontSize: 10, padding: '1px 6px', borderRadius: 4,
-                          background: '#f1f5f9', color: '#64748b', fontWeight: 500,
+                          background: 'var(--m3-surface-container-high)', color: 'var(--m3-on-surface-variant)', fontWeight: 500,
                         }}>
                           {RULE_LABELS[n.rule_key] || n.rule_key}
                         </span>
-                        <span style={{ fontSize: 11, color: '#94a3b8' }}>{timeAgo(n.createdAt || n.created_at)}</span>
+                        <span style={{ fontSize: 11, color: 'var(--m3-outline)' }}>{timeAgo(n.createdAt || n.created_at)}</span>
                       </div>
                     </div>
                     {!n.is_read && (

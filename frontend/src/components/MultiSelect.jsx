@@ -19,16 +19,16 @@ export default function MultiSelect({ label, options, selected, onChange, width 
       <button type="button" className="input" onClick={() => setOpen(o => !o)}
         style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
           padding: '5px 8px', fontSize: 11, height: 30,
-          borderColor: selected.length ? '#6366f1' : '#cbd5e1', background: selected.length ? '#eef2ff' : '#fff' }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: selected.length ? '#4338ca' : '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          borderColor: selected.length ? 'var(--m3-primary)' : 'var(--m3-outline-variant)', background: selected.length ? 'var(--m3-primary-container)' : '#fff' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: selected.length ? 'var(--m3-primary)' : 'var(--m3-on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {selected.length ? `${label} (${selected.length})` : label}
         </span>
-        <span style={{ fontSize: 10, color: '#64748b', marginLeft: 4 }}>▾</span>
+        <span style={{ fontSize: 10, color: 'var(--m3-on-surface-variant)', marginLeft: 4 }}>▾</span>
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff',
-          border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.08)',
+          position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--m3-surface-container-lowest)',
+          border: '1px solid var(--m3-outline-variant)', borderRadius: 8, boxShadow: 'var(--elevation-2)',
           zIndex: 20, minWidth: width, maxHeight: 220, overflowY: 'auto', padding: 6,
         }}>
           {options.map(opt => {

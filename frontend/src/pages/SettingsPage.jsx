@@ -18,7 +18,7 @@ const DROPDOWN_LISTS = [
 ];
 
 const ROLE_LABEL = { super_admin: 'Owner', business_admin: 'Business Admin', pmo: 'Manager', bd: 'Sales Rep' };
-const ROLE_COLOR = { super_admin: '#7c3aed', business_admin: '#4f46e5', pmo: '#0ea5e9', bd: '#0891b2' };
+const ROLE_COLOR = { super_admin: 'var(--m3-primary)', business_admin: 'var(--m3-primary)', pmo: 'var(--m3-tertiary)', bd: 'var(--m3-tertiary)' };
 const EMPTY_FORM = { name: '', email: '', mobile: '', role: 'bd' };
 
 // Which roles the current actor may assign (mirrors the backend hierarchy, Themes E2/E3/E4/E5):
@@ -108,7 +108,7 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
       <label
         style={{
           display: 'flex', alignItems: 'flex-start', gap: 9, padding: '9px 11px', borderRadius: 8,
-          border: '1px solid ' + (on ? '#c7d2fe' : '#e2e8f0'), background: on ? '#eef2ff' : '#fff',
+          border: '1px solid ' + (on ? 'var(--m3-primary-container)' : 'var(--m3-outline-variant)'), background: on ? 'var(--m3-primary-container)' : '#fff',
           cursor: lockRole ? 'not-allowed' : 'pointer', opacity: lockRole && !on ? 0.5 : 1,
         }}
       >
@@ -118,7 +118,7 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
         />
         <span>
           <span style={{ fontSize: 13, fontWeight: 600, display: 'block' }}>{t.label}</span>
-          <span style={{ fontSize: 11, color: '#64748b' }}>{t.blurb}</span>
+          <span style={{ fontSize: 11, color: 'var(--m3-on-surface-variant)' }}>{t.blurb}</span>
         </span>
       </label>
     );
@@ -146,7 +146,7 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
               <div>
                 <label className="field-label">Username</label>
                 <input className="input" value={form.username || ''} onChange={set('username')} placeholder="First.Last" pattern="[A-Za-z0-9][A-Za-z0-9._\-]{1,62}" title="Letters, digits, dots, hyphens and underscores, no spaces" />
-                <p style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 0' }}>Used to sign in, along with the email.</p>
+                <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: '4px 0 0' }}>Used to sign in, along with the email.</p>
               </div>
             )}
             <div>
@@ -162,17 +162,17 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
               </div>
               {extra.length > 0 && !lockRole && (
                 <button type="button" onClick={() => setShowMore(v => !v)}
-                  style={{ border: 'none', background: 'none', color: '#4f46e5', fontSize: 11, cursor: 'pointer', padding: '6px 0 0' }}>
+                  style={{ border: 'none', background: 'none', color: 'var(--m3-primary)', fontSize: 11, cursor: 'pointer', padding: '6px 0 0' }}>
                   {showMore ? '- Fewer account types' : '+ More account types (' + extra.length + ')'}
                 </button>
               )}
-              {lockRole && <p style={{ fontSize: 11, color: '#94a3b8', margin: '5px 0 0' }}>You cannot change your own account type.</p>}
+              {lockRole && <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: '5px 0 0' }}>You cannot change your own account type.</p>}
             </div>
 
             {isAdd && (
               <div>
                 <label className="field-label">Module access *</label>
-                <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 8px' }}>
+                <p style={{ fontSize: 11, color: 'var(--m3-on-surface-variant)', margin: '0 0 8px' }}>
                   Pre-filled from the account type — adjust anything you like. Changeable later from
                   the 🔐 Access button on their row.
                 </p>
@@ -182,7 +182,7 @@ function UserFormModal({ mode, initial, busy, lockRole, assignableRoles, onSubmi
               </div>
             )}
 
-            {err && <p style={{ fontSize: 12, color: '#dc2626', margin: 0 }}>{err}</p>}
+            {err && <p style={{ fontSize: 12, color: 'var(--m3-error)', margin: 0 }}>{err}</p>}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
               <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={busy}>
@@ -375,15 +375,15 @@ export default function SettingsPage() {
 
   return (
     <Layout>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px' }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Settings{buLabel ? ` — ${buLabel}` : ''}</h1>
-        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Manage this business's team, lists and account</p>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--m3-outline-variant)', padding: '10px 16px' }}>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Settings{buLabel ? ` — ${buLabel}` : ''}</h1>
+        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>Manage this business's team, lists and account</p>
       </div>
 
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ maxWidth: 640, margin: '0 auto', padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div className="card">
           <p className="section-title">Admin Account</p>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 12px' }}>Logged in as <strong>{user.email}</strong></p>
+          <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', margin: '0 0 12px' }}>Logged in as <strong>{user.email}</strong></p>
           {/* Self-service password change. */}
           <button className="btn" onClick={() => navigate('/change-password')}>Change Password</button>
         </div>
@@ -393,23 +393,23 @@ export default function SettingsPage() {
             <p className="section-title" style={{ margin: 0 }}>Manage Users{buLabel ? ` — ${buLabel}` : ''}</p>
             {canAct && <button className="btn btn-primary btn-sm" disabled={busy || !manageBusiness} onClick={() => setModal({ mode: 'add' })}>+ Add User</button>}
           </div>
-          <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 14px' }}>
+          <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: '0 0 14px' }}>
             Manager users are admins; Sales Rep users are the sales team. Use Edit to change a user's details. If a Sales Rep forgets their password, use Reset Password to set a new one.
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {manageBusiness && users.length === 0 && <p style={{ fontSize: 13, color: '#94a3b8' }}>No users yet — add one above.</p>}
+            {manageBusiness && users.length === 0 && <p style={{ fontSize: 13, color: 'var(--m3-outline)' }}>No users yet — add one above.</p>}
             {users.map(u => (
               <div key={u.id} style={{ paddingBottom: 8, borderBottom: '1px solid #f1f5f9', opacity: u.active ? 1 : 0.55 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 8, background: ROLE_COLOR[u.role] || '#6366f1', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{u.initials}</div>
+                  <div style={{ width: 30, height: 30, borderRadius: 8, background: ROLE_COLOR[u.role] || 'var(--m3-primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{u.initials}</div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>
                       {u.name}
-                      {!u.active && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#b45309', background: '#fef3c7', padding: '1px 6px', borderRadius: 6 }}>DISABLED</span>}
-                      {u.locked_until && new Date(u.locked_until) > new Date() && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#b91c1c', background: '#fee2e2', padding: '1px 6px', borderRadius: 6 }}>LOCKED</span>}
+                      {!u.active && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--color-warning)', background: 'var(--m3-tertiary-container)', padding: '1px 6px', borderRadius: 6 }}>DISABLED</span>}
+                      {u.locked_until && new Date(u.locked_until) > new Date() && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--m3-error)', background: 'var(--m3-error-container)', padding: '1px 6px', borderRadius: 6 }}>LOCKED</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{ROLE_LABEL[u.role] || u.role}{u.username ? ` · ${u.username}` : ''}{u.email ? ` · ${u.email}` : ''}{u.mobile ? ` · ${u.mobile}` : ''}</div>
+                    <div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>{ROLE_LABEL[u.role] || u.role}{u.username ? ` · ${u.username}` : ''}{u.email ? ` · ${u.email}` : ''}{u.mobile ? ` · ${u.mobile}` : ''}</div>
                   </div>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                     {canAct && (canActOn(u) || u.id === user.id) && (
@@ -425,7 +425,7 @@ export default function SettingsPage() {
                         same thing. Access is the single place it is granted. */}
                     {canActOn(u) && (
                       <button className="btn btn-sm" disabled={busy} onClick={() => setPermTarget({ id: u.id, name: u.name })}
-                        title="Set per-module access levels (Leads, Dashboard, Inventory Pipeline, Reports)">🔐 Access</button>
+                        title="Set per-module access levels (Leads, Dashboard, Inventory Pipeline, Reports)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline',verticalAlign:'middle',marginRight:4}}><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>Access</button>
                     )}
                     {/* J1: per-Manager Activity-feed grant. Only for Managers, and only a Global Admin /
                         Business Admin can set it. Business Admin / Owner get the feed by role, so
@@ -433,7 +433,7 @@ export default function SettingsPage() {
                     {u.role === 'pmo' && canGrantFeed && (
                       <button className="btn btn-sm" disabled={busy} onClick={() => handleToggleFeed(u)}
                         title="Grant or revoke this Manager's access to the organization-wide Activity feed">
-                        {u.activity_feed_access ? '🕒 Feed: On' : '🕒 Feed: Off'}
+                        {u.activity_feed_access ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline',verticalAlign:'middle',marginRight:4}}><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>Feed: On</> : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline',verticalAlign:'middle',marginRight:4}}><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>Feed: Off</>}
                       </button>
                     )}
                     {u.locked_until && new Date(u.locked_until) > new Date() && canAct && canActOn(u) && (
@@ -450,38 +450,38 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
-          {msg && <p style={{ fontSize: 12, marginTop: 12, color: msg.toLowerCase().includes('error') ? '#dc2626' : '#059669' }}>{msg}</p>}
+          {msg && <p style={{ fontSize: 12, marginTop: 12, color: msg.toLowerCase().includes('error') ? 'var(--m3-error)' : 'var(--m3-success)' }}>{msg}</p>}
         </div>
 
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
             <div>
               <p className="section-title" style={{ margin: 0 }}>Lead Scoring — Stage TAT{buLabel ? ` — ${buLabel}` : ''}</p>
-              <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 0' }}>
+              <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: '4px 0 0' }}>
                 Turn-around days per stage that drive the win-confidence decay — {canEditTat ? 'editable independently per business.' : "managed by this business's Manager / Business Admin."}
               </p>
             </div>
             {manageBusiness && (
               <button className="btn btn-sm" style={{ flexShrink: 0 }} onClick={() => { setTatMsg(''); setTatModal(true); }}>
-                {canEditTat ? '⚙ Edit Stage TAT' : '👁 View Stage TAT'}
+                {canEditTat ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline',verticalAlign:'middle',marginRight:4}}><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>Edit Stage TAT</> : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline',verticalAlign:'middle',marginRight:4}}><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>View Stage TAT</>}
               </button>
             )}
           </div>
-          {!manageBusiness && <p style={{ fontSize: 13, color: '#94a3b8', margin: '10px 0 0' }}>Select a business above to view its stage TAT.</p>}
+          {!manageBusiness && <p style={{ fontSize: 13, color: 'var(--m3-outline)', margin: '10px 0 0' }}>Select a business above to view its stage TAT.</p>}
         </div>
 
         {canManageLists && (
           <div className="card">
             <p className="section-title" style={{ margin: 0 }}>Dropdown lists{buLabel ? ` — ${buLabel}` : ''}</p>
-            <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 12px' }}>
+            <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: '4px 0 12px' }}>
               The choices offered in this business's lead form. Click Manage to add or remove options.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {DROPDOWN_LISTS.map(d => (
-                <div key={d.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                <div key={d.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 10px', border: '1px solid var(--m3-outline-variant)', borderRadius: 8 }}>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{d.label}</div>
-                    <div style={{ fontSize: 11.5, color: '#94a3b8' }}>{d.hint}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--m3-on-surface)' }}>{d.label}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--m3-outline)' }}>{d.hint}</div>
                   </div>
                   <DropdownManager field={d.field} label={d.label} />
                 </div>
@@ -490,9 +490,9 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <div className="card" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: '#92400e', margin: '0 0 4px' }}>💡 Weekly targets</p>
-          <p style={{ fontSize: 12, color: '#92400e', margin: 0 }}>Global and per-Sales Rep weekly pipeline targets are editable directly on the Dashboard page.</p>
+        <div className="card" style={{ background: 'var(--m3-tertiary-container)', borderColor: 'var(--m3-outline-variant)' }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--m3-on-surface)', margin: '0 0 4px' }}>💡 Weekly targets</p>
+          <p style={{ fontSize: 12, color: 'var(--m3-on-surface)', margin: 0 }}>Global and per-Sales Rep weekly pipeline targets are editable directly on the Dashboard page.</p>
         </div>
       </div>
 
@@ -516,17 +516,17 @@ export default function SettingsPage() {
               <button className="btn btn-sm" onClick={() => setTatModal(false)} disabled={tatBusy}>✕</button>
             </div>
             <div className="modal-body">
-              <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 14px' }}>
+              <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: '0 0 14px' }}>
                 <b>TAT</b> is how many days a lead may sit in each stage before its win-confidence begins to decay.
                 The <b>weightage</b> (each stage's base confidence) and the decay formula are fixed constants shown for
                 reference only — just the TAT is editable.
               </p>
               {!canEditTat && (
-                <p style={{ fontSize: 12, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px', margin: '0 0 12px' }}>
+                <p style={{ fontSize: 12, color: 'var(--color-warning)', background: 'var(--m3-tertiary-container)', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px', margin: '0 0 12px' }}>
                   Stage TAT can only be changed by this business's <b>Manager</b> or <b>Business Admin</b>. You can view the values below.
                 </p>
               )}
-              {tatStages.length === 0 ? <p style={{ fontSize: 13, color: '#94a3b8' }}>Loading…</p> : (
+              {tatStages.length === 0 ? <p style={{ fontSize: 13, color: 'var(--m3-outline)' }}>Loading…</p> : (
                 <table className="data-table" style={{ width: '100%' }}>
                   <thead>
                     <tr><th>Stage</th><th style={{ textAlign: 'center' }}>Weightage (%)</th><th style={{ textAlign: 'center' }}>TAT (days)</th></tr>
@@ -535,7 +535,7 @@ export default function SettingsPage() {
                     {tatStages.map(r => (
                       <tr key={r.stage}>
                         <td style={{ fontWeight: 600 }}>{r.stage}</td>
-                        <td style={{ textAlign: 'center', color: '#64748b' }} title="Fixed base confidence weight — not editable">{r.weight}%</td>
+                        <td style={{ textAlign: 'center', color: 'var(--m3-on-surface-variant)' }} title="Fixed base confidence weight — not editable">{r.weight}%</td>
                         <td style={{ textAlign: 'center' }}>
                           <input className="input" style={{ width: 90, textAlign: 'center', display: 'inline-block' }} type="number" min={1} max={365}
                             value={r.tat_days} disabled={!canEditTat} onChange={e => setTatDay(r.stage, e.target.value)} />
@@ -545,8 +545,8 @@ export default function SettingsPage() {
                   </tbody>
                 </table>
               )}
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: '10px 0 0' }}>Won is terminal (no TAT). Allowed range 1–365 days.</p>
-              {tatMsg && <p style={{ fontSize: 12, margin: '10px 0 0', color: tatMsg.toLowerCase().includes('error') ? '#dc2626' : '#059669' }}>{tatMsg}</p>}
+              <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: '10px 0 0' }}>Won is terminal (no TAT). Allowed range 1–365 days.</p>
+              {tatMsg && <p style={{ fontSize: 12, margin: '10px 0 0', color: tatMsg.toLowerCase().includes('error') ? 'var(--m3-error)' : 'var(--m3-success)' }}>{tatMsg}</p>}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
                 <button className="btn" onClick={() => setTatModal(false)} disabled={tatBusy}>Close</button>
                 {canEditTat && <button className="btn btn-primary" disabled={tatBusy} onClick={saveTat}>{tatBusy ? 'Saving…' : 'Save TAT'}</button>}
@@ -564,7 +564,7 @@ export default function SettingsPage() {
               <button className="btn btn-sm" onClick={() => setTransferFor(null)} disabled={busy}>✕</button>
             </div>
             <div className="modal-body">
-              <p style={{ fontSize: 13, color: '#334155', margin: '0 0 14px' }}>
+              <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', margin: '0 0 14px' }}>
                 <strong>{transferFor.user.name}</strong> owns <strong>{transferFor.leadCount}</strong> lead(s). Choose who to transfer them to — then the account will be deleted.
               </p>
               <label className="field-label">Transfer leads to</label>

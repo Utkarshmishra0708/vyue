@@ -22,9 +22,9 @@ function ModuleNoAccess({ module }) {
     <Layout>
       <div style={{ minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <div className="card" style={{ maxWidth: 440, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>🔒</div>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center' }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--m3-on-surface-variant)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg></div>
           <h1 style={{ fontSize: 18, margin: '0 0 8px' }}>No access to {label}</h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
+          <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', margin: 0 }}>
             You don't have access to the {label} module. Ask an administrator to grant it — the
             change applies here immediately, without signing in again.
           </p>
@@ -42,7 +42,7 @@ export function ModuleRoute({ module, minLevel = 'read', children }) {
   const { isAuthenticated, loading, permissions, isConsoleOnly, buHasModule } = useAuth();
   const location = useLocation();
 
-  if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
+  if (loading) return <div style={{ padding: 32, color: 'var(--m3-on-surface-variant)' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   if (isConsoleOnly) return <Navigate to="/choose-business" replace />;
   if (buHasModule && !buHasModule(module)) return <ModuleNoAccess module={module} />;
@@ -56,7 +56,7 @@ export function PrivateRoute({ children }) {
   const { isAuthenticated, isConsoleOnly, mustChangePassword, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
+  if (loading) return <div style={{ padding: 32, color: 'var(--m3-on-surface-variant)' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   if (mustChangePassword && location.pathname !== '/change-password') return <Navigate to="/change-password" replace />;
   // An Owner who has not opened a business yet (the picker) is kept to the picker, Organization
@@ -73,7 +73,7 @@ export function SuperAdminRoute({ children }) {
   const { isAuthenticated, isSuperAdmin, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
+  if (loading) return <div style={{ padding: 32, color: 'var(--m3-on-surface-variant)' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   if (!isSuperAdmin) return <Navigate to="/leads" replace />;
   return children;
@@ -84,7 +84,7 @@ export function SuperAdminRoute({ children }) {
 export function PickerRoute({ children }) {
   const { isAuthenticated, isSuperAdmin, mustChangePassword, loading, user } = useAuth();
   const location = useLocation();
-  if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
+  if (loading) return <div style={{ padding: 32, color: 'var(--m3-on-surface-variant)' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   if (mustChangePassword) return <Navigate to="/change-password" replace />;
   const several = isSuperAdmin || (Array.isArray(user?.platforms) && user.platforms.length > 1);
@@ -100,7 +100,7 @@ export function PickerRoute({ children }) {
 export function BusinessUnitRoute({ children }) {
   const { isAuthenticated, isSuperAdmin, loading, user } = useAuth();
   const location = useLocation();
-  if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
+  if (loading) return <div style={{ padding: 32, color: 'var(--m3-on-surface-variant)' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   if (isSuperAdmin || user?.role === 'business_admin') return children;
   return <Navigate to="/leads" replace />;
@@ -110,7 +110,7 @@ export function AdminRoute({ children }) {
   const { isAuthenticated, isAdmin, isConsoleOnly, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) return <div style={{ padding: 32, color: '#64748b' }}>Loading…</div>;
+  if (loading) return <div style={{ padding: 32, color: 'var(--m3-on-surface-variant)' }}>Loading…</div>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   if (!isAdmin) return <Navigate to="/leads" replace />;
   // An Owner who has not opened a business yet has no business Settings: back to the picker.

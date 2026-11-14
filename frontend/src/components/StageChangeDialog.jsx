@@ -65,16 +65,16 @@ export default function StageChangeDialog({ lead, toPhase, buConfig, onDone, onC
     }
   };
 
-  const label = { display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 };
-  const hint = { fontSize: 11, color: '#94a3b8', margin: '4px 0 0' };
+  const label = { display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--m3-on-surface)', marginBottom: 4 };
+  const hint = { fontSize: 11, color: 'var(--m3-outline)', margin: '4px 0 0' };
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Move to {toPhase}</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{lead.customer_name} · from {lead.phase}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--m3-on-surface)' }}>Move to {toPhase}</div>
+            <div style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)', marginTop: 2 }}>{lead.customer_name} · from {lead.phase}</div>
           </div>
           <button type="button" className="btn btn-sm" onClick={onCancel} aria-label="Close">✕</button>
         </div>
@@ -124,10 +124,10 @@ export default function StageChangeDialog({ lead, toPhase, buConfig, onDone, onC
             </div>
           )}
 
-          {err && <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '8px 12px', borderRadius: 8, fontSize: 13 }}>{err}</div>}
+          {err && <div style={{ background: 'var(--m3-error-container)', color: 'var(--m3-error)', padding: '8px 12px', borderRadius: 8, fontSize: 13 }}>{err}</div>}
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
-            <button type="button" className="btn btn-sm" style={{ background: 'none', border: 'none', color: '#4338ca', padding: 0 }} onClick={onOpenForm}>
+            <button type="button" className="btn btn-sm" style={{ background: 'none', border: 'none', color: 'var(--m3-primary)', padding: 0 }} onClick={onOpenForm}>
               Open full lead instead
             </button>
             <div style={{ display: 'flex', gap: 8 }}>

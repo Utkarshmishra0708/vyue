@@ -73,30 +73,30 @@ export default function NotificationPreferences({ onClose }) {
     setSaving(false);
   };
 
-  if (loading) return <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>Loading...</div>;
+  if (loading) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--m3-outline)' }}>Loading...</div>;
 
   return (
     <div style={{ padding: '0 16px 16px' }}>
       {RULE_GROUPS.map(g => (
         <div key={g.label} style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: 6 }}>{g.label}</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--m3-on-surface-variant)', textTransform: 'uppercase', marginBottom: 6 }}>{g.label}</div>
           {g.rules.map(r => {
             const enabled = prefs[r.key]?.enabled !== false;
             return (
               <div key={r.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}>
-                <span style={{ fontSize: 13, color: '#334155' }}>{r.label}</span>
+                <span style={{ fontSize: 13, color: 'var(--m3-on-surface)' }}>{r.label}</span>
                 <button
                   onClick={() => toggle(r.key)}
                   style={{
                     width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer',
-                    background: enabled ? '#3b82f6' : '#cbd5e1',
+                    background: enabled ? 'var(--m3-primary)' : 'var(--m3-outline-variant)',
                     position: 'relative', transition: 'background 0.2s',
                   }}
                 >
                   <span style={{
                     position: 'absolute', top: 2,
                     left: enabled ? 18 : 2,
-                    width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                    width: 16, height: 16, borderRadius: '50%', background: 'var(--m3-surface-container-lowest)',
                     transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
                   }} />
                 </button>
@@ -105,9 +105,9 @@ export default function NotificationPreferences({ onClose }) {
           })}
         </div>
       ))}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-        <button onClick={onClose} style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
-        <button onClick={save} disabled={saving} style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--m3-outline-variant)', paddingTop: 12 }}>
+        <button onClick={onClose} style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid var(--m3-outline-variant)', background: 'var(--m3-surface-container-lowest)', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+        <button onClick={save} disabled={saving} style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: 'var(--m3-primary)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
           {saving ? 'Saving...' : 'Save'}
         </button>
       </div>

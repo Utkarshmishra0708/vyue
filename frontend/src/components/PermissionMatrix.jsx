@@ -3,10 +3,10 @@ import { MODULES, MODULE_LABELS, LEVELS, LEVEL_LABELS, LEVEL_HINTS } from '../ut
 
 // Tint per level so the chosen column reads at a glance.
 const LEVEL_STYLE = {
-  none: { bg: '#fef2f2', fg: '#991b1b', br: '#fecaca' },
-  read: { bg: '#f1f5f9', fg: '#475569', br: '#e2e8f0' },
-  edit: { bg: '#fffbeb', fg: '#92400e', br: '#fde68a' },
-  full: { bg: '#f0fdf4', fg: '#15803d', br: '#bbf7d0' },
+  none: { bg: 'var(--m3-error-container)', fg: 'var(--m3-error)', br: '#fecaca' },
+  read: { bg: 'var(--m3-surface-container-high)', fg: 'var(--m3-on-surface-variant)', br: 'var(--m3-outline-variant)' },
+  edit: { bg: 'var(--m3-tertiary-container)', fg: 'var(--m3-on-surface)', br: 'var(--m3-outline-variant)' },
+  full: { bg: 'var(--m3-success-container)', fg: 'var(--m3-success)', br: '#bbf7d0' },
 };
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ export default function PermissionMatrix({ value, onChange, idPrefix = 'perm', c
 // The short legend shown under the grid in both callers.
 export function PermissionLegend() {
   return (
-    <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.7, background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: 8, padding: '10px 12px' }}>
+    <div style={{ fontSize: 11, color: 'var(--m3-on-surface-variant)', lineHeight: 1.7, background: 'var(--m3-surface-container)', border: '1px solid #f1f5f9', borderRadius: 8, padding: '10px 12px' }}>
       <div><b>No Access</b> — hidden from the sidebar entirely</div>
       <div><b>Read-only</b> — can view, cannot change anything</div>
       <div><b>Edit</b> — can change existing records, but not module configuration (Parent Accounts, dropdown lists)</div>

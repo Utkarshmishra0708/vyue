@@ -34,15 +34,15 @@ export default function GlobalPosView({ onClose }) {
         </div>
         <div className="modal-body">
           {detail ? <ChainDetail detail={detail} onBack={() => setDetail(null)} />
-            : chains === null ? <p style={{ color: '#94a3b8' }}>Loading…</p>
-            : chains.length === 0 ? <p style={{ color: '#94a3b8', fontSize: 13 }}>No parent accounts yet. Create one via <b>New Lead → Order Type → Master Order</b>.</p>
+            : chains === null ? <p style={{ color: 'var(--m3-outline)' }}>Loading…</p>
+            : chains.length === 0 ? <p style={{ color: 'var(--m3-outline)', fontSize: 13 }}>No parent accounts yet. Create one via <b>New Lead → Order Type → Master Order</b>.</p>
             : (
               <table className="data-table" style={{ width: '100%' }}>
                 <thead><tr><th>Parent Account</th><th>Status</th><th style={{ textAlign: 'right' }}>Total</th><th style={{ textAlign: 'right' }}>Consumed</th><th>Pool Status</th></tr></thead>
                 <tbody>
                   {chains.map(c => (
                     <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(c.id)}>
-                      <td style={{ fontWeight: 600 }}>{c.chain_name}<div style={{ fontSize: 11, color: '#94a3b8' }}>{c.device_type && <span style={{ background: '#f1f5f9', borderRadius: 4, padding: '1px 5px', marginRight: 6, fontSize: 10, fontWeight: 600, color: '#475569' }}>{c.device_type}</span>}{c.linked_count} linked order(s)</div></td>
+                      <td style={{ fontWeight: 600 }}>{c.chain_name}<div style={{ fontSize: 11, color: 'var(--m3-outline)' }}>{c.device_type && <span style={{ background: 'var(--m3-surface-container-high)', borderRadius: 4, padding: '1px 5px', marginRight: 6, fontSize: 10, fontWeight: 600, color: 'var(--m3-on-surface-variant)' }}>{c.device_type}</span>}{c.linked_count} linked order(s)</div></td>
                       <td>
                         <select
                           value={c.status || 'New'}
@@ -67,7 +67,7 @@ export default function GlobalPosView({ onClose }) {
                   const totRem = totQty - totCon;
                   return (
                     <tfoot>
-                      <tr style={{ borderTop: '2px solid #cbd5e1', background: '#f8fafc' }}>
+                      <tr style={{ borderTop: '2px solid #cbd5e1', background: 'var(--m3-surface-container)' }}>
                         <td style={{ fontWeight: 700 }}>Total · {chains.length} chain{chains.length === 1 ? '' : 's'}</td>
                         <td />
                         <td style={{ textAlign: 'right', fontWeight: 700 }}>{totQty}</td>
@@ -95,9 +95,9 @@ function StatusBadge({ s, total }) {
 
 function Stat({ label, value, color }) {
   return (
-    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px' }}>
-      <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: color || '#0f172a' }}>{value}</div>
+    <div style={{ background: 'var(--m3-surface-container)', border: '1px solid var(--m3-outline-variant)', borderRadius: 10, padding: '12px 14px' }}>
+      <div style={{ fontSize: 11, color: 'var(--m3-on-surface-variant)', fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: color || 'var(--m3-on-surface)' }}>{value}</div>
     </div>
   );
 }
@@ -127,16 +127,16 @@ function ChainDetail({ detail, onBack }) {
           : <Stat label="Remaining" value={s.remaining} color="#16a34a" />}
       </div>
       {s.exceeded && (
-        <p style={{ fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 10px', marginBottom: 14 }}>
+        <p style={{ fontSize: 12, color: 'var(--m3-error)', background: 'var(--m3-error-container)', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 10px', marginBottom: 14 }}>
           ⚠ Cumulative wins exceed the original parent account total of {detail.device_total} devices. Wins are never blocked — the overage is shown for visibility only.
         </p>
       )}
-      <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 4px' }}>
-        Type: <span style={{ color: '#334155', fontWeight: 600 }}>{detail.device_type || 'Hardware'}</span> · Price: {detail.price_lakhs ? `₹${detail.price_lakhs}L` : '—'} · Expected {detail.expected_start_date ? fmtDate(detail.expected_start_date) : '—'} → {detail.expected_end_date ? fmtDate(detail.expected_end_date) : '—'}
+      <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: '0 0 4px' }}>
+        Type: <span style={{ color: 'var(--m3-on-surface)', fontWeight: 600 }}>{detail.device_type || 'Hardware'}</span> · Price: {detail.price_lakhs ? `₹${detail.price_lakhs}L` : '—'} · Expected {detail.expected_start_date ? fmtDate(detail.expected_start_date) : '—'} → {detail.expected_end_date ? fmtDate(detail.expected_end_date) : '—'}
       </p>
       <p className="section-title" style={{ marginTop: 16 }}>Contributing Individual Orders (won)</p>
       {(!detail.contributors || detail.contributors.length === 0) ? (
-        <p style={{ fontSize: 13, color: '#94a3b8' }}>No customers won yet — the pool updates automatically the moment a linked Individual Order reaches Won.</p>
+        <p style={{ fontSize: 13, color: 'var(--m3-outline)' }}>No customers won yet — the pool updates automatically the moment a linked Individual Order reaches Won.</p>
       ) : (
         <table className="data-table" style={{ width: '100%' }}>
           <thead><tr><th>Customer</th><th style={{ textAlign: 'right' }}>Devices Won</th><th>Date Won</th></tr></thead>
@@ -155,7 +155,7 @@ function ChainDetail({ detail, onBack }) {
         placeholder="Add notes about this parent account… Use @Name to mention someone"
         style={{
           width: '100%', minHeight: 80, padding: '8px 10px', fontSize: 13, lineHeight: 1.5,
-          border: '1px solid #e2e8f0', borderRadius: 8, resize: 'vertical',
+          border: '1px solid var(--m3-outline-variant)', borderRadius: 8, resize: 'vertical',
           fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
         }}
       />

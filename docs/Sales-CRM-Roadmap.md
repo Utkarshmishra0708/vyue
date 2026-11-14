@@ -20,7 +20,7 @@ These choices shape every later phase. Nothing gets built until they're settled.
 
 | Decision | Why it matters |
 |----------|----------------|
-| Product name (a placeholder is fine) | Replaces "Jio Sales CRM" everywhere |
+| Product name (a placeholder is fine) | Replaces "VYUE" everywhere |
 | Vocabulary: what "Business Unit", "BD", "Global Admin", "PO", "Lead" become | Used in every screen and in the manual |
 | Target customers: which industries first | Decides default stages, fields and sample data |
 | Keep the multi-business model? (one company running several separate businesses) | It's the app's core structure today |

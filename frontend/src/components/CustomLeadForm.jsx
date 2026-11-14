@@ -277,8 +277,8 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
     }
   };
 
-  if (err && !cfg) return <div style={{ padding: 16, color: '#b91c1c', fontSize: 13 }}>{err}</div>;
-  if (!cfg) return <div style={{ padding: 24, color: '#64748b' }}>Loading {user.business_unit} template…</div>;
+  if (err && !cfg) return <div style={{ padding: 16, color: 'var(--m3-error)', fontSize: 13 }}>{err}</div>;
+  if (!cfg) return <div style={{ padding: 24, color: 'var(--m3-on-surface-variant)' }}>Loading {user.business_unit} template…</div>;
 
   // The PO section / po_type field must be enabled in this business's template for the PO-type cards
   // and chain mapping to appear. Disabling PO Type in Edit Template hides them here.
@@ -294,11 +294,11 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <button type="button" onClick={() => setPoType('individual')} style={poCardStyle(poType === 'individual')}>
           <div style={{ fontWeight: 700, fontSize: 14 }}>Individual Order</div>
-          <div style={{ fontSize: 12, color: '#64748b' }}>A single-customer deal — enters the funnel and is scored.</div>
+          <div style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>A single-customer deal — enters the funnel and is scored.</div>
         </button>
         <button type="button" onClick={() => setPoType('global')} style={poCardStyle(poType === 'global')}>
           <div style={{ fontWeight: 700, fontSize: 14 }}>Master Order (parent account)</div>
-          <div style={{ fontSize: 12, color: '#64748b' }}>A parent-account reference record — not tracked in the funnel.</div>
+          <div style={{ fontSize: 12, color: 'var(--m3-on-surface-variant)' }}>A parent-account reference record — not tracked in the funnel.</div>
         </button>
       </div>
     </div>
@@ -311,7 +311,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
         value={lines} onChange={setLines} />
       {manualValueOn && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: -6 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#334155', cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--m3-on-surface-variant)', cursor: 'pointer' }}>
             <input type="checkbox" checked={!!form.tcv_manual} onChange={e => setF('tcv_manual', e.target.checked)} />
             Enter the deal value by hand instead of calculating it from the services
           </label>
@@ -322,7 +322,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
                 value={form.potential_tcv_lakhs ?? ''} onChange={e => setF('potential_tcv_lakhs', e.target.value)} />
             </span>
           )}
-          {form.tcv_manual && <span style={{ fontSize: 11, color: '#94a3b8' }}>The calculated total above is not used while this is ticked.</span>}
+          {form.tcv_manual && <span style={{ fontSize: 11, color: 'var(--m3-outline)' }}>The calculated total above is not used while this is ticked.</span>}
         </div>
       )}
     </React.Fragment>
@@ -351,9 +351,9 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
             <div><label className="field-label">Expected Start Date</label><input className="input" type="date" value={globalForm.expected_start_date} onChange={e => setGlobal('expected_start_date', e.target.value)} /></div>
             <div><label className="field-label">Expected End Date</label><input className="input" type="date" value={globalForm.expected_end_date} onChange={e => setGlobal('expected_end_date', e.target.value)} /></div>
           </div>
-          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 10 }}>Saved for reference only — a Master Order does not enter the sales funnel and has no stage or confidence score.</p>
+          <p style={{ fontSize: 12, color: 'var(--m3-outline)', marginTop: 10 }}>Saved for reference only — a Master Order does not enter the sales funnel and has no stage or confidence score.</p>
         </div>
-        {err && <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '8px 12px', borderRadius: 8, fontSize: 13 }}>{err}</div>}
+        {err && <div style={{ background: 'var(--m3-error-container)', color: 'var(--m3-error)', padding: '8px 12px', borderRadius: 8, fontSize: 13 }}>{err}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
           <button type="button" className="btn" onClick={onCancel}>Cancel</button>
           <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Create Parent Account'}</button>
@@ -365,7 +365,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
   return (
     <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {expansionFrom && !lead && (
-        <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#3730a3', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: 'var(--m3-primary-container)', border: '1px solid #c7d2fe', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--m3-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 16 }}>{expansionMode === 'renewal' ? '🔄' : '➕'}</span>
           <span>
             <strong>
@@ -373,7 +373,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
                 ? `Renewing order ${expansionFrom.po_number || expansionFrom.lead_ref || ''} (${expansionFrom.customer_name})`
                 : `New order for ${expansionFrom.customer_name}`}
             </strong>
-            <span style={{ color: '#64748b', marginLeft: 6, fontSize: 12 }}>
+            <span style={{ color: 'var(--m3-on-surface-variant)', marginLeft: 6, fontSize: 12 }}>
               {expansionMode === 'renewal' ? 'Check the dates and price, then save.' : 'Add what they are buying, then save.'}
             </span>
           </span>
@@ -386,7 +386,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
       {poEnabled && !expansionFrom && (
       <div>
         <p className="section-title">PARENT ACCOUNT</p>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#334155' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--m3-on-surface-variant)' }}>
           <input type="checkbox" checked={linkToChain} onChange={e => { setLinkToChain(e.target.checked); if (!e.target.checked) setF('global_po_id', ''); }} />
           This customer belongs to a parent account
         </label>
@@ -397,17 +397,17 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
               <option value="">Select a parent account…</option>
               {chains.map(c => <option key={c.id} value={c.id}>{c.chain_name} ({c.device_type || 'Hardware'})</option>)}
             </select>
-            {chains.length === 0 && <p style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>No parent accounts yet — create one via New Lead → Order Type → Master Order.</p>}
+            {chains.length === 0 && <p style={{ fontSize: 12, color: 'var(--color-warning)', marginTop: 6 }}>No parent accounts yet — create one via New Lead → Order Type → Master Order.</p>}
           </div>
-        ) : <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>Standalone customer — no parent account mapping.</p>}
+        ) : <p style={{ fontSize: 12, color: 'var(--m3-outline)', marginTop: 6 }}>Standalone customer — no parent account mapping.</p>}
       </div>
       )}
       {poEnabled && expansionFrom && linkToChain && (
       <div>
         <p className="section-title">PARENT ACCOUNT</p>
-        <p style={{ fontSize: 13, color: '#334155' }}>
+        <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)' }}>
           Linked to chain: <strong>{chains.find(c => String(c.id) === String(form.global_po_id))?.chain_name || '—'}</strong>
-          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 6 }}>(inherited from source order)</span>
+          <span style={{ fontSize: 11, color: 'var(--m3-outline)', marginLeft: 6 }}>(inherited from source order)</span>
         </p>
       </div>
       )}
@@ -423,7 +423,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
               {bds.map(b => <option key={b.id} value={b.id}>{b.label || b.name}</option>)}
             </select>
             {bds.length === 0 && (
-              <p style={{ fontSize: 11.5, color: '#b45309', marginTop: 4 }}>
+              <p style={{ fontSize: 11.5, color: 'var(--color-warning)', marginTop: 4 }}>
                 This business has no Sales Reps yet. Leads are owned by Sales Reps, so add one in Settings → Users first.
               </p>
             )}
@@ -473,7 +473,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
         return (
           <div>
             <p className="section-title">PHASE & TIMELINE</p>
-            <p style={{ fontSize: 11, color: '#94a3b8', margin: '-6px 0 12px' }}>Confidence is calculated automatically from the phase and its SLA decay — it is not editable.</p>
+            <p style={{ fontSize: 11, color: 'var(--m3-outline)', margin: '-6px 0 12px' }}>Confidence is calculated automatically from the phase and its SLA decay — it is not editable.</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
                 <label className="field-label">Current Phase *</label>
@@ -510,7 +510,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
                 <div>
                   <label className="field-label">{form.phase} Date{isBD ? ' (today − up to 7 days back)' : ''}</label>
                   <input type="date" className="input" value={phaseDate} min={minPhaseDate} max={maxPhaseDate} onChange={e => setPhaseDate(e.target.value)} />
-                  <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                  <p style={{ fontSize: 11, color: 'var(--m3-outline)', marginTop: 4 }}>
                     {isBD ? 'Defaults to today. You can backdate up to 7 days if this stage actually happened earlier, but not choose a future date.' : 'Defaults to today. You can set any date.'}
                   </p>
                 </div>
@@ -519,13 +519,13 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
                 <div>
                   <label className="field-label">Resume / Hold-until Date</label>
                   <input type="date" className="input" value={form.hold_end_date || ''} onChange={e => setF('hold_end_date', e.target.value)} />
-                  <p style={{ fontSize: 11, color: '#0ea5e9', marginTop: 4 }}>Confidence is frozen while On Hold.</p>
+                  <p style={{ fontSize: 11, color: 'var(--m3-tertiary)', marginTop: 4 }}>Confidence is frozen while On Hold.</p>
                 </div>
               )}
               <div>
                 <label className="field-label">Delivery Requested Date</label>
                 <input type="date" className="input" value={form.device_requested_date || ''} onChange={e => setF('device_requested_date', e.target.value)} />
-                <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>When the hardware for this deal is expected — used (and sorted by) in the Inventory Pipeline.</p>
+                <p style={{ fontSize: 11, color: 'var(--m3-outline)', marginTop: 4 }}>When the hardware for this deal is expected — used (and sorted by) in the Inventory Pipeline.</p>
               </div>
               <div>
                 <label className="field-label">Order Expected Date{reqField('po_expected_date') ? ' *' : ''}</label>
@@ -584,14 +584,14 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
           <p className="section-title">ORDER DOCUMENT{docOn ? ' *' : ''}</p>
           {docOn && (<>
             {!existingPoUrl && !poFile && (
-              <p style={{ fontSize: 12, color: '#dc2626', margin: '0 0 8px' }}>An order document is required once the phase is Won.</p>
+              <p style={{ fontSize: 12, color: 'var(--m3-error)', margin: '0 0 8px' }}>An order document is required once the phase is Won.</p>
             )}
             {existingPoUrl && !poFile && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <div className="badge badge-green" style={{ padding: '6px 12px' }}>
                   <a href={fileUrl(existingPoUrl)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>📄 View uploaded document</a>
                 </div>
-                <button type="button" className="btn btn-sm" style={{ color: '#dc2626', fontSize: 11 }}
+                <button type="button" className="btn btn-sm" style={{ color: 'var(--m3-error)', fontSize: 11 }}
                   onClick={() => { if (window.confirm('Remove the uploaded order document?')) setExistingPoUrl(null); }}>
                   🗑 Remove
                 </button>
@@ -603,7 +603,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
             <div style={{ marginTop: 12, maxWidth: 380 }}>
               <label className="field-label">Order Number{docOn && (poFile || existingPoUrl) ? ' *' : ''}</label>
               <input className="input" value={form.po_number || ''} onChange={e => setF('po_number', e.target.value)} placeholder="Enter order number (identifier)" />
-              <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>A unique identifier for the received order{docOn ? ', required once the document is attached' : ''}.</p>
+              <p style={{ fontSize: 11, color: 'var(--m3-outline)', marginTop: 4 }}>A unique identifier for the received order{docOn ? ', required once the document is attached' : ''}.</p>
             </div>
           )}
         </div>
@@ -615,7 +615,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
           <p className="section-title" style={{ margin: 0 }}>Contacts (POC){(contactCfg.nameReq || contactCfg.emailReq || contactCfg.phoneReq || contactCfg.desigReq) ? ' *' : ''}</p>
           <button type="button" className="btn btn-sm" onClick={addContact}>+ Add Contact</button>
         </div>
-        <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 0' }}>Add the point(s) of contact for this deal.{(contactCfg.nameReq || contactCfg.emailReq) ? ' At least one contact is required.' : ''}</p>
+        <p style={{ fontSize: 12, color: 'var(--m3-outline)', margin: '4px 0 0' }}>Add the point(s) of contact for this deal.{(contactCfg.nameReq || contactCfg.emailReq) ? ' At least one contact is required.' : ''}</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
           {contacts.map((c, i) => {
             const cols = ['1fr', ' 1fr', contactCfg.showPhone ? ' 1fr' : '', contactCfg.showDesig ? ' 1fr' : '', ' auto'].join('');
@@ -629,7 +629,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
             </div>
             );
           })}
-          {contacts.length === 0 && (contactCfg.nameReq || contactCfg.emailReq || contactCfg.phoneReq || contactCfg.desigReq) && <p style={{ fontSize: 12, color: '#dc2626' }}>At least one contact (POC) is required — click "+ Add Contact".</p>}
+          {contacts.length === 0 && (contactCfg.nameReq || contactCfg.emailReq || contactCfg.phoneReq || contactCfg.desigReq) && <p style={{ fontSize: 12, color: 'var(--m3-error)' }}>At least one contact (POC) is required — click "+ Add Contact".</p>}
         </div>
       </div>
 
@@ -660,7 +660,7 @@ export default function CustomLeadForm({ lead, onSave, onCancel, buConfig, expan
         </div>
       )}
 
-      {err && <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '8px 12px', borderRadius: 8, fontSize: 13 }}>{err}</div>}
+      {err && <div style={{ background: 'var(--m3-error-container)', color: 'var(--m3-error)', padding: '8px 12px', borderRadius: 8, fontSize: 13 }}>{err}</div>}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
         <button type="button" className="btn" onClick={onCancel}>Cancel</button>
@@ -762,5 +762,5 @@ function pickCore(lead, config) {
 }
 function poCardStyle(active) {
   return { textAlign: 'left', padding: 14, borderRadius: 12, cursor: 'pointer',
-    border: active ? '2px solid #4f46e5' : '2px solid #e2e8f0', background: active ? '#eef2ff' : '#fff' };
+    border: active ? '2px solid #4f46e5' : '2px solid #e8eaf0', background: active ? 'var(--m3-primary-container)' : '#fff' };
 }

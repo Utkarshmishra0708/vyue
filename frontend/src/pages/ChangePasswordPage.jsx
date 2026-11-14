@@ -36,10 +36,10 @@ export default function ChangePasswordPage() {
   const forced = mustChangePassword;
 
   const inner = (
-    <div style={{ maxWidth: 420, margin: '0 auto', padding: '24px 20px' }}>
+    <div style={{ maxWidth: 420, margin: '0 auto', padding: '16px 16px' }}>
       <div className="card">
         {forced && (
-          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#92400e' }}>
+          <div style={{ background: 'var(--m3-tertiary-container)', border: '1px solid var(--m3-outline-variant)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: 'var(--m3-on-surface)' }}>
             You're using a temporary password. Please choose your own before continuing.
           </div>
         )}
@@ -56,7 +56,7 @@ export default function ChangePasswordPage() {
             <label className="field-label">Confirm New Password</label>
             <input type="password" className="input" required value={confirm} onChange={e => setConfirm(e.target.value)} />
           </div>
-          {msg && <p style={{ fontSize: 13, color: msg.includes('success') ? '#059669' : '#dc2626' }}>{msg}</p>}
+          {msg && <p style={{ fontSize: 13, color: msg.includes('success') ? 'var(--m3-success)' : 'var(--m3-error)' }}>{msg}</p>}
           <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Updating…' : forced ? 'Set Password & Continue' : 'Update Password'}</button>
         </form>
       </div>
@@ -65,10 +65,10 @@ export default function ChangePasswordPage() {
 
   if (forced) {
     return (
-      <div style={{ minHeight: '100vh', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, system-ui, sans-serif' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-body)' }}>
         <div style={{ width: '100%', maxWidth: 480 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', marginBottom: 4 }}>Set Your Password</h1>
-          <p style={{ fontSize: 13, color: '#64748b', textAlign: 'center', marginBottom: 20 }}>Choose a password you'll remember. You won't need the temporary one after this.</p>
+          <p style={{ fontSize: 13, color: 'var(--m3-on-surface-variant)', textAlign: 'center', marginBottom: 20 }}>Choose a password you'll remember. You won't need the temporary one after this.</p>
           {inner}
         </div>
       </div>
@@ -77,8 +77,8 @@ export default function ChangePasswordPage() {
 
   return (
     <Layout>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 24px' }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Change Password</h1>
+      <div style={{ background: 'var(--m3-surface-container-lowest)', borderBottom: '1px solid var(--color-border)', padding: '10px 16px' }}>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Change Password</h1>
       </div>
       {inner}
     </Layout>
